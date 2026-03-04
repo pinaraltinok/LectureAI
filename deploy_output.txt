@@ -1,0 +1,118 @@
+﻿python.exe : Preparing 
+function...
+At D:\New folder (4)\go
+ogle-cloud-sdk\bin\gclo
+ud.ps1:114 char:3
++   & "$cloudsdk_python
+" $run_args_array
++   ~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~
+    + CategoryInfo     
+         : NotSpecified
+: (Pre    paring functi
+on...:Str    ing) [], R
+emoteExcepti    on
+    + FullyQualifiedErr
+orI    d : NativeComman
+dError
+ 
+.......done.
+Deploying function...
+[Build]................
+.......................
+.......................
+.......................
+.......................
+.......................
+.......................
+.......................
+.......................
+.......................
+.......................
+.......................
+.......................
+.......................
+.......................
+.......................
+.......................
+.......................
+.......................
+.......................
+.............done
+[Service]..............
+.......................
+.......................
+..................done
+[Trigger]..............
+.......................
+.......................
+.......................
+.......................
+.......................
+.......................
+.......................
+.......................
+......done
+Done.
+You can view your funct
+ion in the Cloud Consol
+e here: https://console
+.cloud.google.com/funct
+ions/details/europe-wes
+t4/video-segmenter?proj
+ect=senior-design-48890
+8
+
+buildConfig:
+  automaticUpdatePolicy: {}
+  build: projects/679435321951/locations/europe-west4/builds/b5694e2d-4cc7-473c-8cc5-145fb0d2d288
+  dockerRegistry: ARTIFACT_REGISTRY
+  dockerRepository: projects/senior-design-488908/locations/europe-west4/repositories/gcf-artifacts
+  entryPoint: segment_video
+  runtime: python311
+  serviceAccount: projects/senior-design-488908/serviceAccounts/679435321951-compute@developer.gserviceaccount.com
+  source:
+    storageSource:
+      bucket: gcf-v2-sources-679435321951-europe-west4
+      generation: '1772548146630072'
+      object: video-segmenter/function-source.zip
+  sourceProvenance:
+    resolvedStorageSource:
+      bucket: gcf-v2-sources-679435321951-europe-west4
+      generation: '1772548146630072'
+      object: video-segmenter/function-source.zip
+createTime: '2026-03-03T14:29:07.566242964Z'
+environment: GEN_2
+eventTrigger:
+  eventFilters:
+  - attribute: bucket
+    value: lectureai_full_videos
+  eventType: google.cloud.storage.object.v1.finalized
+  pubsubTopic: projects/senior-design-488908/topics/eventarc-europe-west4-video-segmenter-126293-465
+  retryPolicy: RETRY_POLICY_DO_NOT_RETRY
+  serviceAccountEmail: 679435321951-compute@developer.gserviceaccount.com
+  trigger: projects/senior-design-488908/locations/europe-west4/triggers/video-segmenter-126293
+  triggerRegion: europe-west4
+labels:
+  deployment-tool: cli-gcloud
+name: projects/senior-design-488908/locations/europe-west4/functions/video-segmenter
+satisfiesPzi: true
+serviceConfig:
+  allTrafficOnLatestRevision: true
+  availableCpu: '2'
+  availableMemory: 4Gi
+  environmentVariables:
+    EXPECTED_PREFIX: Lesson_Records/
+    LOG_EXECUTION_ID: 'true'
+    PROCESSED_BUCKET: lectureai_processed
+  ingressSettings: ALLOW_ALL
+  maxInstanceCount: 10
+  maxInstanceRequestConcurrency: 1
+  revision: video-segmenter-00001-vak
+  service: projects/senior-design-488908/locations/europe-west4/services/video-segmenter
+  serviceAccountEmail: 679435321951-compute@developer.gserviceaccount.com
+  timeoutSeconds: 540
+  uri: https://video-segmenter-rmflr2h5qq-ez.a.run.app
+state: ACTIVE
+updateTime: '2026-03-03T14:30:33.782935908Z'
+url: https://europe-west4-senior-design-488908.cloudfunctions.net/video-segmenter
