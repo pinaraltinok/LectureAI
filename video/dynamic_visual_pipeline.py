@@ -21,6 +21,7 @@ def run_dynamic_visual_poc(
     metric_size=(384, 384),
     start_sec: float = 0.0,
     end_sec: float = None,
+    only_camera_open_frames: bool = True,
 ):
     locator = TeacherLocator(teacher_name=teacher_name)
     face = FaceMetrics()
@@ -29,7 +30,7 @@ def run_dynamic_visual_poc(
 
     total_sampled_frames = 0
     located_frames = 0
-    face_frames = 0
+    camera_open_frames = 0
     smile_frames = 0
     hand_frames = 0
     movement_vals = []
@@ -73,6 +74,8 @@ def run_dynamic_visual_poc(
                 "frame_idx": frame_idx,
                 "t_sec": t_sec,
                 "teacher_found": False,
+                "camera_open_frame": False,
+                "used_for_metrics": False,
                 "source": loc["source"],
                 "label_text": None,
                 "label_conf": 0.0,
@@ -95,13 +98,38 @@ def run_dynamic_visual_poc(
         teacher_tile = standardize_crop(teacher_tile, out_size=metric_size)
 
         fm = face.compute(teacher_tile)
+        face_detected = bool(fm.get("face_detected", False))
+
+        if only_camera_open_frames and not face_detected:
+            movement.reset()
+            debug_rows.append({
+                "frame_idx": frame_idx,
+                "t_sec": t_sec,
+                "teacher_found": True,
+                "camera_open_frame": False,
+                "used_for_metrics": False,
+                "source": loc["source"],
+                "label_text": loc["label_text"],
+                "label_conf": loc["label_conf"],
+                "match_score": loc["match_score"],
+                "tile_x": x,
+                "tile_y": y,
+                "tile_w": w,
+                "tile_h": h,
+                "face_detected_metric": False,
+                "smile_score": None,
+                "hands_detected": None,
+                "movement_energy": None,
+            })
+            continue
+
+        camera_open_frames += 1
+
         gm = gesture.compute(teacher_tile)
         mv = movement.update(teacher_tile)
 
-        if fm.get("face_detected"):
-            face_frames += 1
-            if fm.get("smile_score", -999) >= smile_threshold:
-                smile_frames += 1
+        if fm.get("smile_score", -999) >= smile_threshold:
+            smile_frames += 1
 
         if gm.get("hands_detected", 0) > 0:
             hand_frames += 1
@@ -112,6 +140,8 @@ def run_dynamic_visual_poc(
             "frame_idx": frame_idx,
             "t_sec": t_sec,
             "teacher_found": True,
+            "camera_open_frame": face_detected,
+            "used_for_metrics": True,
             "source": loc["source"],
             "label_text": loc["label_text"],
             "label_conf": loc["label_conf"],
@@ -120,7 +150,7 @@ def run_dynamic_visual_poc(
             "tile_y": y,
             "tile_w": w,
             "tile_h": h,
-            "face_detected_metric": fm.get("face_detected", False),
+            "face_detected_metric": face_detected,
             "smile_score": fm.get("smile_score"),
             "hands_detected": gm.get("hands_detected"),
             "movement_energy": mv.get("movement_energy"),
@@ -131,10 +161,12 @@ def run_dynamic_visual_poc(
         "relocalize_interval_sec": relocalize_interval_sec,
         "frames_total_sampled": total_sampled_frames,
         "teacher_located_frames": located_frames,
+        "camera_open_frames": camera_open_frames,
         "teacher_locate_ratio": (located_frames / total_sampled_frames) if total_sampled_frames else 0.0,
-        "face_detect_ratio": (face_frames / located_frames) if located_frames else 0.0,
-        "smile_frame_ratio": (smile_frames / face_frames) if face_frames else 0.0,
-        "hand_visible_ratio": (hand_frames / located_frames) if located_frames else 0.0,
+        "camera_open_ratio_total": (camera_open_frames / total_sampled_frames) if total_sampled_frames else 0.0,
+        "camera_open_ratio_among_located": (camera_open_frames / located_frames) if located_frames else 0.0,
+        "smile_frame_ratio": (smile_frames / camera_open_frames) if camera_open_frames else 0.0,
+        "hand_visible_ratio": (hand_frames / camera_open_frames) if camera_open_frames else 0.0,
         "movement_energy_avg": (sum(movement_vals) / len(movement_vals)) if movement_vals else 0.0,
     }
 
