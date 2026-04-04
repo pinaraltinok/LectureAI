@@ -9,7 +9,7 @@ Usage on Colab::
     # Cell 1: Setup
     !git clone https://github.com/pinaraltinok/LectureAI.git
     %cd LectureAI
-    !pip install librosa opensmile praat-parselmouth openai-whisper pydantic google-cloud-storage -q
+    !pip install librosa opensmile praat-parselmouth whisperx pydantic google-cloud-storage -q
     from google.colab import auth
     auth.authenticate_user()
 
@@ -97,7 +97,7 @@ def process_segment(
     segment_index: int,
     lecture_name: str,
     teacher_name: str = "Unknown",
-    whisper_model: str = "base",
+    whisper_model: str = "medium",
     language: str = "tr",
     run_visual: bool = False,
     persist: bool = False,
@@ -198,6 +198,7 @@ def process_segment(
             "status": "success",
             "transcript_words": transcript.summary.total_words,
             "transcript_segments": transcript.summary.total_segments,
+            "num_speakers": transcript.summary.num_speakers,
             "clarity_score": sound_metrics.summary.clarity_score,
             "child_friendly_score": sound_metrics.summary.child_friendly_score,
             "emotional_tone": sound_metrics.summary.emotional_tone,
@@ -228,7 +229,7 @@ def process_segment(
 def process_all_segments(
     bucket_name: str = PROCESSED_BUCKET,
     teacher_name: str = "Unknown",
-    whisper_model: str = "base",
+    whisper_model: str = "medium",
     language: str = "tr",
     run_visual: bool = False,
     persist: bool = False,

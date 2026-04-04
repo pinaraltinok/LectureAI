@@ -12,8 +12,8 @@ Usage::
 
 This function:
 1. Downloads the segment from GCS
-2. Extracts audio (16kHz mono WAV for Whisper)
-3. Runs Whisper transcription
+2. Extracts audio (16kHz mono WAV)
+3. Runs WhisperX transcription + alignment + diarization
 4. Transforms raw output → TranscriptData schema
 5. Persists to Supabase (transcript JSONB column)
 6. Cleans up temp files
@@ -42,8 +42,9 @@ def run_transcript_pipeline(
     segment_id: str,
     gcs_uri: str,
     *,
-    model_size: str = "base",
+    model_size: str = "medium",
     language: str = "tr",
+    diarize: bool = True,
     include_word_timestamps: bool = True,
     persist: bool = True,
     supabase_client=None,
@@ -79,6 +80,7 @@ def run_transcript_pipeline(
     params = TranscriptParams(
         model_size=model_size,
         language=language,
+        diarization_enabled=diarize,
     )
 
     try:
@@ -96,6 +98,7 @@ def run_transcript_pipeline(
             audio_path=local_audio,
             model_size=model_size,
             language=language,
+            diarize=diarize,
         )
 
         # ── 4. Transform → schema ───────────────────────────
