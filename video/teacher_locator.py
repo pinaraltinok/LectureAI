@@ -201,9 +201,21 @@ class TeacherLocator:
             "source": "tracking",
         }
 
-    def locate_teacher(self, frame_bgr):
+    def locate_teacher(self, frame_bgr, ocr_scale=0.5):
         boxes = self._extract_tile_boxes(frame_bgr)
-        ocr_results = self.reader.readtext(frame_bgr, detail=1, paragraph=False)
+        
+        if ocr_scale < 1.0:
+            h, w = frame_bgr.shape[:2]
+            scaled = cv2.resize(frame_bgr, (int(w * ocr_scale), int(h * ocr_scale)))
+            ocr_results = self.reader.readtext(scaled, detail=1, paragraph=False)
+            
+            scaled_ocr = []
+            for pts, text, conf in ocr_results:
+                scaled_pts = [[p[0] / ocr_scale, p[1] / ocr_scale] for p in pts]
+                scaled_ocr.append((scaled_pts, text, conf))
+            ocr_results = scaled_ocr
+        else:
+            ocr_results = self.reader.readtext(frame_bgr, detail=1, paragraph=False)
 
         best = None
         best_total_score = -1.0

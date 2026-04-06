@@ -38,6 +38,7 @@ def run_dynamic_visual_poc(
 
     last_bbox = None
     last_ocr_t = None
+    ocr_backoff_until = 0.0
 
     if debug_dir is not None:
         import os
@@ -66,11 +67,25 @@ def run_dynamic_visual_poc(
             loc = locator.validate_previous(frame, last_bbox)
 
         if loc is None or not loc["found"]:
-            loc = locator.locate_teacher(frame)
-            if loc["found"]:
-                last_bbox = loc["tile_bbox"]
-                last_ocr_t = t_sec
+            if t_sec >= ocr_backoff_until:
+                loc = locator.locate_teacher(frame, ocr_scale=0.5)
+                if loc["found"]:
+                    last_bbox = loc["tile_bbox"]
+                    last_ocr_t = t_sec
+                else:
+                    last_bbox = None
+                    ocr_backoff_until = t_sec + 15.0
             else:
+                loc = {
+                    "found": False,
+                    "tile_bbox": None,
+                    "source": "backoff",
+                    "label_text": None,
+                    "label_conf": 0.0,
+                    "match_score": 0.0,
+                    "face_found": False,
+                    "face_bbox_local": None,
+                }
                 last_bbox = None
 
         if not loc["found"]:
@@ -94,6 +109,12 @@ def run_dynamic_visual_poc(
                 "hands_detected": None,
                 "movement_energy": None,
             })
+            if debug_dir is not None:
+                import os
+                draw_frame = frame.copy()
+                cv2.putText(draw_frame, "TEACHER NOT FOUND", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
+                out_path = os.path.join(debug_dir, f"frame_{frame_idx:04d}_notfound.jpg")
+                cv2.imwrite(out_path, draw_frame)
             continue
 
         located_frames += 1
@@ -151,6 +172,13 @@ def run_dynamic_visual_poc(
                 "hands_detected": None,
                 "movement_energy": None,
             })
+            if debug_dir is not None:
+                import os
+                draw_frame = frame.copy()
+                cv2.rectangle(draw_frame, (x, y), (x+w, y+h), (0, 165, 255), 2)
+                cv2.putText(draw_frame, "NO FACE IN BOX", (x, max(30, y - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+                out_path = os.path.join(debug_dir, f"frame_{frame_idx:04d}_noface.jpg")
+                cv2.imwrite(out_path, draw_frame)
             continue
 
         camera_open_frames += 1
