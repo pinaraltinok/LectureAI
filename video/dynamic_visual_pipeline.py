@@ -99,7 +99,32 @@ def run_dynamic_visual_poc(
         located_frames += 1
 
         x, y, w, h = loc["tile_bbox"]
-        teacher_tile = crop_roi(frame, (x, y, w, h))
+        
+        if loc.get("face_found") and loc.get("face_bbox_local"):
+            fx, fy, fw, fh = loc["face_bbox_local"]
+            gx = x + fx
+            gy = y + fy
+            cx = gx + fw / 2.0
+            
+            mw = int(fw * 4.0)
+            mh = int(fh * 4.5)
+            
+            mx = int(cx - mw / 2.0)
+            my = int(gy - fh * 1.0)
+            
+            H, W = frame.shape[:2]
+            mx = max(0, min(mx, W - 1))
+            my = max(0, min(my, H - 1))
+            mw = max(1, min(mw, W - mx))
+            mh = max(1, min(mh, H - my))
+            
+            metric_bbox = (mx, my, mw, mh)
+        else:
+            metric_bbox = (x, y, w, h)
+
+        mx, my, mw, mh = metric_bbox
+
+        teacher_tile = crop_roi(frame, (mx, my, mw, mh))
         teacher_tile = standardize_crop(teacher_tile, out_size=metric_size)
 
         fm = face.compute(teacher_tile)
@@ -164,8 +189,12 @@ def run_dynamic_visual_poc(
         if debug_dir is not None:
             import os
             draw_frame = frame.copy()
-            cv2.rectangle(draw_frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-            y_offset = max(20, y - 10)
+            # Draw tracking bbox (blue)
+            cv2.rectangle(draw_frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
+            # Draw metric bbox (green)
+            cv2.rectangle(draw_frame, (mx, my), (mx+mw, my+mh), (0, 255, 0), 3)
+            
+            y_offset = max(20, my - 10)
             texts = [
                 f"Face: {face_detected}",
                 f"Smile: {fm.get('smile_score', 0):.2f}" if fm.get("smile_score") is not None else "Smile: N/A",
@@ -173,7 +202,7 @@ def run_dynamic_visual_poc(
                 f"Movement: {mv.get('movement_energy', 0):.2f}"
             ]
             for i, t in enumerate(reversed(texts)):
-                cv2.putText(draw_frame, t, (x, y_offset - i*20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+                cv2.putText(draw_frame, t, (mx, y_offset - i*20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
             
             out_path = os.path.join(debug_dir, f"frame_{frame_idx:04d}.jpg")
             cv2.imwrite(out_path, draw_frame)
