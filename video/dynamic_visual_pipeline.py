@@ -22,6 +22,7 @@ def run_dynamic_visual_poc(
     start_sec: float = 0.0,
     end_sec: float = None,
     only_camera_open_frames: bool = True,
+    debug_dir: str = None,
 ):
     locator = TeacherLocator(teacher_name=teacher_name)
     face = FaceMetrics()
@@ -37,6 +38,10 @@ def run_dynamic_visual_poc(
 
     last_bbox = None
     last_ocr_t = None
+
+    if debug_dir is not None:
+        import os
+        os.makedirs(debug_dir, exist_ok=True)
 
     debug_rows = []
 
@@ -155,6 +160,24 @@ def run_dynamic_visual_poc(
             "hands_detected": gm.get("hands_detected"),
             "movement_energy": mv.get("movement_energy"),
         })
+
+        if debug_dir is not None:
+            import os
+            draw_frame = frame.copy()
+            cv2.rectangle(draw_frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+            y_offset = max(20, y - 10)
+            texts = [
+                f"Face: {face_detected}",
+                f"Smile: {fm.get('smile_score', 0):.2f}" if fm.get("smile_score") is not None else "Smile: N/A",
+                f"Hands: {gm.get('hands_detected', 0)}",
+                f"Movement: {mv.get('movement_energy', 0):.2f}"
+            ]
+            for i, t in enumerate(reversed(texts)):
+                cv2.putText(draw_frame, t, (x, y_offset - i*20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+            
+            out_path = os.path.join(debug_dir, f"frame_{frame_idx:04d}.jpg")
+            cv2.imwrite(out_path, draw_frame)
+
 
     summary = {
         "analysis_interval_sec": analysis_interval_sec,
