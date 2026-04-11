@@ -7,6 +7,8 @@ from google.cloud import storage
 from video.dynamic_visual_pipeline import run_dynamic_visual_poc
 from video.frame_extractor import get_video_meta
 
+import os
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"C:\Users\Zehra\Desktop\bitirme\senior-design-488908-1d5d3e1681ee.json"
 
 def download_blob(bucket_name, source_blob_name, destination_file_name):
     client = storage.Client()

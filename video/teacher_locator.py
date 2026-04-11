@@ -157,19 +157,18 @@ class TeacherLocator:
             return False, None
 
         h, w = tile_bgr.shape[:2]
-        best_area = -1
+        best_score = -1.0
         best_bbox = None
 
         for det in res.detections:
-            box = det.location_data.relative_bounding_box
-            x = max(0, int(box.xmin * w))
-            y = max(0, int(box.ymin * h))
-            bw = max(1, int(box.width * w))
-            bh = max(1, int(box.height * h))
-            area = bw * bh
-
-            if area > best_area:
-                best_area = area
+            score = det.score[0] if det.score else 0.0
+            if score > best_score:
+                best_score = score
+                box = det.location_data.relative_bounding_box
+                x = max(0, int(box.xmin * w))
+                y = max(0, int(box.ymin * h))
+                bw = max(1, int(box.width * w))
+                bh = max(1, int(box.height * h))
                 best_bbox = (x, y, bw, bh)
 
         return True, best_bbox
@@ -256,28 +255,6 @@ class TeacherLocator:
                 }
 
         if best is None:
-            # Fallback: If OCR failed, try to find the largest face in the entire frame
-            face_found, full_face_bbox = self._detect_face_in_tile(frame_bgr)
-            if face_found:
-                fx, fy, fw, fh = full_face_bbox
-                tile_bbox = self._clip_roi(
-                    (fx - fw, int(fy - fh * 1.5), fw * 3, fh * 4), 
-                    frame_bgr.shape
-                )
-                tile = crop_roi(frame_bgr, tile_bbox)
-                f_found, face_bbox_local = self._detect_face_in_tile(tile)
-                if f_found:
-                    return {
-                        "found": True,
-                        "tile_bbox": tile_bbox,
-                        "label_text": "FACE_FALLBACK",
-                        "label_conf": 1.0,
-                        "match_score": 1.0,
-                        "face_found": True,
-                        "face_bbox_local": face_bbox_local,
-                        "source": "face_fallback",
-                    }
-
             return {
                 "found": False,
                 "tile_bbox": None,
