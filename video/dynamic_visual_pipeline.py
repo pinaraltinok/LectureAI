@@ -68,13 +68,13 @@ def run_dynamic_visual_poc(
 
         if loc is None or not loc["found"]:
             if t_sec >= ocr_backoff_until:
-                loc = locator.locate_teacher(frame, ocr_scale=0.5)
+                loc = locator.locate_teacher(frame, ocr_scale=1.0)
                 if loc["found"]:
                     last_bbox = loc["tile_bbox"]
                     last_ocr_t = t_sec
                 else:
                     last_bbox = None
-                    ocr_backoff_until = t_sec + 10.0
+                    ocr_backoff_until = t_sec + 5.0
             else:
                 loc = {
                     "found": False,

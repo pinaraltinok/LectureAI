@@ -51,24 +51,21 @@ cells.append(make_cell([
 # -- Cell 3: Pip install --
 cells.append(make_cell([
     '!pip install -q "numpy<2" "mediapipe==0.10.21" "easyocr==1.7.2" "google-cloud-storage>=2.16.0" opencv-python-headless pandas torch\n',
+    "\n",
+    "import site\n",
+    "import importlib\n",
+    "importlib.reload(site)\n",
+    "print('Paketler kuruldu ve path guncellendi.')\n",
 ], cell_id="c3"))
 
-# -- Cell 4: Runtime restart --
-cells.append(make_cell([
-    "# Runtime restart - pip kurulumu sonrasi gerekli\n",
-    "# Calistirdiktan sonra SONRAKI hucreden devam edin\n",
-    "import os\n",
-    "os.kill(os.getpid(), 9)\n",
-], cell_id="c4"))
-
-# -- Cell 5: Post-restart setup --
+# -- Cell 4: Imports --
 cells.append(make_cell([
     "import os, sys, json, glob\n",
     "import pandas as pd\n",
     "import mediapipe as mp\n",
     "from pathlib import Path\n",
     "\n",
-    "# Credential tekrar ayarla (restart sonrasi env temizlenir)\n",
+    "# Credential ayarla\n",
     "CREDENTIAL_PATH = '/content/senior-design-488908-1d5d3e1681ee.json'\n",
     "if not os.path.exists(CREDENTIAL_PATH):\n",
     f"    _cred = {cred_escaped}\n",
@@ -82,9 +79,9 @@ cells.append(make_cell([
     "\n",
     'print("mediapipe:", mp.__version__)\n',
     'print("Credential:", CREDENTIAL_PATH)\n',
-], cell_id="c5"))
+], cell_id="c4"))
 
-# -- Cell 6: Import pipeline --
+# -- Cell 5: Import pipeline --
 cells.append(make_cell([
     "from video.dynamic_visual_pipeline import run_dynamic_visual_poc\n",
     "from video.frame_extractor import get_video_meta\n",
@@ -92,7 +89,7 @@ cells.append(make_cell([
     "\n",
     "client = storage.Client()\n",
     'print("Import ve Storage client hazir.")\n',
-], cell_id="c6"))
+], cell_id="c5"))
 
 # -- Cell 7: Config --
 cells.append(make_cell([
@@ -100,9 +97,9 @@ cells.append(make_cell([
     'SEGMENT_PREFIX = "TUR40W245_TUE-18_8-9(M1L1)/"\n',
     'TEACHER_NAME = "Zehra Bozkurt"\n',
     "\n",
-    "ANALYSIS_INTERVAL_SEC = 4.0\n",
-    "RELOCALIZE_INTERVAL_SEC = 20.0\n",
-    "SMILE_THRESHOLD = 0.35\n",
+    "ANALYSIS_INTERVAL_SEC = 2.0\n",
+    "RELOCALIZE_INTERVAL_SEC = 10.0\n",
+    "SMILE_THRESHOLD = 0.60\n",
     "\n",
     'LOCAL_SEGMENT_DIR = "/content/work/segments"\n',
     'LOCAL_OUTPUT_DIR = "/content/work/outputs"\n',
@@ -161,6 +158,8 @@ cells.append(make_cell([
     "    local_video = os.path.join(LOCAL_SEGMENT_DIR, segment_name)\n",
     "    output_dir = os.path.join(LOCAL_OUTPUT_DIR, segment_stem)\n",
     "    os.makedirs(output_dir, exist_ok=True)\n",
+    '    debug_frames_dir = os.path.join(output_dir, "frames")\n',
+    "    os.makedirs(debug_frames_dir, exist_ok=True)\n",
     "\n",
     "    download_blob(BUCKET_NAME, blob_name, local_video)\n",
     "\n",
@@ -176,7 +175,7 @@ cells.append(make_cell([
     "        start_sec=0.0,\n",
     "        end_sec=None,\n",
     "        only_camera_open_frames=True,\n",
-    "        debug_dir=None,  # debug frame kaydi kapatildi (hiz icin)\n",
+    "        debug_dir=debug_frames_dir,\n",
     "    )\n",
     "\n",
     "    summary.update({\n",
