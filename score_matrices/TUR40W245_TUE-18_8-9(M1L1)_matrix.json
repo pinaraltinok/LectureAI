@@ -1,0 +1,163 @@
+{
+  "folder": "TUR40W245_TUE-18_8-9(M1L1)",
+  "chronological_matrix": [
+    {
+      "index": 0,
+      "timestamp": "0:00",
+      "segment": "TUR40W245_TUE-18_8-9(M1L1)/seg_0.mp4",
+      "scores": {
+        "İletişim": 0.33241331393504736,
+        "Hazırlık": 0.38092588603906297,
+        "Organizasyon": 0.4266003677526398,
+        "Ders Yapısı": 0.31542455665412417
+      }
+    },
+    {
+      "index": 1,
+      "timestamp": "0:10",
+      "segment": "TUR40W245_TUE-18_8-9(M1L1)/seg_1.mp4",
+      "scores": {
+        "İletişim": 0.3222355102013604,
+        "Hazırlık": 0.3478825645864885,
+        "Organizasyon": 0.40488451178156565,
+        "Ders Yapısı": 0.29297437489156364
+      }
+    },
+    {
+      "index": 2,
+      "timestamp": "0:20",
+      "segment": "TUR40W245_TUE-18_8-9(M1L1)/seg_2.mp4",
+      "scores": {
+        "İletişim": 0.30225478465083255,
+        "Hazırlık": 0.35341731142003574,
+        "Organizasyon": 0.3790376020093523,
+        "Ders Yapısı": 0.2957032271536146
+      }
+    },
+    {
+      "index": 3,
+      "timestamp": "0:30",
+      "segment": "TUR40W245_TUE-18_8-9(M1L1)/seg_3.mp4",
+      "scores": {
+        "İletişim": 0.3038924865086612,
+        "Hazırlık": 0.3515153854505213,
+        "Organizasyon": 0.38358575968796166,
+        "Ders Yapısı": 0.28776417786482994
+      }
+    },
+    {
+      "index": 4,
+      "timestamp": "0:40",
+      "segment": "TUR40W245_TUE-18_8-9(M1L1)/seg_4.mp4",
+      "scores": {
+        "İletişim": 0.2870171702527302,
+        "Hazırlık": 0.33801348897765937,
+        "Organizasyon": 0.36188101324613275,
+        "Ders Yapısı": 0.2680705933704205
+      }
+    },
+    {
+      "index": 5,
+      "timestamp": "0:50",
+      "segment": "TUR40W245_TUE-18_8-9(M1L1)/seg_5.mp4",
+      "scores": {
+        "İletişim": 0.29619750221760716,
+        "Hazırlık": 0.34030989752238916,
+        "Organizasyon": 0.37183153997642954,
+        "Ders Yapısı": 0.28045007587482257
+      }
+    },
+    {
+      "index": 6,
+      "timestamp": "1:00",
+      "segment": "TUR40W245_TUE-18_8-9(M1L1)/seg_6.mp4",
+      "scores": {
+        "İletişim": 0.3142115186352127,
+        "Hazırlık": 0.3606702930015246,
+        "Organizasyon": 0.40063527125863174,
+        "Ders Yapısı": 0.3017547576850765
+      }
+    },
+    {
+      "index": 7,
+      "timestamp": "1:10",
+      "segment": "TUR40W245_TUE-18_8-9(M1L1)/seg_7.mp4",
+      "scores": {
+        "İletişim": 0.2982133760250465,
+        "Hazırlık": 0.3477258742708045,
+        "Organizasyon": 0.38339253998288947,
+        "Ders Yapısı": 0.2772293532664647
+      }
+    }
+  ],
+  "top_evidence_navigator": {
+    "İletişim": [
+      {
+        "timestamp": "0:00",
+        "score": 0.33241331393504736,
+        "segment": "TUR40W245_TUE-18_8-9(M1L1)/seg_0.mp4"
+      },
+      {
+        "timestamp": "0:10",
+        "score": 0.3222355102013604,
+        "segment": "TUR40W245_TUE-18_8-9(M1L1)/seg_1.mp4"
+      },
+      {
+        "timestamp": "1:00",
+        "score": 0.3142115186352127,
+        "segment": "TUR40W245_TUE-18_8-9(M1L1)/seg_6.mp4"
+      }
+    ],
+    "Hazırlık": [
+      {
+        "timestamp": "0:00",
+        "score": 0.38092588603906297,
+        "segment": "TUR40W245_TUE-18_8-9(M1L1)/seg_0.mp4"
+      },
+      {
+        "timestamp": "1:00",
+        "score": 0.3606702930015246,
+        "segment": "TUR40W245_TUE-18_8-9(M1L1)/seg_6.mp4"
+      },
+      {
+        "timestamp": "0:20",
+        "score": 0.35341731142003574,
+        "segment": "TUR40W245_TUE-18_8-9(M1L1)/seg_2.mp4"
+      }
+    ],
+    "Organizasyon": [
+      {
+        "timestamp": "0:00",
+        "score": 0.4266003677526398,
+        "segment": "TUR40W245_TUE-18_8-9(M1L1)/seg_0.mp4"
+      },
+      {
+        "timestamp": "0:10",
+        "score": 0.40488451178156565,
+        "segment": "TUR40W245_TUE-18_8-9(M1L1)/seg_1.mp4"
+      },
+      {
+        "timestamp": "1:00",
+        "score": 0.40063527125863174,
+        "segment": "TUR40W245_TUE-18_8-9(M1L1)/seg_6.mp4"
+      }
+    ],
+    "Ders Yapısı": [
+      {
+        "timestamp": "0:00",
+        "score": 0.31542455665412417,
+        "segment": "TUR40W245_TUE-18_8-9(M1L1)/seg_0.mp4"
+      },
+      {
+        "timestamp": "1:00",
+        "score": 0.3017547576850765,
+        "segment": "TUR40W245_TUE-18_8-9(M1L1)/seg_6.mp4"
+      },
+      {
+        "timestamp": "0:20",
+        "score": 0.2957032271536146,
+        "segment": "TUR40W245_TUE-18_8-9(M1L1)/seg_2.mp4"
+      }
+    ]
+  }
+}

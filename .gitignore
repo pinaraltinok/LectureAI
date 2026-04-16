@@ -1,13 +1,26 @@
+# Python cache / bytecode
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+
 .ipynb_checkpoints/
 
+# Video / media artifacts
 *.mp4
 *.avi
 *.mov
 *.mkv
+
+# JSON outputs (kept out of the repo by default in this project)
 *.json
 
+# Other generated folders
 outputs/
 work/
 data/
+temp_videos/
+
+# OS junk
+Thumbs.db
+.DS_Store

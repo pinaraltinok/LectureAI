@@ -1,0 +1,115 @@
+{
+  "video_folder": "TUR40W207_SUN-2030_10-12(M1L1)",
+  "model": "gemini-embedding-2-preview",
+  "timestamp": "2026-04-12 18:14:31",
+  "matrix": [
+    {
+      "segment": "TUR40W207_SUN-2030_10-12(M1L1)/seg_0.mp4",
+      "scores": {
+        "İletişim": 0.3415,
+        "Hazırlık": 0.3803,
+        "Organizasyon": 0.4253,
+        "Ders Yapısı": 0.3123
+      }
+    },
+    {
+      "segment": "TUR40W207_SUN-2030_10-12(M1L1)/seg_1.mp4",
+      "scores": {
+        "İletişim": 0.3028,
+        "Hazırlık": 0.3543,
+        "Organizasyon": 0.395,
+        "Ders Yapısı": 0.2899
+      }
+    },
+    {
+      "segment": "TUR40W207_SUN-2030_10-12(M1L1)/seg_2.mp4",
+      "scores": {
+        "İletişim": 0.3467,
+        "Hazırlık": 0.3724,
+        "Organizasyon": 0.421,
+        "Ders Yapısı": 0.2979
+      }
+    },
+    {
+      "segment": "TUR40W207_SUN-2030_10-12(M1L1)/seg_3.mp4",
+      "scores": {
+        "İletişim": 0.3459,
+        "Hazırlık": 0.3797,
+        "Organizasyon": 0.43,
+        "Ders Yapısı": 0.2928
+      }
+    },
+    {
+      "segment": "TUR40W207_SUN-2030_10-12(M1L1)/seg_4.mp4",
+      "scores": {
+        "İletişim": 0.3111,
+        "Hazırlık": 0.3453,
+        "Organizasyon": 0.3835,
+        "Ders Yapısı": 0.2925
+      }
+    },
+    {
+      "segment": "TUR40W207_SUN-2030_10-12(M1L1)/seg_5.mp4",
+      "scores": {
+        "İletişim": 0.3056,
+        "Hazırlık": 0.34,
+        "Organizasyon": 0.386,
+        "Ders Yapısı": 0.2784
+      }
+    },
+    {
+      "segment": "TUR40W207_SUN-2030_10-12(M1L1)/seg_6.mp4",
+      "scores": {
+        "İletişim": 0.3028,
+        "Hazırlık": 0.3533,
+        "Organizasyon": 0.3789,
+        "Ders Yapısı": 0.2822
+      }
+    },
+    {
+      "segment": "TUR40W207_SUN-2030_10-12(M1L1)/seg_7.mp4",
+      "scores": {
+        "İletişim": 0.2878,
+        "Hazırlık": 0.3359,
+        "Organizasyon": 0.3723,
+        "Ders Yapısı": 0.2705
+      }
+    },
+    {
+      "segment": "TUR40W207_SUN-2030_10-12(M1L1)/seg_8.mp4",
+      "scores": {
+        "İletişim": 0.3099,
+        "Hazırlık": 0.3401,
+        "Organizasyon": 0.3924,
+        "Ders Yapısı": 0.2797
+      }
+    },
+    {
+      "segment": "TUR40W207_SUN-2030_10-12(M1L1)/seg_9.mp4",
+      "scores": {
+        "İletişim": 0.3088,
+        "Hazırlık": 0.3508,
+        "Organizasyon": 0.3873,
+        "Ders Yapısı": 0.286
+      }
+    },
+    {
+      "segment": "TUR40W207_SUN-2030_10-12(M1L1)/seg_10.mp4",
+      "scores": {
+        "İletişim": 0.2991,
+        "Hazırlık": 0.3454,
+        "Organizasyon": 0.3931,
+        "Ders Yapısı": 0.2739
+      }
+    },
+    {
+      "segment": "TUR40W207_SUN-2030_10-12(M1L1)/seg_11.mp4",
+      "scores": {
+        "İletişim": 0.3258,
+        "Hazırlık": 0.382,
+        "Organizasyon": 0.4087,
+        "Ders Yapısı": 0.3105
+      }
+    }
+  ]
+}

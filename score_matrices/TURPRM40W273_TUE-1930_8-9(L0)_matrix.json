@@ -1,0 +1,77 @@
+{
+  "folder": "TURPRM40W273_TUE-1930_8-9(L0)",
+  "results": [
+    {
+      "segment": "TURPRM40W273_TUE-1930_8-9(L0)/seg_0.mp4",
+      "scores": {
+        "İletişim": 0.3475208219561133,
+        "Hazırlık": 0.3820017292086247,
+        "Organizasyon": 0.40719946277456603,
+        "Ders Yapısı": 0.3165360225053219
+      }
+    },
+    {
+      "segment": "TURPRM40W273_TUE-1930_8-9(L0)/seg_1.mp4",
+      "scores": {
+        "İletişim": 0.2897524209890985,
+        "Hazırlık": 0.32789912162690155,
+        "Organizasyon": 0.38727827592097946,
+        "Ders Yapısı": 0.2603827110211935
+      }
+    },
+    {
+      "segment": "TURPRM40W273_TUE-1930_8-9(L0)/seg_2.mp4",
+      "scores": {
+        "İletişim": 0.35669044805804473,
+        "Hazırlık": 0.38851540727338213,
+        "Organizasyon": 0.421300839103611,
+        "Ders Yapısı": 0.2978673402943737
+      }
+    },
+    {
+      "segment": "TURPRM40W273_TUE-1930_8-9(L0)/seg_3.mp4",
+      "scores": {
+        "İletişim": 0.31656045215039136,
+        "Hazırlık": 0.36586219245136015,
+        "Organizasyon": 0.4162857028217925,
+        "Ders Yapısı": 0.2887833373812858
+      }
+    },
+    {
+      "segment": "TURPRM40W273_TUE-1930_8-9(L0)/seg_4.mp4",
+      "scores": {
+        "İletişim": 0.32161317118782196,
+        "Hazırlık": 0.35964458424595763,
+        "Organizasyon": 0.4267363751055144,
+        "Ders Yapısı": 0.28976129276632684
+      }
+    },
+    {
+      "segment": "TURPRM40W273_TUE-1930_8-9(L0)/seg_5.mp4",
+      "scores": {
+        "İletişim": 0.3095703040869018,
+        "Hazırlık": 0.3593300270782785,
+        "Organizasyon": 0.39495499551250446,
+        "Ders Yapısı": 0.2748943640188436
+      }
+    },
+    {
+      "segment": "TURPRM40W273_TUE-1930_8-9(L0)/seg_6.mp4",
+      "scores": {
+        "İletişim": 0.3205151011019977,
+        "Hazırlık": 0.3822464360901886,
+        "Organizasyon": 0.39486789256818633,
+        "Ders Yapısı": 0.2926523592983549
+      }
+    },
+    {
+      "segment": "TURPRM40W273_TUE-1930_8-9(L0)/seg_7.mp4",
+      "scores": {
+        "İletişim": 0.33192172416121896,
+        "Hazırlık": 0.3802301497412479,
+        "Organizasyon": 0.41811294571772034,
+        "Ders Yapısı": 0.2863073955362649
+      }
+    }
+  ]
+}

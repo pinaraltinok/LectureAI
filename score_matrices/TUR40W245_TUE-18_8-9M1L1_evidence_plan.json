@@ -1,0 +1,25 @@
+{
+  "folder": "TUR40W245_TUE-18_8-9(M1L1)",
+  "evidence": [
+    {
+      "rubric": "İletişim",
+      "time": "2:12",
+      "evidence": "Öğretmen, öğrencinin sesinin az geldiğini fark eder ve mikrofonu yaklaştırmasını ister."
+    },
+    {
+      "rubric": "Hazırlık",
+      "time": "3:05",
+      "evidence": "Öğretmen, öğrencilerin Roblox Studio'yu kurup kurmadığını ve daha önce Kodland'dan ders alıp almadığını sorar."
+    },
+    {
+      "rubric": "Organizasyon",
+      "time": "6:10",
+      "evidence": "Öğretmen, teknik bir sorunla karşılaşan öğrencinin ekran kontrolünü alarak kurulum sürecine yardımcı olur."
+    },
+    {
+      "rubric": "Ders Yapısı",
+      "time": "3:45",
+      "evidence": "Öğretmen, dersin içeriği ve ilerleyişi hakkında bilgi vererek, gerçek kodlamaya geçmeden önce basit kısımlardan başlayacaklarını açıklar."
+    }
+  ]
+}

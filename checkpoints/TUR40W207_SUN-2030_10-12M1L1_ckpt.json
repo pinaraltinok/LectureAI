@@ -1,0 +1,42 @@
+{
+  "stage1": {
+    "0": {
+      "name": "TUR40W207_SUN-2030_10-12(M1L1)/seg_0.mp4",
+      "gcs_uri": "gs://lectureai_processed/TUR40W207_SUN-2030_10-12(M1L1)/seg_0.mp4",
+      "base_time": 0,
+      "scores": {}
+    },
+    "1": {
+      "name": "TUR40W207_SUN-2030_10-12(M1L1)/seg_1.mp4",
+      "gcs_uri": "gs://lectureai_processed/TUR40W207_SUN-2030_10-12(M1L1)/seg_1.mp4",
+      "base_time": 10,
+      "scores": {}
+    },
+    "2": {
+      "name": "TUR40W207_SUN-2030_10-12(M1L1)/seg_2.mp4",
+      "gcs_uri": "gs://lectureai_processed/TUR40W207_SUN-2030_10-12(M1L1)/seg_2.mp4",
+      "base_time": 20,
+      "scores": {}
+    },
+    "3": {
+      "name": "TUR40W207_SUN-2030_10-12(M1L1)/seg_3.mp4",
+      "gcs_uri": "gs://lectureai_processed/TUR40W207_SUN-2030_10-12(M1L1)/seg_3.mp4",
+      "base_time": 30,
+      "scores": {}
+    },
+    "4": {
+      "name": "TUR40W207_SUN-2030_10-12(M1L1)/seg_4.mp4",
+      "gcs_uri": "gs://lectureai_processed/TUR40W207_SUN-2030_10-12(M1L1)/seg_4.mp4",
+      "base_time": 40,
+      "scores": {}
+    },
+    "5": {
+      "name": "TUR40W207_SUN-2030_10-12(M1L1)/seg_5.mp4",
+      "gcs_uri": "gs://lectureai_processed/TUR40W207_SUN-2030_10-12(M1L1)/seg_5.mp4",
+      "base_time": 50,
+      "scores": {}
+    }
+  },
+  "stage2": {},
+  "done": []
+}
