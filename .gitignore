@@ -1,0 +1,20 @@
+# Environment and secrets (never commit)
+.env
+scripts/.env
+service_account.json
+**/service_account.json
+tests/service_account/*.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+ENV/
+
+# Tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
