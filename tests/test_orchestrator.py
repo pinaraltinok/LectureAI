@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -316,6 +316,75 @@ async def test_generate_report_uses_processed_bucket_paths():
 
     # Exactly 1 chunk + 1 merge call
     assert orch._genai_client.models.generate_content.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_generate_report_falls_back_to_nested_lecture_report_path():
+    orch = _make_orchestrator()
+    _buckets, blobs = _install_bucket_router(orch)
+
+    primary_cv_blob = ("lectureai_processed", "results/vid-1.json")
+    blobs[primary_cv_blob] = MagicMock()
+    blobs[primary_cv_blob].exists.return_value = False
+
+    nested_cv_blob = (
+        "lectureai_processed",
+        "results/vid-1/lecture_report.json",
+    )
+    blobs[nested_cv_blob] = MagicMock()
+    blobs[nested_cv_blob].exists.return_value = True
+    blobs[nested_cv_blob].download_as_text = MagicMock(return_value=_cv_json())
+
+    orch._genai_client = MagicMock()
+    orch._genai_client.models.generate_content.side_effect = [
+        SimpleNamespace(text=_chunk_response_json()),
+        SimpleNamespace(text=_merge_response_json()),
+    ]
+
+    report = await orch.generate_report("vid-1", _audio_result())
+
+    assert report.video_id == "vid-1"
+    blobs[primary_cv_blob].exists.assert_called_once()
+    blobs[nested_cv_blob].download_as_text.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_merge_retries_on_503_then_succeeds():
+    """503 on merge is retried once (10s backoff); chunk call unchanged."""
+    from google.genai.errors import ServerError
+
+    orch = _make_orchestrator()
+    _buckets, blobs = _install_bucket_router(orch)
+
+    cv_blob_key = ("lectureai_processed", "results/vid-1.json")
+    blobs[cv_blob_key] = MagicMock()
+    blobs[cv_blob_key].download_as_text = MagicMock(return_value=_cv_json())
+
+    orch._genai_client = MagicMock()
+    orch._genai_client.models.generate_content.side_effect = [
+        SimpleNamespace(text=_chunk_response_json()),
+        ServerError(
+            503,
+            {
+                "error": {
+                    "code": 503,
+                    "message": "UNAVAILABLE",
+                    "status": "UNAVAILABLE",
+                }
+            },
+            None,
+        ),
+        SimpleNamespace(text=_merge_response_json()),
+    ]
+
+    with patch(
+        "src.orchestrator.gemini_client.asyncio.sleep", new_callable=AsyncMock
+    ) as mock_sleep:
+        report = await orch.generate_report("vid-1", _audio_result())
+
+    assert report.video_id == "vid-1"
+    assert orch._genai_client.models.generate_content.call_count == 3
+    mock_sleep.assert_awaited_once_with(10.0)
 
 
 # --------------------------------------------------------------------------- #

@@ -7,6 +7,7 @@ the pipeline touches. Pass one instance to both
 Loadable from environment variables:
 
     GCS_BUCKET_VIDEOS        = lectureai_full_videos
+    GCS_FULL_VIDEOS_BUCKET   = lectureai_full_videos  (alias for pipeline CLI)
     GCS_BUCKET_PROCESSED     = lectureai_processed
     GCS_BUCKET_TRANSCRIPTS   = lectureai_transcripts
     GCS_BUCKET_AUDIO         = lectureai_audio
@@ -49,7 +50,7 @@ class BucketConfig(BaseModel):
     )
 
     # ---- object key templates -----------------------------------------
-    video_key: str = Field(default="{video_id}.mp4")
+    video_key: str = Field(default="Lesson_Records/{video_id}.mp4")
     cv_key: str = Field(default="results/{video_id}.json")
     audio_json_key: str = Field(default="{video_id}.json")
     report_key: str = Field(default="reports/{video_id}.json")
@@ -84,7 +85,13 @@ class BucketConfig(BaseModel):
         values = {}
         missing = []
         for field, env_var in required.items():
-            val = os.environ.get(env_var)
+            if field == "videos":
+                val = (
+                    os.environ.get("GCS_FULL_VIDEOS_BUCKET")
+                    or os.environ.get(env_var)
+                )
+            else:
+                val = os.environ.get(env_var)
             if not val:
                 missing.append(env_var)
             else:

@@ -15,11 +15,14 @@ if str(ROOT) not in sys.path:
 
 from src.audio.assemblyai_client import AudioAnalysisClient
 from src.config import BucketConfig
+from src.env_bootstrap import load_dotenv_files
 from src.orchestrator.gemini_client import ReportOrchestrator
+from scripts.generate_pdf import generate_pdf_for_video_id
 
 
 PROCESSED_BUCKET = "lectureai_processed"
-VIDEOS_PREFIX = "videos/"
+FULL_VIDEOS_BUCKET = "lectureai_full_videos"
+VIDEOS_PREFIX = "Lesson_Records/"
 REPORTS_PREFIX = "reports/"
 MAX_CONCURRENCY = 3
 
@@ -39,43 +42,32 @@ def _is_excluded_video_id(video_id: str) -> bool:
     )
 
 
+def _full_videos_bucket_name() -> str:
+    return (
+        os.environ.get("GCS_FULL_VIDEOS_BUCKET")
+        or os.environ.get("GCS_BUCKET_VIDEOS")
+        or FULL_VIDEOS_BUCKET
+    )
+
+
 def _discover_video_ids(storage_client: storage.Client) -> List[str]:
-    """List gs://lectureai_processed/videos/*.mp4 and return video_ids."""
-    bucket_name = PROCESSED_BUCKET
+    """List gs://{full_videos_bucket}/Lesson_Records/*.mp4 and return video_ids."""
+    bucket_name = _full_videos_bucket_name()
     bucket = storage_client.bucket(bucket_name)
     blobs = list(bucket.list_blobs(prefix=VIDEOS_PREFIX))
 
     video_ids = set()
-    # Primary layout: videos/{video_id}.mp4
+    # Canonical layout: Lesson_Records/{video_id}.mp4
     for blob in blobs:
         object_name = blob.name
+        if not object_name.startswith(VIDEOS_PREFIX):
+            continue
         if not object_name.lower().endswith(".mp4"):
             continue
         filename = object_name.rsplit("/", 1)[-1]
         video_id = filename[:-4]  # strip ".mp4"
         if video_id:
             video_ids.add(video_id)
-
-    # Fallback layout observed in this bucket:
-    #   {video_id}/seg_0.mp4, {video_id}/seg_1.mp4, ...
-    if video_ids:
-        return sorted(video_ids)
-
-    all_mp4_blobs = [
-        blob.name
-        for blob in bucket.list_blobs()
-        if blob.name.lower().endswith(".mp4")
-    ]
-
-    for name in all_mp4_blobs:
-        parts = name.split("/")
-        if len(parts) >= 2 and parts[-1].lower().startswith("seg_"):
-            # segmented storage: first path component is the lecture id
-            video_ids.add(parts[0])
-            continue
-        # flat file fallback: use filename without extension
-        filename = parts[-1]
-        video_ids.add(filename[:-4])
 
     return sorted(video_ids)
 
@@ -105,7 +97,14 @@ async def _process_video(
                 return PipelineResult(video_id=video_id, status="skipped")
 
             audio_result = await audio.analyze(video_id)
-            await orchestrator.generate_report(video_id, audio_result)
+            report = await orchestrator.generate_report(video_id, audio_result)
+            await asyncio.to_thread(
+                generate_pdf_for_video_id,
+                storage_client=storage_client,
+                bucket_name=PROCESSED_BUCKET,
+                video_id=video_id,
+                report=report,
+            )
             print(f"[DONE] {video_id}")
             return PipelineResult(video_id=video_id, status="processed")
         except Exception as exc:  # pragma: no cover - integration path
@@ -146,6 +145,8 @@ def _parse_args() -> argparse.Namespace:
 
 
 async def main() -> None:
+    load_dotenv_files(ROOT)
+
     args = _parse_args()
     # Keep stdout clean: only explicit `print(...)` lines from this script.
     logging.getLogger().handlers.clear()
@@ -174,29 +175,15 @@ async def main() -> None:
         )
 
     buckets = BucketConfig.from_env()
-    # Reports + CV live in processed; source mp4 may live elsewhere.
+    # Reports + CV live in processed; source mp4s live in full-videos bucket.
     buckets = buckets.model_copy(
         update={
+            "videos": _full_videos_bucket_name(),
             "processed": PROCESSED_BUCKET,
+            "video_key": "Lesson_Records/{video_id}.mp4",
             "report_key": "reports/{video_id}.json",
         }
     )
-
-    processed_bucket = storage_client.bucket(PROCESSED_BUCKET)
-    primary_video_blob = processed_bucket.blob("videos/{video_id}.mp4")
-    if await asyncio.to_thread(primary_video_blob.exists):
-        buckets = buckets.model_copy(
-            update={
-                "videos": PROCESSED_BUCKET,
-                "video_key": "videos/{video_id}.mp4",
-            }
-        )
-    else:
-        buckets = buckets.model_copy(
-            update={
-                "video_key": "Lesson_Records/{video_id}.mp4",
-            }
-        )
 
     filtered_video_ids: List[str] = []
     for video_id in video_ids:

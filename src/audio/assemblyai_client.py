@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import shutil
 import sys
 import tempfile
 import time
@@ -39,6 +40,49 @@ from .schemas import (
 from .transcript_format import build_transcript_txt
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_ffmpeg_executable() -> Optional[str]:
+    """Return a usable ``ffmpeg`` binary path, or ``None`` if not found.
+
+    ``ffmpeg-python`` shells out to the real CLI. Set ``FFMPEG_BINARY`` or
+    ``FFMPEG_PATH`` to a full path (e.g. ``C:\\\\ffmpeg\\\\bin\\\\ffmpeg.exe``)
+    if ``ffmpeg`` is not on ``PATH`` (common on Windows).
+    """
+    for key in ("FFMPEG_BINARY", "FFMPEG_PATH"):
+        raw = (os.environ.get(key) or "").strip().strip('"')
+        if not raw:
+            continue
+        if os.path.isfile(raw):
+            return os.path.normpath(raw)
+        found = shutil.which(raw)
+        if found:
+            return found
+    found = shutil.which("ffmpeg")
+    if found:
+        return found
+    if sys.platform == "win32":
+        return shutil.which("ffmpeg.exe")
+    return None
+
+
+def _ffmpeg_not_found_message() -> str:
+    if sys.platform == "win32":
+        install = (
+            "Install ffmpeg (e.g. `winget install Gyan.FFmpeg` or "
+            "https://www.gyan.dev/ffmpeg/builds/) and add its `bin` folder "
+            "to your PATH, or set env var FFMPEG_BINARY to the full path "
+            "of ffmpeg.exe."
+        )
+    else:
+        install = (
+            "Install ffmpeg with your package manager and ensure `ffmpeg` "
+            "is on PATH, or set FFMPEG_BINARY to the full path of the binary."
+        )
+    return (
+        "ffmpeg executable not found. The audio pipeline requires the "
+        f"ffmpeg CLI (ffmpeg-python only wraps it). {install}"
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -92,6 +136,28 @@ class AudioAnalysisClient:
         aai.settings.api_key = assemblyai_api_key
 
         self._storage_client: storage.Client = storage.Client()
+
+    @staticmethod
+    def _build_transcription_config() -> aai.TranscriptionConfig:
+        """Build an AssemblyAI config compatible with old/new SDKs."""
+        base_kwargs = {
+            "speaker_labels": True,
+            "sentiment_analysis": True,
+            "auto_highlights": True,
+        }
+        try:
+            return aai.TranscriptionConfig(
+                **base_kwargs,
+                speech_models=["universal-2"],
+            )
+        except TypeError:
+            speech_model = getattr(getattr(aai, "SpeechModel", None), "best", None)
+            if speech_model is not None:
+                return aai.TranscriptionConfig(
+                    **base_kwargs,
+                    speech_model=speech_model,
+                )
+            return aai.TranscriptionConfig(**base_kwargs)
 
     # ------------------------------------------------------------------ #
     #  Public API
@@ -200,6 +266,15 @@ class AudioAnalysisClient:
 
     async def _convert_mp4_to_mp3(self, video_id: str, mp4_path: str) -> str:
         with self._stage(video_id, "ffmpeg"):
+            ffmpeg_cmd = resolve_ffmpeg_executable()
+            if not ffmpeg_cmd:
+                raise AudioProcessingError(
+                    video_id,
+                    "ffmpeg",
+                    _ffmpeg_not_found_message(),
+                )
+            logger.debug("[%s] using ffmpeg binary: %s", video_id, ffmpeg_cmd)
+
             fd, mp3_path = tempfile.mkstemp(suffix=".mp3")
             os.close(fd)
 
@@ -212,7 +287,11 @@ class AudioAnalysisClient:
                         acodec="libmp3lame",
                         audio_bitrate="64k",
                     )
-                    .run(overwrite_output=True, quiet=True)
+                    .run(
+                        overwrite_output=True,
+                        quiet=True,
+                        cmd=ffmpeg_cmd,
+                    )
                 )
 
             try:
@@ -222,10 +301,21 @@ class AudioAnalysisClient:
                     os.unlink(mp3_path)
                 except OSError:
                     pass
+                hint = ""
+                err_s = str(exc)
+                if (
+                    "WinError 2" in err_s
+                    or "[Errno 2]" in err_s
+                    or "cannot find the file specified" in err_s.lower()
+                ):
+                    hint = (
+                        " (Likely cause: ffmpeg.exe missing or not on PATH; "
+                        "set FFMPEG_BINARY or install ffmpeg — see logs above.)"
+                    )
                 raise AudioProcessingError(
                     video_id,
                     "ffmpeg",
-                    f"ffmpeg MP3 conversion failed: {exc}",
+                    f"ffmpeg MP3 conversion failed: {exc}{hint}",
                 ) from exc
             return mp3_path
 
@@ -237,12 +327,7 @@ class AudioAnalysisClient:
         """Submit a local MP3 file to AssemblyAI."""
         with self._stage(video_id, "upload_assemblyai"):
             try:
-                config = aai.TranscriptionConfig(
-                    speaker_labels=True,
-                    sentiment_analysis=True,
-                    auto_highlights=True,
-                    speech_models=["universal-2"],
-                )
+                config = self._build_transcription_config()
                 transcriber = aai.Transcriber(config=config)
                 transcript = await asyncio.to_thread(
                     transcriber.submit, mp3_path

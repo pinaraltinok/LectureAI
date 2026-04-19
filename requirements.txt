@@ -1,3 +1,6 @@
+# Use Python 3.11, 3.12, or 3.13. Python 3.14 is not supported yet by
+# pydantic-core (PyO3) and other native wheels — see pyproject.toml.
+#
 # ---- Core runtime dependencies (pinned) ----
 pydantic==2.9.2
 pydantic-settings==2.6.1
@@ -10,6 +13,8 @@ google-cloud-storage==2.18.2
 # ---- IO ----
 aiofiles==24.1.0
 ffmpeg-python==0.2.0
+python-dotenv==1.0.1
+reportlab
 
 # ---- Testing ----
 pytest==8.3.3

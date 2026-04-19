@@ -14,6 +14,7 @@ from src.audio.schemas import (
     build_sentiment_summary,
 )
 from src.config import BucketConfig
+from src.env_bootstrap import load_dotenv_files
 from src.orchestrator.gemini_client import ReportOrchestrator
 
 
@@ -21,6 +22,7 @@ VIDEO_ID = "TUR40W245_TUE-18_8-9(M1L1)"
 
 
 async def main() -> None:
+    load_dotenv_files(ROOT)
     buckets = BucketConfig.from_env()
     orchestrator = ReportOrchestrator(
         gemini_api_key=os.environ["GEMINI_API_KEY"],

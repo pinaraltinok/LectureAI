@@ -10,6 +10,7 @@ if str(ROOT) not in sys.path:
 
 from src.audio.assemblyai_client import AudioAnalysisClient
 from src.config import BucketConfig
+from src.env_bootstrap import load_dotenv_files
 from src.orchestrator.gemini_client import ReportOrchestrator
 
 
@@ -17,6 +18,7 @@ VIDEO_ID = "TUR40W245_TUE-18_8-9(M1L1)"
 
 
 async def main() -> None:
+    load_dotenv_files(ROOT)
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",

@@ -116,13 +116,17 @@ def _ensure_blob(
 
 
 def _patch_ffmpeg_run():
-    """Return a patch context manager for ``ffmpeg`` chain (input/output/run)."""
+    """Mock ``ffmpeg-python`` and pretend ``ffmpeg`` CLI is available."""
     mock_input = MagicMock()
     mock_out = MagicMock()
     mock_out.run = MagicMock()
     mock_input.output.return_value = mock_out
-    return patch(
-        "src.audio.assemblyai_client.ffmpeg.input", return_value=mock_input
+    mock_ffmpeg_mod = MagicMock()
+    mock_ffmpeg_mod.input.return_value = mock_input
+    return patch.multiple(
+        "src.audio.assemblyai_client",
+        ffmpeg=mock_ffmpeg_mod,
+        resolve_ffmpeg_executable=MagicMock(return_value="ffmpeg"),
     )
 
 
@@ -140,7 +144,11 @@ async def test_analyze_happy_path_mp3_pipeline():
     )
     cache_blob.exists.return_value = False
 
-    video_blob = _ensure_blob(client, "lectureai_full_videos", "video-123.mp4")
+    video_blob = _ensure_blob(
+        client,
+        "lectureai_full_videos",
+        "Lesson_Records/video-123.mp4",
+    )
 
     with _patch_ffmpeg_run(), patch(
         "src.audio.assemblyai_client.aai.Transcriber"
@@ -211,7 +219,11 @@ async def test_analyze_transcription_error_raises():
     )
     cache_blob.exists.return_value = False
 
-    video_blob = _ensure_blob(client, "lectureai_full_videos", "video-err.mp4")
+    video_blob = _ensure_blob(
+        client,
+        "lectureai_full_videos",
+        "Lesson_Records/video-err.mp4",
+    )
 
     with _patch_ffmpeg_run(), patch(
         "src.audio.assemblyai_client.aai.Transcriber"
@@ -268,4 +280,7 @@ async def test_analyze_cache_hit_skips_download_and_transcription():
     assert result.video_id == "video-cache"
     assert result.full_transcript == "cached transcript"
 
-    assert ("lectureai_full_videos", "video-cache.mp4") not in blobs
+    assert (
+        "lectureai_full_videos",
+        "Lesson_Records/video-cache.mp4",
+    ) not in blobs

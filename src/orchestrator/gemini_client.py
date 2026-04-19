@@ -23,6 +23,7 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from google import genai
 from google.cloud import storage
+from google.genai.errors import APIError
 
 from src.audio.schemas import AudioAnalysisResult, TranscriptSegment
 from src.audio.transcript_format import build_formatted_transcript_for_prompt
@@ -42,6 +43,14 @@ from .report_schema import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Transient capacity / rate limits: initial try + up to three retries.
+_GEMINI_RETRY_BACKOFF_SEC = (10.0, 30.0, 60.0)
+
+
+def _is_retryable_gemini_error(exc: BaseException) -> bool:
+    """True for HTTP 429 / 503 from the GenAI SDK (``APIError`` subclasses)."""
+    return isinstance(exc, APIError) and exc.code in (429, 503)
 
 
 ORCHESTRATOR_SYSTEM_BASE = (
@@ -118,6 +127,46 @@ class ReportOrchestrator:
 
         self._storage_client: storage.Client = storage.Client()
 
+    async def _generate_content_with_retry(
+        self,
+        *,
+        video_id: str,
+        purpose: str,
+        model: str,
+        contents: str,
+    ) -> Any:
+        """Call ``models.generate_content`` with backoff on 429/503 only."""
+        max_attempts = len(_GEMINI_RETRY_BACKOFF_SEC) + 1
+        last_exc: Optional[BaseException] = None
+        for attempt in range(max_attempts):
+            try:
+                return await asyncio.to_thread(
+                    self._genai_client.models.generate_content,
+                    model=model,
+                    contents=contents,
+                )
+            except Exception as exc:
+                last_exc = exc
+                if (
+                    not _is_retryable_gemini_error(exc)
+                    or attempt >= max_attempts - 1
+                ):
+                    raise
+                delay = _GEMINI_RETRY_BACKOFF_SEC[attempt]
+                logger.warning(
+                    "[%s] Gemini %s failed (attempt %d/%d): %s; "
+                    "sleeping %.0fs before retry",
+                    video_id,
+                    purpose,
+                    attempt + 1,
+                    max_attempts,
+                    exc,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+        assert last_exc is not None
+        raise last_exc
+
     # ------------------------------------------------------------------ #
     #  Public API
     # ------------------------------------------------------------------ #
@@ -173,21 +222,45 @@ class ReportOrchestrator:
     # ------------------------------------------------------------------ #
     async def _load_cv_data(self, video_id: str) -> Dict[str, Any]:
         with self._stage(video_id, "load_cv"):
-            try:
-                bucket = self._storage_client.bucket(self.buckets.processed)
-                blob = bucket.blob(self.buckets.cv_path(video_id))
-                payload = await asyncio.to_thread(blob.download_as_text)
-                data = json.loads(payload)
-                if not isinstance(data, dict):
-                    raise ValueError("CV JSON top-level must be an object")
-                return data
-            except Exception as exc:
-                raise OrchestratorError(
-                    f"failed to load CV JSON from gs://"
-                    f"{self.buckets.processed}/"
-                    f"{self.buckets.cv_path(video_id)}: {exc}",
-                    video_id=video_id,
-                ) from exc
+            bucket = self._storage_client.bucket(self.buckets.processed)
+            attempted_paths: List[str] = []
+            for cv_path in self._candidate_cv_paths(video_id):
+                attempted_paths.append(cv_path)
+                try:
+                    blob = bucket.blob(cv_path)
+                    exists = await asyncio.to_thread(blob.exists)
+                    if not exists:
+                        continue
+                    payload = await asyncio.to_thread(blob.download_as_text)
+                    data = json.loads(payload)
+                    if not isinstance(data, dict):
+                        raise ValueError("CV JSON top-level must be an object")
+                    return data
+                except OrchestratorError:
+                    raise
+                except Exception as exc:
+                    raise OrchestratorError(
+                        f"failed to load CV JSON from gs://"
+                        f"{self.buckets.processed}/{cv_path}: {exc}",
+                        video_id=video_id,
+                    ) from exc
+
+            tried = ", ".join(
+                f"gs://{self.buckets.processed}/{path}" for path in attempted_paths
+            )
+            raise OrchestratorError(
+                f"failed to load CV JSON; no object found at any known path: {tried}",
+                video_id=video_id,
+            )
+
+    def _candidate_cv_paths(self, video_id: str) -> List[str]:
+        """Ordered CV JSON lookup paths for backward compatibility."""
+        configured = self.buckets.cv_path(video_id)
+        candidates = [configured]
+        nested_report = f"results/{video_id}/lecture_report.json"
+        if nested_report not in candidates:
+            candidates.append(nested_report)
+        return candidates
 
     # ------------------------------------------------------------------ #
     #  Step 2 - chunking
@@ -317,8 +390,9 @@ class ReportOrchestrator:
         with self._stage(video_id, f"chunk_{idx}"):
             try:
                 prompt = self._build_chunk_prompt(chunk, total_chunks)
-                response = await asyncio.to_thread(
-                    self._genai_client.models.generate_content,
+                response = await self._generate_content_with_retry(
+                    video_id=video_id,
+                    purpose=f"chunk_{idx}",
                     model=self.model_name,
                     contents=prompt,
                 )
@@ -441,8 +515,9 @@ Respond with this exact JSON schema:
                 prompt = self._build_merge_prompt(
                     chunk_analyses, audio_result, duration_min
                 )
-                response = await asyncio.to_thread(
-                    self._genai_client.models.generate_content,
+                response = await self._generate_content_with_retry(
+                    video_id=video_id,
+                    purpose="merge",
                     model=self.model_name,
                     contents=prompt,
                 )
@@ -670,11 +745,16 @@ Respond with this exact QAReport JSON schema:
             try:
                 bucket = self._storage_client.bucket(self.buckets.processed)
                 blob = bucket.blob(self.buckets.report_path(video_id))
-                payload = report.model_dump_json(indent=2)
+                payload = json.dumps(
+                    report.model_dump(),
+                    ensure_ascii=False,
+                    indent=2,
+                    default=str,
+                )
                 await asyncio.to_thread(
                     blob.upload_from_string,
                     payload,
-                    content_type="application/json",
+                    content_type="application/json; charset=utf-8",
                 )
             except Exception as exc:
                 raise OrchestratorError(
