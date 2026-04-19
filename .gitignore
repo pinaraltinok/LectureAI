@@ -8,13 +8,27 @@ tests/service_account/*.json
 # Python
 __pycache__/
 *.py[cod]
+*.pyc
 *$py.class
 .Python
 .venv/
 venv/
 ENV/
 
+# Jupyter
+.ipynb_checkpoints/
+
 # Tooling
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# Data and Media
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.json
+outputs/
+work/
+data/

@@ -15,5 +15,13 @@ ffmpeg-python==0.2.0
 pytest==8.3.3
 pytest-asyncio==0.24.0
 
+# ---- Additional Dependencies (from remote) ----
+opencv-python-headless
+numpy
+pandas
+mediapipe
+easyocr
+torch
+
 # NOTE: `asyncio` is part of the Python standard library (>=3.4)
 # and does not need to be installed separately.
