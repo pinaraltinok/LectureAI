@@ -5,6 +5,7 @@ def get_video_meta(video_path: str):
     if not cap.isOpened():
         raise FileNotFoundError(f"Cannot open video: {video_path}")
 
+
     fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)

@@ -1,0 +1,181 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+  PARENT
+}
+
+enum AnalysisStatus {
+  PENDING
+  PROCESSING
+  DRAFT
+  FINALIZED
+}
+
+// ─── Models ──────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role
+  branch    String?  // Eğitmen branşı (ör: Matematik, Fizik)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  taughtLessons      Lesson[]          @relation("TeacherLessons")
+  enrollments        LessonEnrollment[] @relation("StudentEnrollments")
+  analysisJobs       AnalysisJob[]      @relation("TeacherAnalysis")
+  writtenFeedbacks   MentorFeedback[]   @relation("FeedbackWriter")
+  receivedFeedbacks  MentorFeedback[]   @relation("FeedbackReceiver")
+  surveys            Survey[]
+  personalNotes      PersonalNote[]
+  parentLinks        ParentStudent[]    @relation("ParentLink")
+  childLinks         ParentStudent[]    @relation("ChildLink")
+  badges             Badge[]
+
+  @@map("users")
+}
+
+model Lesson {
+  id         String   @id @default(uuid())
+  title      String
+  moduleCode String
+  teacherId  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  teacher     User               @relation("TeacherLessons", fields: [teacherId], references: [id])
+  enrollments LessonEnrollment[]
+  analysisJobs AnalysisJob[]
+  mentorFeedbacks MentorFeedback[]
+  surveys     Survey[]
+
+  @@map("lessons")
+}
+
+model LessonEnrollment {
+  id        String @id @default(uuid())
+  lessonId  String
+  studentId String
+
+  // Relations
+  lesson  Lesson @relation(fields: [lessonId], references: [id])
+  student User   @relation("StudentEnrollments", fields: [studentId], references: [id])
+
+  @@unique([lessonId, studentId])
+  @@map("lesson_enrollments")
+}
+
+model AnalysisJob {
+  id            String         @id @default(uuid())
+  videoUrl      String?
+  videoFilename String?
+  teacherId     String?
+  lessonId      String?
+  status        AnalysisStatus @default(PENDING)
+  draftReport   Json?
+  finalReport   Json?
+  adminFeedback String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  // Relations
+  teacher User?   @relation("TeacherAnalysis", fields: [teacherId], references: [id])
+  lesson  Lesson? @relation(fields: [lessonId], references: [id])
+
+  @@map("analysis_jobs")
+}
+
+model MentorFeedback {
+  id        String   @id @default(uuid())
+  teacherId String
+  studentId String
+  lessonId  String?
+  note      String
+  createdAt DateTime @default(now())
+
+  // Relations
+  teacher User    @relation("FeedbackWriter", fields: [teacherId], references: [id])
+  student User    @relation("FeedbackReceiver", fields: [studentId], references: [id])
+  lesson  Lesson? @relation(fields: [lessonId], references: [id])
+
+  @@map("mentor_feedbacks")
+}
+
+model Survey {
+  id               String   @id @default(uuid())
+  studentId        String
+  lessonId         String
+  contentQuality   Int      // 1-5
+  teachingMethod   Int      // 1-5
+  engagement       Int      // 1-5
+  materials        Int      // 1-5
+  overall          Int      // 1-5
+  anonymousComment String?
+  createdAt        DateTime @default(now())
+
+  // Relations
+  student User   @relation(fields: [studentId], references: [id])
+  lesson  Lesson @relation(fields: [lessonId], references: [id])
+
+  @@unique([studentId, lessonId])
+  @@map("surveys")
+}
+
+model PersonalNote {
+  id        String   @id @default(uuid())
+  teacherId String
+  content   String
+  lessonTag String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  teacher User @relation(fields: [teacherId], references: [id])
+
+  @@map("personal_notes")
+}
+
+model ParentStudent {
+  id        String @id @default(uuid())
+  parentId  String
+  studentId String
+
+  // Relations
+  parent  User @relation("ParentLink", fields: [parentId], references: [id])
+  student User @relation("ChildLink", fields: [studentId], references: [id])
+
+  @@unique([parentId, studentId])
+  @@map("parent_students")
+}
+
+model Badge {
+  id          String   @id @default(uuid())
+  studentId   String
+  title       String
+  description String?
+  earnedAt    DateTime @default(now())
+
+  // Relations
+  student User @relation(fields: [studentId], references: [id])
+
+  @@map("badges")
+}
