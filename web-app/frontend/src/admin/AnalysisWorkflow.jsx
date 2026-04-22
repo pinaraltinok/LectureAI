@@ -60,6 +60,7 @@ const AnalysisWorkflow = ({ onStepChange }) => {
 
     setIsAnalyzing(true)
     setIsRegenerating(false)
+    setProgress({ stage: 'queued', message: 'Video sisteme kaydediliyor...', percent: 5 })
     setError('')
 
     try {
@@ -70,6 +71,7 @@ const AnalysisWorkflow = ({ onStepChange }) => {
       }
       const uploadRes = await apiUpload('/admin/analysis/upload', formData)
       const jobId = uploadRes.jobId
+      setCurrentJobId(jobId)  // Set early so progress polling starts
 
       // Step 2: Assign with curriculum + lesson code metadata
       const curriculumLabel = selectedCurriculum
@@ -151,25 +153,104 @@ const AnalysisWorkflow = ({ onStepChange }) => {
     onStepChange(newStep)
   }
 
+  // --- Progress polling ---
+  const [progress, setProgress] = useState({ stage: 'queued', message: 'Video sisteme kaydediliyor...', percent: 5 })
+
+  useEffect(() => {
+    if (!isAnalyzing || !currentJobId) return
+    const interval = setInterval(async () => {
+      try {
+        const data = await apiGet(`/admin/analysis/progress/${currentJobId}`)
+        setProgress(data)
+        if (data.stage === 'completed' || data.stage === 'failed') {
+          clearInterval(interval)
+        }
+      } catch { /* ignore polling errors */ }
+    }, 2000)
+    return () => clearInterval(interval)
+  }, [isAnalyzing, currentJobId])
+
+  const STAGES = [
+    { key: 'queued', label: 'Sisteme Kaydediliyor', icon: '💾' },
+    { key: 'downloading', label: 'Video İndiriliyor', icon: '⬇️' },
+    { key: 'processing', label: 'Video İşleniyor', icon: '🎬' },
+    { key: 'reporting', label: 'Rapor Oluşturuluyor', icon: '📊' },
+    { key: 'uploading', label: "Bucket'a Yükleniyor", icon: '☁️' },
+    { key: 'completed', label: 'Tamamlandı!', icon: '✅' },
+  ]
+
   if (isAnalyzing) {
+    const currentIdx = STAGES.findIndex(s => s.key === progress.stage)
     return (
       <div style={{display:'grid', placeItems:'center', minHeight:'500px', textAlign:'center', animation: 'fadeIn 0.5s ease'}}>
-        <div style={{maxWidth: '430px'}}>
+        <div style={{maxWidth: '520px', width: '100%'}}>
+          {/* Spinner */}
           <div style={{
             width: '80px', height: '80px', borderRadius: '50%', border: '4px solid #f1f5f9',
             borderTopColor: isRegenerating ? '#10b981' : '#6366f1', margin: '0 auto 2rem', animation: 'spin 1s linear infinite'
           }}></div>
-          <h2 style={{fontSize:'2.2rem', fontWeight:950, color: '#0f172a', letterSpacing: '-0.02em'}}>
-            {isRegenerating ? 'Rapor Optimize Ediliyor' : 'Video Yükleniyor & Analiz Başlıyor'}
+          <h2 style={{fontSize:'1.8rem', fontWeight:950, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: '0.5rem'}}>
+            {isRegenerating ? 'Rapor Optimize Ediliyor' : progress.message || 'Analiz Başlatılıyor...'}
           </h2>
-          <p style={{color:'#64748b', fontWeight:600, lineHeight: 1.6}}>
-            {isRegenerating 
-              ? 'Geri bildirimleriniz AI modelimize aktarıldı. Rapor içeriği ve skorlamalar notlarınıza göre yeniden hesaplanıyor...' 
-              : 'Video sunucuya yükleniyor ve analiz kuyruğuna ekleniyor. Lütfen bekleyin...'}
-          </p>
+
+          {/* Progress bar */}
+          <div style={{background: '#f1f5f9', borderRadius: '12px', height: '12px', margin: '1.5rem 0', overflow: 'hidden'}}>
+            <div style={{
+              width: `${progress.percent || 5}%`,
+              height: '100%',
+              borderRadius: '12px',
+              background: 'linear-gradient(90deg, #6366f1, #a855f7)',
+              transition: 'width 0.8s ease',
+            }}></div>
+          </div>
+          <p style={{color:'#94a3b8', fontSize: '0.85rem', fontWeight: 700, marginBottom: '2rem'}}>%{progress.percent || 0}</p>
+
+          {/* Stage steps */}
+          <div style={{display: 'flex', flexDirection: 'column', gap: '0', textAlign: 'left'}}>
+            {STAGES.map((s, i) => {
+              const isDone = i < currentIdx
+              const isActive = i === currentIdx
+              const isPending = i > currentIdx
+              return (
+                <div key={s.key} style={{
+                  display: 'flex', alignItems: 'center', gap: '14px',
+                  padding: '12px 16px', borderRadius: '14px',
+                  background: isActive ? '#f5f3ff' : 'transparent',
+                  transition: 'all 0.3s ease',
+                }}>
+                  {/* Step indicator */}
+                  <div style={{
+                    width: '36px', height: '36px', borderRadius: '50%',
+                    display: 'grid', placeItems: 'center', fontSize: '1rem', flexShrink: 0,
+                    background: isDone ? '#10b981' : isActive ? 'linear-gradient(135deg, #6366f1, #a855f7)' : '#f1f5f9',
+                    color: (isDone || isActive) ? '#fff' : '#94a3b8',
+                    boxShadow: isActive ? '0 4px 12px rgba(99,102,241,0.3)' : 'none',
+                    transition: 'all 0.3s ease',
+                  }}>
+                    {isDone ? '✓' : s.icon}
+                  </div>
+                  <span style={{
+                    fontWeight: isActive ? 800 : 600,
+                    fontSize: '0.95rem',
+                    color: isDone ? '#10b981' : isActive ? '#4f46e5' : '#94a3b8',
+                    transition: 'all 0.3s ease',
+                  }}>
+                    {s.label}
+                  </span>
+                  {isActive && (
+                    <div style={{
+                      marginLeft: 'auto', width: '8px', height: '8px', borderRadius: '50%',
+                      background: '#6366f1', animation: 'pulse 1.5s infinite',
+                    }}></div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
         <style>{`
           @keyframes spin { 100% { transform: rotate(360deg); } }
+          @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.5); } }
         `}</style>
       </div>
     )

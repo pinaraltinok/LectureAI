@@ -15,19 +15,22 @@ const {
   getLessons,
   getAnalysisJobs,
   getCurricula,
+  getAnalysisProgress,
 } = require('../controllers/admin.controller');
 
 // Multer configuration for video uploads
-const storage = multer.diskStorage({
+const multerStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, process.env.UPLOAD_DIR || './uploads');
   },
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
+    // Preserve original filename, add timestamp prefix to avoid collisions
+    const sanitized = file.originalname.replace(/[^a-zA-Z0-9_\-().]/g, '_');
+    const uniqueName = Date.now() + '_' + sanitized;
+    cb(null, uniqueName);
   },
 });
-const upload = multer({ storage });
+const upload = multer({ storage: multerStorage });
 
 /**
  * @swagger
@@ -217,6 +220,7 @@ router.post('/analysis/finalize', auth, roleGuard('ADMIN'), finalizeAnalysis);
 
 router.get('/lessons', auth, roleGuard('ADMIN'), getLessons);
 router.get('/analysis/jobs', auth, roleGuard('ADMIN'), getAnalysisJobs);
+router.get('/analysis/progress/:jobId', auth, roleGuard('ADMIN'), getAnalysisProgress);
 router.get('/curricula', auth, roleGuard('ADMIN'), getCurricula);
 
 module.exports = router;
