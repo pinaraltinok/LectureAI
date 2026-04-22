@@ -3,6 +3,85 @@ const bcrypt = require('bcryptjs');
 
 const prisma = new PrismaClient();
 
+// ── Curricula from the real system ────────────────────────────
+const CURRICULA_DATA = [
+  // ─── Roblox Game Developer ───────────────────────────────────
+  {
+    code: '1719',
+    name: 'Roblox Game Developer',
+    year: 2025, ageRange: '8-9', durationMin: 60, totalLessons: 40,
+    modules: 10, lessonsPerModule: 4, language: 'TUR', status: 'Actual',
+    bucketCode: 'TUR40W1719',
+  },
+  {
+    code: '1495',
+    name: 'Roblox Game Developer',
+    year: 2024, ageRange: '10-12', durationMin: 90, totalLessons: 40,
+    modules: 10, lessonsPerModule: 4, language: 'TUR', status: 'In Progress',
+    bucketCode: 'TUR40W1495',
+  },
+  {
+    code: '1494',
+    name: 'Roblox Game Developer',
+    year: 2024, ageRange: '8-9', durationMin: 60, totalLessons: 40,
+    modules: 10, lessonsPerModule: 4, language: 'TUR', status: 'In Progress',
+    bucketCode: 'TUR40W1494',
+  },
+  {
+    code: '1041',
+    name: 'Roblox Game Developer',
+    year: 2023, ageRange: '10-12', durationMin: 90, totalLessons: 32,
+    modules: 8, lessonsPerModule: 4, language: 'TUR', status: 'In Progress',
+    bucketCode: 'TUR32W1041',
+  },
+  {
+    code: '955',
+    name: 'Roblox Game Developer',
+    year: 2023, ageRange: '8-9', durationMin: 60, totalLessons: 32,
+    modules: 8, lessonsPerModule: 4, language: 'TUR', status: 'Actual',
+    bucketCode: 'TUR32W955',
+  },
+  // ─── Python Developer ─────────────────────────────────────────
+  {
+    code: '1500',
+    name: 'Python Developer',
+    year: 2024, ageRange: '10-11', durationMin: 60, totalLessons: 40,
+    modules: 10, lessonsPerModule: 4, language: 'TUR', status: 'In Progress',
+    bucketCode: 'TUR40W1500',
+  },
+  {
+    code: '1501',
+    name: 'Python Developer',
+    year: 2024, ageRange: '12-13', durationMin: 60, totalLessons: 40,
+    modules: 10, lessonsPerModule: 4, language: 'TUR', status: 'In Progress',
+    bucketCode: 'TUR40W1501',
+  },
+  // ─── Scratch Jr. ──────────────────────────────────────────────
+  {
+    code: '1510',
+    name: 'Scratch Jr.',
+    year: 2024, ageRange: '6-7', durationMin: 60, totalLessons: 24,
+    modules: 6, lessonsPerModule: 4, language: 'TUR', status: 'In Progress',
+    bucketCode: 'TUR24W1510',
+  },
+  // ─── Web Development ─────────────────────────────────────────
+  {
+    code: '1520',
+    name: 'Web Development',
+    year: 2024, ageRange: '12-14', durationMin: 60, totalLessons: 40,
+    modules: 10, lessonsPerModule: 4, language: 'TUR', status: 'In Progress',
+    bucketCode: 'TUR40W1520',
+  },
+  // ─── Unity Game Development ───────────────────────────────────
+  {
+    code: '1530',
+    name: 'Unity Game Development',
+    year: 2024, ageRange: '12-14', durationMin: 60, totalLessons: 40,
+    modules: 10, lessonsPerModule: 4, language: 'TUR', status: 'In Progress',
+    bucketCode: 'TUR40W1530',
+  },
+];
+
 async function main() {
   console.log('🌱 Seeding database...');
 
@@ -15,9 +94,19 @@ async function main() {
   await prisma.lessonEnrollment.deleteMany();
   await prisma.parentStudent.deleteMany();
   await prisma.lesson.deleteMany();
+  await prisma.curriculum.deleteMany();
   await prisma.user.deleteMany();
 
   const hash = await bcrypt.hash('password123', 10);
+
+  // ── Curricula ─────────────────────────────────────────────────
+  console.log('📚 Seeding curricula...');
+  const createdCurricula = {};
+  for (const c of CURRICULA_DATA) {
+    const curriculum = await prisma.curriculum.create({ data: c });
+    createdCurricula[c.code] = curriculum;
+  }
+  console.log(`   ✓ ${CURRICULA_DATA.length} curricula created`);
 
   // ── Users ──────────────────────────────────────────────────
   const admin = await prisma.user.create({
@@ -35,7 +124,6 @@ async function main() {
       password: hash,
       name: 'Ahmet Yılmaz',
       role: 'TEACHER',
-      branch: 'Matematik',
     },
   });
 
@@ -45,7 +133,15 @@ async function main() {
       password: hash,
       name: 'Ayşe Demir',
       role: 'TEACHER',
-      branch: 'Fizik',
+    },
+  });
+
+  const teacher3 = await prisma.user.create({
+    data: {
+      email: 'zehra.bozkurt@lectureai.com',
+      password: hash,
+      name: 'Zehra Bozkurt',
+      role: 'TEACHER',
     },
   });
 
@@ -79,17 +175,19 @@ async function main() {
   // ── Lessons ────────────────────────────────────────────────
   const lesson1 = await prisma.lesson.create({
     data: {
-      title: 'Diferansiyel Denklemler',
-      moduleCode: 'MATH301',
+      title: 'Roblox Game Developer [2024][8-9][60m][40L][TUR][In Progress]',
+      moduleCode: 'M1L1',
       teacherId: teacher1.id,
+      curriculumId: createdCurricula['1494'].id,
     },
   });
 
   const lesson2 = await prisma.lesson.create({
     data: {
-      title: 'Kuantum Mekaniği',
-      moduleCode: 'PHYS401',
+      title: 'Python Developer [2024][10-11][60m][40L][TUR][In Progress]',
+      moduleCode: 'M1L1',
       teacherId: teacher2.id,
+      curriculumId: createdCurricula['1500'].id,
     },
   });
 
@@ -111,18 +209,13 @@ async function main() {
   });
 
   // ── Analysis Jobs ──────────────────────────────────────────
-  const job1 = await prisma.analysisJob.create({
+  await prisma.analysisJob.create({
     data: {
       videoUrl: 'https://storage.googleapis.com/lectureai/video1.mp4',
       videoFilename: 'video1.mp4',
       teacherId: teacher1.id,
       lessonId: lesson1.id,
-      status: 'DRAFT',
-      draftReport: {
-        overallScore: 82,
-        engagement: 'Yüksek',
-        suggestions: ['Daha fazla örnek verin', 'Tempo biraz yavaşlatılabilir'],
-      },
+      status: 'PROCESSING',
     },
   });
 
@@ -136,12 +229,18 @@ async function main() {
       draftReport: {
         overallScore: 90,
         engagement: 'Çok Yüksek',
-        suggestions: ['Harika ders!'],
+        feedback_metni: 'Eğitmen ders içeriğine hakimiyeti ve öğrencilerle kurduğu dinamik iletişimle standardın üzerinde bir performans sergilemiştir.',
+        speaking_time_rating: '%65',
+        actual_duration_min: 60,
+        yeterlilikler: '%95',
       },
       finalReport: {
         overallScore: 90,
         engagement: 'Çok Yüksek',
-        suggestions: ['Harika ders!'],
+        feedback_metni: 'Eğitmen ders içeriğine hakimiyeti ve öğrencilerle kurduğu dinamik iletişimle standardın üzerinde bir performans sergilemiştir.',
+        speaking_time_rating: '%65',
+        actual_duration_min: 60,
+        yeterlilikler: '%95',
         approvedBy: 'admin',
         approvedAt: new Date().toISOString(),
       },
@@ -155,7 +254,7 @@ async function main() {
         teacherId: teacher1.id,
         studentId: student1.id,
         lessonId: lesson1.id,
-        note: 'Mehmet, diferansiyel denklemlerde çok iyi bir ilerleme gösteriyorsun. Devam et!',
+        note: 'Mehmet, bu derste çok iyi bir ilerleme gösterdin. Devam et!',
       },
       {
         teacherId: teacher1.id,
@@ -184,8 +283,8 @@ async function main() {
   await prisma.personalNote.create({
     data: {
       teacherId: teacher1.id,
-      content: 'Bir sonraki derste Laplace dönüşümüne geçilecek. Örnekler hazırla.',
-      lessonTag: 'MATH301',
+      content: 'Bir sonraki derste M1L2 konusuna geçilecek.',
+      lessonTag: 'M1L1',
     },
   });
 
@@ -206,10 +305,11 @@ async function main() {
   });
 
   console.log('✅ Seed completed successfully!');
-  console.log(`   Admin:   ${admin.email}`);
-  console.log(`   Teacher: ${teacher1.email}, ${teacher2.email}`);
-  console.log(`   Student: ${student1.email}, ${student2.email}`);
-  console.log(`   Parent:  ${parent1.email}`);
+  console.log(`   Admin:    ${admin.email}`);
+  console.log(`   Teacher:  ${teacher1.email}, ${teacher2.email}, ${teacher3.email}`);
+  console.log(`   Student:  ${student1.email}, ${student2.email}`);
+  console.log(`   Parent:   ${parent1.email}`);
+  console.log(`   Curricula: ${CURRICULA_DATA.length} programmes`);
   console.log('   Password for all: password123');
 }
 

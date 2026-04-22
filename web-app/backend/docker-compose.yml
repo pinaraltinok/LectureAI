@@ -26,8 +26,10 @@ services:
       - PORT=3001
       - NODE_ENV=development
       - UPLOAD_DIR=./uploads
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/service_account.json
     volumes:
       - ./uploads:/app/uploads
+      - ./service_account.json:/app/service_account.json:ro
     depends_on:
       - db
     restart: unless-stopped

@@ -134,6 +134,8 @@ async function getReports(req, res) {
       lessonId: j.lesson?.id || null,
       lessonTitle: j.lesson?.title || null,
       moduleCode: j.lesson?.moduleCode || null,
+      videoUrl: j.videoUrl,
+      videoFilename: j.videoFilename,
       finalReport: j.finalReport,
       createdAt: j.createdAt,
       updatedAt: j.updatedAt,
@@ -247,6 +249,78 @@ async function createPersonalNote(req, res) {
   }
 }
 
+/**
+ * GET /api/teacher/lessons
+ * Returns all lessons taught by this teacher.
+ */
+async function getTeacherLessons(req, res) {
+  try {
+    const teacherId = req.user.userId;
+
+    const lessons = await prisma.lesson.findMany({
+      where: { teacherId },
+      include: {
+        enrollments: { select: { id: true } },
+      },
+      orderBy: { title: 'asc' },
+    });
+
+    const result = lessons.map((l) => ({
+      id: l.id,
+      title: l.title,
+      moduleCode: l.moduleCode,
+      studentCount: l.enrollments.length,
+    }));
+
+    return res.json(result);
+  } catch (err) {
+    console.error('GetTeacherLessons error:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+}
+
+/**
+ * GET /api/teacher/stats
+ * Returns computed statistics for the teacher dashboard.
+ */
+async function getTeacherStats(req, res) {
+  try {
+    const teacherId = req.user.userId;
+
+    const [lessons, feedbackCount, totalAnalysisJobs] = await Promise.all([
+      prisma.lesson.findMany({
+        where: { teacherId },
+        include: {
+          enrollments: { select: { id: true } },
+          surveys: { select: { overall: true } },
+        },
+      }),
+      prisma.mentorFeedback.count({ where: { teacherId } }),
+      prisma.analysisJob.count({ where: { teacherId } }),
+    ]);
+
+    const totalStudents = new Set(
+      lessons.flatMap((l) => l.enrollments.map((e) => e.id))
+    ).size;
+
+    const allSurveys = lessons.flatMap((l) => l.surveys);
+    const avgScore = allSurveys.length > 0
+      ? Math.round((allSurveys.reduce((s, sv) => s + sv.overall, 0) / allSurveys.length) * 10) / 10
+      : 0;
+
+    return res.json({
+      totalStudents,
+      feedbackScore: avgScore,
+      totalLessons: lessons.length,
+      totalAnalysisJobs,
+      feedbackCount,
+    });
+  } catch (err) {
+    console.error('GetTeacherStats error:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+}
+
 module.exports = {
   getLessonStudents,
   createMentorFeedback,
@@ -255,4 +329,6 @@ module.exports = {
   getSurveys,
   getPersonalNotes,
   createPersonalNote,
+  getTeacherLessons,
+  getTeacherStats,
 };

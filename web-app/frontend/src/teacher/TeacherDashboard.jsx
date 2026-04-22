@@ -1,29 +1,79 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { apiGet } from '../api'
 import SharedReport from '../components/SharedReport.jsx'
 
 const TeacherDashboard = () => {
-  const [selectedReport, setSelectedReport] = useState(1)
-  const [teacherComment, setTeacherComment] = useState("");
+  const [selectedReport, setSelectedReport] = useState(null)
+  const [teacherComment, setTeacherComment] = useState("")
+  const [stats, setStats] = useState(null)
+  const [reports, setReports] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    Promise.all([
+      apiGet('/teacher/stats'),
+      apiGet('/teacher/reports'),
+    ]).then(([s, r]) => {
+      setStats(s)
+      setReports(r)
+      if (r.length > 0) setSelectedReport(r[0].jobId)
+    }).catch(err => setError(err.message))
+      .finally(() => setLoading(false))
+  }, [])
 
   const teacherStats = [
-    { label: "Total Students", value: "24", icon: "👥", color: "#6366f1" },
-    { label: "Feedback Score", value: "4.9", icon: "⭐", color: "#10b981" },
-    { label: "Total Hours", value: "142", icon: "⏳", color: "#f59e0b" },
-    { label: "Active Groups", value: "3", icon: "📚", color: "#ec4899" }
+    { label: "Toplam Öğrenci", value: stats?.totalStudents ?? '—', icon: "👥", color: "#6366f1" },
+    { label: "Anket Skoru", value: stats?.feedbackScore ?? '—', icon: "⭐", color: "#10b981" },
+    { label: "Toplam Ders", value: stats?.totalLessons ?? '—', icon: "📚", color: "#f59e0b" },
+    { label: "Analiz Sayısı", value: stats?.totalAnalysisJobs ?? '—', icon: "📊", color: "#ec4899" }
   ]
 
-  const pendingReports = [
-    { 
-      id: 1, group: "TURPRM1220", module: "Modül 8 - Ders 2", date: "11/02/2026", status: "Awaiting Feedback", 
-      evaluator: 'Özlem', quality: '%95', ttt: '%42', duration: '75dk'
-    },
-    { 
-      id: 2, group: "TURPRM1221", module: "Modül 9 - Ders 1", date: "14/02/2026", status: "New",
-      evaluator: 'Hakan', quality: '%98', ttt: '%35', duration: '60dk'
+  const currentReport = reports.find(r => r.jobId === selectedReport) || reports[0]
+
+  if (loading) {
+    return (
+      <div style={{display:'grid', placeItems:'center', minHeight:'400px'}}>
+        <div style={{textAlign:'center', color:'#64748b'}}>
+          <div style={{fontSize:'2rem', marginBottom:'1rem'}}>⏳</div>
+          <p style={{fontWeight:700}}>Veriler yükleniyor...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div style={{display:'grid', placeItems:'center', minHeight:'400px'}}>
+        <div style={{textAlign:'center', color:'#f43f5e'}}>
+          <div style={{fontSize:'2rem', marginBottom:'1rem'}}>⚠️</div>
+          <p style={{fontWeight:700}}>{error}</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Convert API report to SharedReport props
+  const buildReportProps = (r) => {
+    if (!r) return null
+    const fr = r.finalReport || {}
+    return {
+      id: r.jobId?.slice(0, 8) || '—',
+      name: r.lessonTitle || '',
+      module: r.lessonTitle || '',
+      date: r.createdAt ? new Date(r.createdAt).toLocaleDateString('tr-TR') : '',
+      group: r.moduleCode || '',
+      evaluator: fr.approvedBy ? 'Admin Onaylı' : 'Sistem (AI)',
+      quality: fr.yeterlilikler || fr.quality || '—',
+      ttt: fr.speaking_time_rating || '—',
+      duration: fr.actual_duration_min ? `${fr.actual_duration_min}dk` : '—',
+      videoUrl: r.videoUrl || null,
+      obs: fr.feedback_metni
+        ? [{ t: 'Genel Değerlendirme', c: fr.feedback_metni }]
+        : [{ t: 'Bilgi', c: 'Bu rapor için detaylı gözlem verisi henüz mevcut değil.' }],
+      finalReport: fr,
     }
-  ]
-
-  const currentReport = pendingReports.find(r => r.id === selectedReport) || pendingReports[0]
+  }
 
   return (
     <div className="teacher-dashboard" style={{animation: 'fadeIn 0.5s ease'}}>
@@ -47,66 +97,73 @@ const TeacherDashboard = () => {
         ))}
       </div>
 
-      <div style={{display: 'grid', gridTemplateColumns: '320px 1fr', gap: '2rem'}}>
-        
-        {/* Sidebar: Pending Reports List */}
-        <div style={{display:'flex', flexDirection:'column', gap:'1.25rem'}}>
-          <h3 style={{fontSize:'0.9rem', fontWeight:800, color:'#64748b', mb:'1rem', display:'flex', alignItems:'center', gap:'8px'}}>
-            <span style={{width:'8px', height:'8px', background:'#f59e0b', borderRadius:'50%'}}></span>
-            BEKLEYEN ANALİZLER
-          </h3>
+      {reports.length === 0 ? (
+        <div style={{textAlign:'center', padding:'4rem', color:'#64748b'}}>
+          <div style={{fontSize:'3rem', marginBottom:'1rem'}}>📋</div>
+          <h3 style={{fontWeight:800, color:'#1e293b'}}>Henüz onaylanmış rapor bulunmuyor</h3>
+          <p>Admin tarafından onaylanan raporlar burada görünecektir.</p>
+        </div>
+      ) : (
+        <div style={{display: 'grid', gridTemplateColumns: '320px 1fr', gap: '2rem'}}>
           
-          {pendingReports.map(report => (
-            <div 
-              key={report.id}
-              onClick={() => setSelectedReport(report.id)}
-              style={{
-                padding: '1.1rem', borderRadius: '16px', border: '1px solid',
-                borderColor: selectedReport === report.id ? 'var(--primary)' : '#f1f5f9',
-                background: selectedReport === report.id ? '#f5f3ff' : '#fff',
-                cursor: 'pointer', transition: 'all 0.3s ease',
-                boxShadow: selectedReport === report.id ? '0 10px 15px -3px rgba(99, 102, 241, 0.1)' : 'none'
-              }}
-            >
-              <div style={{display:'flex', justifyContent:'space-between', marginBottom:'6px'}}>
-                <span style={{fontSize:'10px', fontWeight:800, color: selectedReport === report.id ? 'var(--primary)' : '#94a3b8'}}>{report.group}</span>
-                <span style={{fontSize:'10px', color:'#94a3b8'}}>{report.date}</span>
-              </div>
-              <h4 style={{margin:0, fontSize:'0.9rem', fontWeight:800, color:'#1e293b'}}>{report.module}</h4>
-            </div>
-          ))}
-        </div>
-
-        {/* Main: Shared QA Report Component */}
-        <div style={{display: 'flex', flexDirection: 'column', gap: '2rem'}}>
-           <SharedReport report={currentReport} />
-
-           {/* Teacher's Response Area */}
-           <div className="report-card-internal" style={{padding: '2.5rem', background: '#f8fafc', border: '1px solid #cbd5e1'}}>
-              <h5 style={{margin:'0 0 1.25rem 0', fontSize:'11px', fontWeight:800, color:'#0f172a', textTransform:'uppercase', letterSpacing:'0.05em'}}>Eğitmen Yanıtı & Kabul Beyanı</h5>
-              <textarea 
-                placeholder="Rapor hakkında eklemek istediğiniz bir not var mı?"
-                value={teacherComment}
-                onChange={(e) => setTeacherComment(e.target.value)}
+          {/* Sidebar: Reports List */}
+          <div style={{display:'flex', flexDirection:'column', gap:'1.25rem'}}>
+            <h3 style={{fontSize:'0.9rem', fontWeight:800, color:'#64748b', display:'flex', alignItems:'center', gap:'8px'}}>
+              <span style={{width:'8px', height:'8px', background:'#10b981', borderRadius:'50%'}}></span>
+              ONAYLANMIŞ ANALİZLER ({reports.length})
+            </h3>
+            
+            {reports.map(report => (
+              <div 
+                key={report.jobId}
+                onClick={() => setSelectedReport(report.jobId)}
                 style={{
-                  width:'100%', minHeight:'120px', padding:'1.5rem', borderRadius:'16px', border:'1px solid #cbd5e1',
-                  fontSize:'0.95rem', outline:'none', background:'#fff', transition:'0.3s'
+                  padding: '1.1rem', borderRadius: '16px', border: '1px solid',
+                  borderColor: selectedReport === report.jobId ? 'var(--primary)' : '#f1f5f9',
+                  background: selectedReport === report.jobId ? '#f5f3ff' : '#fff',
+                  cursor: 'pointer', transition: 'all 0.3s ease',
+                  boxShadow: selectedReport === report.jobId ? '0 10px 15px -3px rgba(99, 102, 241, 0.1)' : 'none'
                 }}
-              />
-              <div style={{display:'flex', justifyContent:'flex-end', gap:'1rem', marginTop:'1.5rem'}}>
-                 <button style={{padding:'12px 24px', background:'none', border:'1px solid #cbd5e1', borderRadius:'12px', fontWeight:700, cursor:'pointer'}}>Taslağı Kaydet</button>
-                 <button 
-                   className="primary-btn" 
-                   onClick={() => { alert("Rapor onaylandı!"); setTeacherComment(""); }}
-                   style={{padding:'12px 32px', background: teacherComment ? 'var(--primary)' : '#e2e8f0', pointerEvents: teacherComment ? 'auto' : 'none'}}
-                 >
-                   Onayla ve Gönder
-                 </button>
+              >
+                <div style={{display:'flex', justifyContent:'space-between', marginBottom:'6px'}}>
+                  <span style={{fontSize:'10px', fontWeight:800, color: selectedReport === report.jobId ? 'var(--primary)' : '#94a3b8'}}>{report.moduleCode || '—'}</span>
+                  <span style={{fontSize:'10px', color:'#94a3b8'}}>{report.createdAt ? new Date(report.createdAt).toLocaleDateString('tr-TR') : ''}</span>
+                </div>
+                <h4 style={{margin:0, fontSize:'0.9rem', fontWeight:800, color:'#1e293b'}}>{report.lessonTitle || 'Ders Analizi'}</h4>
               </div>
-           </div>
-        </div>
+            ))}
+          </div>
 
-      </div>
+          {/* Main: Shared QA Report Component */}
+          <div style={{display: 'flex', flexDirection: 'column', gap: '2rem'}}>
+             <SharedReport report={buildReportProps(currentReport)} />
+
+             {/* Teacher's Response Area */}
+             <div className="report-card-internal" style={{padding: '2.5rem', background: '#f8fafc', border: '1px solid #cbd5e1'}}>
+                <h5 style={{margin:'0 0 1.25rem 0', fontSize:'11px', fontWeight:800, color:'#0f172a', textTransform:'uppercase', letterSpacing:'0.05em'}}>Eğitmen Yanıtı & Kabul Beyanı</h5>
+                <textarea 
+                  placeholder="Rapor hakkında eklemek istediğiniz bir not var mı?"
+                  value={teacherComment}
+                  onChange={(e) => setTeacherComment(e.target.value)}
+                  style={{
+                    width:'100%', minHeight:'120px', padding:'1.5rem', borderRadius:'16px', border:'1px solid #cbd5e1',
+                    fontSize:'0.95rem', outline:'none', background:'#fff', transition:'0.3s'
+                  }}
+                />
+                <div style={{display:'flex', justifyContent:'flex-end', gap:'1rem', marginTop:'1.5rem'}}>
+                   <button 
+                     className="primary-btn" 
+                     onClick={() => { alert("Rapor onaylandı!"); setTeacherComment(""); }}
+                     style={{padding:'12px 32px', background: teacherComment ? 'var(--primary)' : '#e2e8f0', pointerEvents: teacherComment ? 'auto' : 'none'}}
+                   >
+                     Onayla ve Gönder
+                   </button>
+                </div>
+             </div>
+          </div>
+
+        </div>
+      )}
     </div>
   )
 }

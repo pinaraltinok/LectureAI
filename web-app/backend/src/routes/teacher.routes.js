@@ -10,6 +10,8 @@ const {
   getSurveys,
   getPersonalNotes,
   createPersonalNote,
+  getTeacherLessons,
+  getTeacherStats,
 } = require('../controllers/teacher.controller');
 
 /**
@@ -236,5 +238,8 @@ router.get('/reports/:lessonId/surveys', auth, roleGuard('TEACHER'), getSurveys)
  */
 router.get('/personal-notes', auth, roleGuard('TEACHER'), getPersonalNotes);
 router.post('/personal-notes', auth, roleGuard('TEACHER'), createPersonalNote);
+
+router.get('/lessons', auth, roleGuard('TEACHER'), getTeacherLessons);
+router.get('/stats', auth, roleGuard('TEACHER'), getTeacherStats);
 
 module.exports = router;

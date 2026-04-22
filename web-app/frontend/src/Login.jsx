@@ -22,7 +22,7 @@ export default function Login({ onLogin }) {
         const data = await response.json()
         if (response.ok) {
           localStorage.setItem('token', data.token)
-          onLogin(data.role.toLowerCase())
+          onLogin(data.role.toLowerCase(), data.name || '')
         } else {
           setErrorMsg(data.error || 'Giriş başarısız oldu')
         }

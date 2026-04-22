@@ -61,21 +61,36 @@ async function getTeachers(req, res) {
           where: { status: 'FINALIZED', finalReport: { not: null } },
           orderBy: { updatedAt: 'desc' },
           take: 1,
-          select: { finalReport: true },
+          select: { id: true, finalReport: true },
         },
       },
     });
 
-    const result = teachers.map((t) => ({
-      id: t.id,
-      name: t.name,
-      email: t.email,
-      branch: t.branch,
-      lastScore:
-        t.analysisJobs.length > 0 && t.analysisJobs[0].finalReport
-          ? t.analysisJobs[0].finalReport.overallScore || null
-          : null,
-    }));
+    const result = teachers.map((t) => {
+      const latestJob = t.analysisJobs.length > 0 ? t.analysisJobs[0] : null;
+      const fr = latestJob?.finalReport || null;
+
+      // Extract score from any available field
+      let lastScore = null;
+      if (fr) {
+        if (fr.overallScore != null) {
+          lastScore = fr.overallScore;
+        } else if (fr.yeterlilikler) {
+          // Parse "92%" or "%92" → 92 → scale to /20 gives 4.6
+          const match = String(fr.yeterlilikler).match(/(\d+)/);
+          lastScore = match ? parseInt(match[1]) : null;
+        }
+      }
+
+      return {
+        id: t.id,
+        name: t.name,
+        email: t.email,
+        branch: t.branch,
+        lastScore,
+        latestJobId: latestJob?.id || null,
+      };
+    });
 
     return res.json(result);
   } catch (err) {
@@ -119,14 +134,16 @@ async function uploadAnalysis(req, res) {
 
 /**
  * POST /api/admin/analysis/assign
- * Assigns an uploaded job to a teacher + lesson.
+ * Assigns an uploaded job to a teacher + curriculum/lesson.
+ * Accepts: { jobId, teacherId, curriculumId, curriculumName, lessonCode }
+ * Auto-creates a Lesson record if one doesn't exist for this curriculum+lessonCode+teacher.
  */
 async function assignAnalysis(req, res) {
   try {
-    const { jobId, teacherId, lessonId } = req.body;
+    const { jobId, teacherId, curriculumId, curriculumName, lessonCode, lessonId } = req.body;
 
-    if (!jobId || !teacherId || !lessonId) {
-      return res.status(400).json({ error: 'jobId, teacherId ve lessonId gereklidir.' });
+    if (!jobId || !teacherId) {
+      return res.status(400).json({ error: 'jobId ve teacherId gereklidir.' });
     }
 
     const job = await prisma.analysisJob.findUnique({ where: { id: jobId } });
@@ -134,11 +151,39 @@ async function assignAnalysis(req, res) {
       return res.status(404).json({ error: 'Analiz işi bulunamadı.' });
     }
 
+    // Find or create a lesson for this curriculum + lessonCode + teacher
+    let resolvedLessonId = lessonId || null;
+
+    if (!resolvedLessonId && curriculumName && lessonCode) {
+      // Try to find existing lesson
+      const existingLesson = await prisma.lesson.findFirst({
+        where: {
+          teacherId,
+          moduleCode: lessonCode,
+          title: { contains: curriculumId || '' },
+        },
+      });
+
+      if (existingLesson) {
+        resolvedLessonId = existingLesson.id;
+      } else {
+        // Create new lesson
+        const newLesson = await prisma.lesson.create({
+          data: {
+            title: curriculumName,
+            moduleCode: lessonCode,
+            teacherId,
+          },
+        });
+        resolvedLessonId = newLesson.id;
+      }
+    }
+
     const updated = await prisma.analysisJob.update({
       where: { id: jobId },
       data: {
         teacherId,
-        lessonId,
+        lessonId: resolvedLessonId,
         status: 'PROCESSING',
       },
     });
@@ -177,10 +222,13 @@ async function getDraft(req, res) {
     return res.json({
       jobId: job.id,
       status: job.status,
+      videoUrl: job.videoUrl,
+      videoFilename: job.videoFilename,
       draftReport: job.draftReport,
       teacher: job.teacher,
       lesson: job.lesson,
       createdAt: job.createdAt,
+      finalReport: job.finalReport,
     });
   } catch (err) {
     console.error('GetDraft error:', err);
@@ -275,6 +323,84 @@ async function finalizeAnalysis(req, res) {
   }
 }
 
+/**
+ * GET /api/admin/lessons
+ * Returns all lessons for dropdown population.
+ */
+async function getLessons(req, res) {
+  try {
+    const lessons = await prisma.lesson.findMany({
+      include: {
+        teacher: { select: { id: true, name: true } },
+      },
+      orderBy: { title: 'asc' },
+    });
+
+    const result = lessons.map((l) => ({
+      id: l.id,
+      title: l.title,
+      moduleCode: l.moduleCode,
+      teacherId: l.teacher.id,
+      teacherName: l.teacher.name,
+    }));
+
+    return res.json(result);
+  } catch (err) {
+    console.error('GetLessons error:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+}
+
+/**
+ * GET /api/admin/analysis/jobs
+ * Returns all analysis jobs with status, teacher, lesson info.
+ */
+async function getAnalysisJobs(req, res) {
+  try {
+    const jobs = await prisma.analysisJob.findMany({
+      include: {
+        teacher: { select: { id: true, name: true } },
+        lesson: { select: { id: true, title: true, moduleCode: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const result = jobs.map((j) => ({
+      jobId: j.id,
+      videoFilename: j.videoFilename,
+      status: j.status,
+      teacherId: j.teacher?.id || null,
+      teacherName: j.teacher?.name || null,
+      lessonId: j.lesson?.id || null,
+      lessonTitle: j.lesson?.title || null,
+      moduleCode: j.lesson?.moduleCode || null,
+      createdAt: j.createdAt,
+      updatedAt: j.updatedAt,
+    }));
+
+    return res.json(result);
+  } catch (err) {
+    console.error('GetAnalysisJobs error:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+}
+
+/**
+ * GET /api/admin/curricula
+ * Returns all curriculum programmes from the database.
+ */
+async function getCurricula(req, res) {
+  try {
+    const curricula = await prisma.curriculum.findMany({
+      orderBy: [{ year: 'desc' }, { code: 'asc' }],
+    });
+    return res.json(curricula);
+  } catch (err) {
+    console.error('GetCurricula error:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+}
+
 module.exports = {
   getStats,
   getTeachers,
@@ -283,4 +409,7 @@ module.exports = {
   getDraft,
   regenerateAnalysis,
   finalizeAnalysis,
+  getLessons,
+  getAnalysisJobs,
+  getCurricula,
 };

@@ -12,6 +12,9 @@ const {
   getDraft,
   regenerateAnalysis,
   finalizeAnalysis,
+  getLessons,
+  getAnalysisJobs,
+  getCurricula,
 } = require('../controllers/admin.controller');
 
 // Multer configuration for video uploads
@@ -211,5 +214,9 @@ router.post('/analysis/regenerate', auth, roleGuard('ADMIN'), regenerateAnalysis
  *               $ref: '#/components/schemas/UploadResponse'
  */
 router.post('/analysis/finalize', auth, roleGuard('ADMIN'), finalizeAnalysis);
+
+router.get('/lessons', auth, roleGuard('ADMIN'), getLessons);
+router.get('/analysis/jobs', auth, roleGuard('ADMIN'), getAnalysisJobs);
+router.get('/curricula', auth, roleGuard('ADMIN'), getCurricula);
 
 module.exports = router;

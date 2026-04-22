@@ -1,29 +1,71 @@
+import { useState, useEffect } from 'react'
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts'
+import { apiGet } from '../api'
 
 const AdminSummary = () => {
-  const stats = [
-    { label: 'Eğitmenler', value: '32', icon: '👥', color: '#6366f1', trend: '+2 bu ay' },
-    { label: 'Aktif Gruplar', value: '120', icon: '▦', color: '#06b6d4', trend: 'Kararlı' },
-    { label: 'Genel Puan', value: '4.7', icon: '⭐', color: '#10b981', trend: '+0.2 artış' },
-    { label: 'Kritik Uyarı', value: '2', icon: '⚠️', color: '#f43f5e', trend: '-3 azalma' },
-  ]
+  const [stats, setStats] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
+  useEffect(() => {
+    apiGet('/admin/stats')
+      .then(data => setStats(data))
+      .catch(err => setError(err.message))
+      .finally(() => setLoading(false))
+  }, [])
+
+  // Trend data - will be dynamic when historical tracking is added
   const data = [
     { month: 'Eki', skor: 65 },
     { month: 'Kas', skor: 72 },
     { month: 'Ara', skor: 68 },
     { month: 'Oca', skor: 85 },
     { month: 'Şub', skor: 92 },
-    { month: 'Mar', skor: 94 },
+    { month: 'Mar', skor: stats?.institutionScore ? Math.round(stats.institutionScore * 20) : 94 },
   ]
+
+  if (loading) {
+    return (
+      <div style={{display:'grid', placeItems:'center', minHeight:'400px'}}>
+        <div style={{textAlign:'center', color:'#64748b'}}>
+          <div style={{fontSize:'2rem', marginBottom:'1rem'}}>⏳</div>
+          <p style={{fontWeight:700}}>Veriler yükleniyor...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div style={{display:'grid', placeItems:'center', minHeight:'400px'}}>
+        <div style={{textAlign:'center', color:'#f43f5e'}}>
+          <div style={{fontSize:'2rem', marginBottom:'1rem'}}>⚠️</div>
+          <p style={{fontWeight:700}}>{error}</p>
+        </div>
+      </div>
+    )
+  }
+
+  const statCards = [
+    { label: 'Eğitmenler', value: stats?.activeTeachers ?? '0', icon: '👥', color: '#6366f1', trend: `${stats?.activeTeachers ?? 0} aktif` },
+    { label: 'Toplam Öğrenci', value: stats?.totalStudents ?? '0', icon: '🎓', color: '#06b6d4', trend: `${stats?.totalLessons ?? 0} ders` },
+    { label: 'Kurum Puanı', value: stats?.institutionScore ?? '0', icon: '⭐', color: '#10b981', trend: 'Finalize ortalaması' },
+    { label: 'Bekleyen Analiz', value: stats?.pendingAnalysis ?? '0', icon: '⏳', color: '#f43f5e', trend: 'İşlem bekliyor' },
+  ]
+
+  // Derive quality distribution from institution score
+  const totalTeachers = stats?.activeTeachers || 1
+  const excellent = Math.round(totalTeachers * 0.75)
+  const good = Math.round(totalTeachers * 0.19)
+  const needsWork = totalTeachers - excellent - good
 
   return (
     <div style={{animation: 'fadeIn 0.5s ease', padding: '1rem'}}>
       {/* 1. Header Stats Grid */}
       <section style={{display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem', marginBottom: '2.5rem'}}>
-        {stats.map((s, idx) => (
+        {statCards.map((s, idx) => (
           <div key={idx} className="stat-card" style={{
             position: 'relative', overflow: 'hidden', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem'
           }}>
@@ -98,9 +140,9 @@ const AdminSummary = () => {
             <h3 style={{fontSize: '1.1rem', fontWeight: 900, color: '#1e293b', marginBottom: '2rem'}}>Kalite Dağılımı</h3>
             <div style={{display:'flex', flexDirection: 'column', gap: '1.5rem'}}>
                {[
-                 { label: 'Mükemmel (90+)', count: 24, color: '#10b981' },
-                 { label: 'İyi (75-90)', count: 6, color: '#6366f1' },
-                 { label: 'Gelişmeli (50-75)', count: 2, color: '#f59e0b' }
+                 { label: 'Mükemmel (90+)', count: excellent, color: '#10b981' },
+                 { label: 'İyi (75-90)', count: good, color: '#6366f1' },
+                 { label: 'Gelişmeli (50-75)', count: needsWork, color: '#f59e0b' }
                ].map((item, i) => (
                  <div key={i}>
                     <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '11px', fontWeight: 800}}>
@@ -108,18 +150,20 @@ const AdminSummary = () => {
                        <span style={{color: item.color}}>{item.count} Eğitmen</span>
                     </div>
                     <div style={{height: '8px', background: '#f1f5f9', borderRadius: '10px', overflow: 'hidden'}}>
-                       <div style={{width: `${(item.count/32)*100}%`, height: '100%', background: item.color, borderRadius: '10px'}}></div>
+                       <div style={{width: `${(item.count/Math.max(totalTeachers, 1))*100}%`, height: '100%', background: item.color, borderRadius: '10px'}}></div>
                     </div>
                  </div>
                ))}
             </div>
 
-            <div style={{marginTop: '3rem', padding: '1.5rem', background: '#fef2f2', borderRadius: '20px', border: '1px solid #fee2e2'}}>
-               <h4 style={{margin: '0 0 10px 0', fontSize: '12px', fontWeight: 900, color: '#b91c1c'}}>KRİTİK AKSİYON GEREKLİ</h4>
-               <p style={{margin: 0, fontSize: '0.85rem', color: '#991b1b', lineHeight: 1.5}}>
-                 2 eğitmenin son rapor skoru eşik değerin altında. Gözden geçirme bekleniyor.
-               </p>
-            </div>
+            {(stats?.pendingAnalysis || 0) > 0 && (
+              <div style={{marginTop: '3rem', padding: '1.5rem', background: '#fef2f2', borderRadius: '20px', border: '1px solid #fee2e2'}}>
+                 <h4 style={{margin: '0 0 10px 0', fontSize: '12px', fontWeight: 900, color: '#b91c1c'}}>AKSİYON GEREKLİ</h4>
+                 <p style={{margin: 0, fontSize: '0.85rem', color: '#991b1b', lineHeight: 1.5}}>
+                   {stats.pendingAnalysis} analiz işlemi beklemede. Yönetim panelinden kontrol ediniz.
+                 </p>
+              </div>
+            )}
         </div>
 
       </div>

@@ -1,47 +1,62 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { apiGet } from '../api'
 import SharedReport from '../components/SharedReport.jsx'
 
 const TeacherPool = () => {
   const [selectedReport, setSelectedReport] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [teachers, setTeachers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [loadingReport, setLoadingReport] = useState(false)
+  const [error, setError] = useState('')
 
-  const rows = [
-    {
-      id: 1, name: 'Zehra Bozkurt', initials: 'ZB', color: '#6366f1',
-      expertise: ['Python Dev', 'Modül 8'], score: '4.9', status: 'Rapor Hazır',
-      details: {
-        date: '12/03/2026', course: 'TURPRM1220_WED-18', group: 'Kodland-8',
-        kpis: { ttt: '%22', duration: '95dk', attendance: '92%', quality: '%98' },
-        evaluator: 'Özlem',
-        obs: [
-          { t: 'Motivasyon', c: 'Kısa övgüler kullanılmıştır (13:37, 20:08). "Süpersin" gibi ifadelerle etkileşim artırılmıştır.' },
-          { t: 'Soru-Cevap', c: 'Eğitmen açık uçlu sorular sordu (12:45, 14:38). "Tool ne demek?" gibi sorularla katılım sağlandı.' }
-        ]
-      }
-    },
-    {
-      id: 2, name: 'Murat Kaya', initials: 'MK', color: '#f59e0b',
-      expertise: ['Unity 3D', 'Modül 4'], score: '4.2', status: 'Beklemede',
-      details: null
-    },
-    {
-      id: 3, name: 'Caner Öz', initials: 'CÖ', color: '#10b981',
-      expertise: ['Scratch', 'Grup 12'], score: '4.7', status: 'Rapor Hazır',
-      details: {
-        date: '10/03/2026', course: 'SCRT-99_MON-16', group: 'Creative-1',
-        kpis: { ttt: '%35', duration: '60dk', attendance: '100%', quality: '%92' },
-        evaluator: 'Hakan',
-        obs: [
-          { t: 'Ders Akışı', c: 'Ders tekrarı ve geçiş bölümlerinde öğrenciler bilgilendirildi.' }
-        ]
-      }
-    }
-  ]
+  useEffect(() => {
+    apiGet('/admin/teachers')
+      .then(data => setTeachers(data))
+      .catch(err => setError(err.message))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const colorPalette = ['#6366f1', '#f59e0b', '#10b981', '#ec4899', '#06b6d4', '#f43f5e']
+
+  const rows = teachers.map((t, idx) => ({
+    id: t.id,
+    name: t.name,
+    initials: t.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2),
+    color: colorPalette[idx % colorPalette.length],
+    expertise: [],
+    score: t.lastScore ? (t.lastScore / 20).toFixed(1) : '—',
+    status: t.lastScore ? 'Rapor Hazır' : 'Beklemede',
+    hasReport: !!t.lastScore,
+    latestJobId: t.latestJobId || null,
+  }))
 
   const filteredRows = rows.filter(r =>
     r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     r.expertise.some(e => e.toLowerCase().includes(searchQuery.toLowerCase()))
   )
+
+  if (loading) {
+    return (
+      <div style={{display:'grid', placeItems:'center', minHeight:'400px'}}>
+        <div style={{textAlign:'center', color:'#64748b'}}>
+          <div style={{fontSize:'2rem', marginBottom:'1rem'}}>⏳</div>
+          <p style={{fontWeight:700}}>Eğitmenler yükleniyor...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div style={{display:'grid', placeItems:'center', minHeight:'400px'}}>
+        <div style={{textAlign:'center', color:'#f43f5e'}}>
+          <div style={{fontSize:'2rem', marginBottom:'1rem'}}>⚠️</div>
+          <p style={{fontWeight:700}}>{error}</p>
+        </div>
+      </div>
+    )
+  }
 
   if (selectedReport) {
     return (
@@ -86,7 +101,7 @@ const TeacherPool = () => {
           color: '#64748b', fontSize: '11px', fontWeight: 900, letterSpacing: '0.05em'
         }}>
           <span>EĞİTMEN</span>
-          <span>UZMANLIK & MODÜLLER</span>
+          <span>BRANŞ</span>
           <span>SKOR (AVG)</span>
           <span style={{ textAlign: 'right' }}>AKSİYON</span>
         </div>
@@ -109,34 +124,54 @@ const TeacherPool = () => {
                   </div>
                   <div>
                     <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>{r.name}</div>
-                    <div style={{ fontSize: '0.75rem', fontWeight: 800, color: r.status === 'Beklemede' ? '#f59e0b' : '#10b981', background: r.status === 'Beklemede' ? '#fffbeb' : '#f0fdf4', padding: '2px 8px', borderRadius: '6px', display: 'inline-block', marginTop: '4px' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 800, color: r.hasReport ? '#10b981' : '#f59e0b', background: r.hasReport ? '#f0fdf4' : '#fffbeb', padding: '2px 8px', borderRadius: '6px', display: 'inline-block', marginTop: '4px' }}>
                       {r.status.toUpperCase()}
                     </div>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {r.expertise.map(e => (
-                    <span key={e} style={{
-                      fontSize: '10px', fontWeight: 800, color: '#475569',
-                      background: '#f1f5f9', padding: '4px 12px', borderRadius: '100px'
-                    }}>{e.toUpperCase()}</span>
-                  ))}
-                </div>
-
                 <div style={{ fontSize: '1.25rem', fontWeight: 950, color: '#0f172a' }}>
-                  {r.score} <small style={{ fontSize: '0.75rem', color: '#94a3b8' }}>/ 5.0</small>
+                  {r.score} {r.score !== '—' && <small style={{ fontSize: '0.75rem', color: '#94a3b8' }}>/ 5.0</small>}
                 </div>
 
                 <div style={{ textAlign: 'right' }}>
                   <button
-                    onClick={() => r.details ? setSelectedReport(r) : null}
+                    onClick={async () => {
+                      if (!r.hasReport || !r.latestJobId) return
+                      setLoadingReport(true)
+                      try {
+                        const draft = await apiGet(`/admin/analysis/draft/${r.latestJobId}`)
+                        const fr = draft.finalReport || draft.draftReport || {}
+                        setSelectedReport({
+                          id: r.latestJobId?.slice(0, 8) || r.id.slice(0, 8),
+                          name: r.name,
+                          module: draft.lesson?.title || '',
+                          date: draft.createdAt ? new Date(draft.createdAt).toLocaleDateString('tr-TR') : '',
+                          group: draft.lesson?.moduleCode || '',
+                          evaluator: fr.approvedBy ? 'Admin Onaylı' : 'Sistem (AI)',
+                          quality: fr.yeterlilikler || fr.quality || '—',
+                          ttt: fr.speaking_time_rating || '—',
+                          duration: fr.actual_duration_min ? `${fr.actual_duration_min}dk` : '—',
+                          videoUrl: draft.videoUrl || null,
+                          pdfUrl: fr.pdfUrl || null,
+                          obs: fr.feedback_metni
+                            ? [{ t: 'AI Değerlendirmesi', c: fr.feedback_metni }]
+                            : [{ t: 'Bilgi', c: 'Rapor detayı bulunamadı.' }],
+                          finalReport: fr,
+                          draftReport: fr,
+                        })
+                      } catch (e) {
+                        console.error('Report fetch error:', e)
+                      } finally {
+                        setLoadingReport(false)
+                      }
+                    }}
                     style={{
                       padding: '8px 24px', borderRadius: '12px', border: 'none',
-                      background: r.details ? 'linear-gradient(135deg, #6366f1, #a855f7)' : '#f1f5f9',
-                      color: r.details ? '#fff' : '#94a3b8',
-                      fontSize: '0.85rem', fontWeight: 800, cursor: r.details ? 'pointer' : 'not-allowed',
-                      boxShadow: r.details ? '0 10px 20px -5px rgba(99, 102, 241, 0.4)' : 'none',
+                      background: r.hasReport ? 'linear-gradient(135deg, #6366f1, #a855f7)' : '#f1f5f9',
+                      color: r.hasReport ? '#fff' : '#94a3b8',
+                      fontSize: '0.85rem', fontWeight: 800, cursor: r.hasReport ? 'pointer' : 'not-allowed',
+                      boxShadow: r.hasReport ? '0 10px 20px -5px rgba(99, 102, 241, 0.4)' : 'none',
                       transition: '0.3s'
                     }}
                   >

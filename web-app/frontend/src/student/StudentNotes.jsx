@@ -1,77 +1,109 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { apiGet } from '../api'
 
 const StudentNotes = () => {
-  const [activeTab, setActiveTab] = useState(1)
+  const [notes, setNotes] = useState([])
+  const [activeTab, setActiveTab] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const mockNotes = [
-    {
-      id: 1,
-      course: "Python Programming",
-      teacher: "Zehra Bozkurt",
-      date: "APRIL 19, 2024",
-      note: "Ali, your logical approach to Python loops was excellent! Keep up the great work and keep exploring list comprehensions. You are becoming a master of clean code.",
-      color: "#6366f1", // Indigo
-      secondaryColor: "#a855f7" // Purple
-    },
-    {
-      id: 2,
-      course: "Scratch Basics",
-      teacher: "Mehmet Demir",
-      date: "APRIL 15, 2024",
-      note: "Great job on the animation project! Your use of variables for the score counter was very clever. Try adding more sounds to your next game!",
-      color: "#f59e0b", // Amber
-      secondaryColor: "#d97706" 
-    },
-    {
-      id: 3,
-      course: "AI & ML Intro",
-      teacher: "Selin Yılmaz",
-      date: "APRIL 10, 2024",
-      note: "The way you explained the difference between Supervised and Unsupervised learning was perfect. Your curiousity about neural networks is inspiring.",
-      color: "#10b981", // Emerald
-      secondaryColor: "#059669"
-    }
+  useEffect(() => {
+    apiGet('/student/mentor-notes')
+      .then(data => {
+        setNotes(data)
+        if (data.length > 0) setActiveTab(0)
+      })
+      .catch(err => setError(err.message))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const colorPalette = [
+    { color: '#6366f1', secondaryColor: '#a855f7' },
+    { color: '#f59e0b', secondaryColor: '#d97706' },
+    { color: '#10b981', secondaryColor: '#059669' },
+    { color: '#ec4899', secondaryColor: '#db2777' },
+    { color: '#06b6d4', secondaryColor: '#0891b2' },
   ]
 
-  const currentNote = mockNotes.find(n => n.id === activeTab)
+  const tabIcons = ['💬', '📝', '🎯', '💡', '✨']
+
+  if (loading) {
+    return (
+      <div style={{display:'grid', placeItems:'center', minHeight:'400px'}}>
+        <div style={{textAlign:'center', color:'#64748b'}}>
+          <div style={{fontSize:'2rem', marginBottom:'1rem'}}>⏳</div>
+          <p style={{fontWeight:700}}>Notlar yükleniyor...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div style={{display:'grid', placeItems:'center', minHeight:'400px'}}>
+        <div style={{textAlign:'center', color:'#f43f5e'}}>
+          <div style={{fontSize:'2rem', marginBottom:'1rem'}}>⚠️</div>
+          <p style={{fontWeight:700}}>{error}</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (notes.length === 0) {
+    return (
+      <div style={{display:'grid', placeItems:'center', minHeight:'400px'}}>
+        <div style={{textAlign:'center', color:'#64748b'}}>
+          <div style={{fontSize:'3rem', marginBottom:'1rem'}}>🗨</div>
+          <h3 style={{fontWeight:800, color:'#1e293b'}}>Henüz eğitmen notu bulunmuyor</h3>
+          <p>Eğitmenleriniz size not gönderdiğinde burada görünecektir.</p>
+        </div>
+      </div>
+    )
+  }
+
+  const currentNote = notes[activeTab]
+  const colors = colorPalette[activeTab % colorPalette.length]
 
   return (
     <div className="student-notes-container" style={{maxWidth:'700px', marginTop:'1rem', animation: 'fadeIn 0.5s ease'}}>
       
-      {/* PROMINENT Folder Style Course Tabs */}
-      <div style={{display:'flex', gap:'8px', marginBottom:'-2px', paddingLeft:'15px', position:'relative', zIndex:5}}>
-        {mockNotes.map(note => (
-          <button
-            key={note.id}
-            onClick={() => setActiveTab(note.id)}
-            style={{
-              padding: '12px 24px',
-              background: activeTab === note.id ? note.color : '#e2e8f0',
-              color: activeTab === note.id ? 'white' : '#475569',
-              border: '1px solid ' + (activeTab === note.id ? note.color : '#cbd5e1'),
-              borderBottom: 'none',
-              borderRadius: '16px 16px 0 0',
-              fontSize: '12px',
-              fontWeight: 800,
-              cursor: 'pointer',
-              transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-              boxShadow: activeTab === note.id ? `0 -6px 15px ${note.color}55` : 'none',
-              transform: activeTab === note.id ? 'translateY(0)' : 'translateY(4px)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              letterSpacing: '0.02em'
-            }}
-          >
-            <span style={{fontSize: '1.25rem'}}>{note.id === 1 ? '🐍' : note.id === 2 ? '🧩' : '🤖'}</span>
-            <span>{note.course.split(' ')[0]}</span>
-          </button>
-        ))}
+      {/* Folder Style Tabs */}
+      <div style={{display:'flex', gap:'8px', marginBottom:'-2px', paddingLeft:'15px', position:'relative', zIndex:5, flexWrap:'wrap'}}>
+        {notes.map((note, idx) => {
+          const c = colorPalette[idx % colorPalette.length]
+          return (
+            <button
+              key={note.id}
+              onClick={() => setActiveTab(idx)}
+              style={{
+                padding: '12px 24px',
+                background: activeTab === idx ? c.color : '#e2e8f0',
+                color: activeTab === idx ? 'white' : '#475569',
+                border: '1px solid ' + (activeTab === idx ? c.color : '#cbd5e1'),
+                borderBottom: 'none',
+                borderRadius: '16px 16px 0 0',
+                fontSize: '12px',
+                fontWeight: 800,
+                cursor: 'pointer',
+                transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                boxShadow: activeTab === idx ? `0 -6px 15px ${c.color}55` : 'none',
+                transform: activeTab === idx ? 'translateY(0)' : 'translateY(4px)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                letterSpacing: '0.02em'
+              }}
+            >
+              <span style={{fontSize: '1.25rem'}}>{tabIcons[idx % tabIcons.length]}</span>
+              <span>{note.lessonTitle ? note.lessonTitle.split(' ')[0] : note.teacherName.split(' ')[0]}</span>
+            </button>
+          )
+        })}
       </div>
 
       <div className="report-card-internal" style={{
-        padding: '0', overflow: 'hidden', border: `1px solid ${currentNote.color}33`,
-        boxShadow: `0 20px 40px -20px ${currentNote.color}44`,
+        padding: '0', overflow: 'hidden', border: `1px solid ${colors.color}33`,
+        boxShadow: `0 20px 40px -20px ${colors.color}44`,
         background: '#fff',
         borderRadius: '0 16px 16px 16px',
         position: 'relative',
@@ -79,7 +111,7 @@ const StudentNotes = () => {
       }}>
         {/* Dynamic Header Section */}
         <div style={{
-          background: `linear-gradient(135deg, ${currentNote.color} 0%, ${currentNote.secondaryColor} 100%)`,
+          background: `linear-gradient(135deg, ${colors.color} 0%, ${colors.secondaryColor} 100%)`,
           padding: '1.5rem 2rem', display: 'flex', alignItems: 'center', gap: '1rem',
           transition: 'all 0.5s ease'
         }}>
@@ -92,9 +124,9 @@ const StudentNotes = () => {
           </div>
           <div>
             <h2 style={{margin:0, fontSize:'1.1rem', fontWeight:800, color:'#fff', letterSpacing:'-0.02em'}}>
-              {currentNote.course}
+              {currentNote.lessonTitle || 'Genel Not'}
             </h2>
-            <p style={{margin:0, fontSize:'10px', color:'rgba(255,255,255,0.7)', fontWeight:700}}>Instructor Feedback</p>
+            <p style={{margin:0, fontSize:'10px', color:'rgba(255,255,255,0.7)', fontWeight:700}}>Eğitmen Geri Bildirimi</p>
           </div>
         </div>
 
@@ -102,7 +134,7 @@ const StudentNotes = () => {
           {/* Dynamic Accent Line */}
           <div style={{
             position: 'absolute', left: '0', top: '2rem', bottom: '2rem', 
-            width: '5px', background: `linear-gradient(to bottom, ${currentNote.color}, ${currentNote.secondaryColor})`,
+            width: '5px', background: `linear-gradient(to bottom, ${colors.color}, ${colors.secondaryColor})`,
             borderRadius: '0 5px 5px 0'
           }}></div>
 
@@ -120,21 +152,23 @@ const StudentNotes = () => {
               <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
                 <div style={{
                   width:'32px', height:'32px', borderRadius:'10px', 
-                  background: `linear-gradient(135deg, ${currentNote.color}, ${currentNote.secondaryColor})`, 
+                  background: `linear-gradient(135deg, ${colors.color}, ${colors.secondaryColor})`, 
                   display:'grid', placeItems:'center', color:'white', fontSize:'12px', fontWeight:800
                 }}>
-                  {currentNote.teacher.split(' ').map(n=>n[0]).join('')}
+                  {currentNote.teacherName.split(' ').map(n=>n[0]).join('').slice(0, 2)}
                 </div>
                 <div>
-                   <span style={{fontSize: '0.9rem', fontWeight: 800, color: '#0f172a', display:'block'}}>{currentNote.teacher}</span>
-                   <span style={{fontSize: '10px', color: 'var(--text-muted)', fontWeight: 700}}>{currentNote.date}</span>
+                   <span style={{fontSize: '0.9rem', fontWeight: 800, color: '#0f172a', display:'block'}}>{currentNote.teacherName}</span>
+                   <span style={{fontSize: '10px', color: 'var(--text-muted)', fontWeight: 700}}>
+                     {currentNote.createdAt ? new Date(currentNote.createdAt).toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric' }) : ''}
+                   </span>
                 </div>
               </div>
               <div style={{
-                 padding: '4px 10px', background: `${currentNote.color}11`, color: currentNote.color, 
+                 padding: '4px 10px', background: `${colors.color}11`, color: colors.color, 
                  borderRadius: '6px', fontSize: '9px', fontWeight: 800
               }}>
-                 OFFICIAL FEEDBACK
+                 RESMİ GERİ BİLDİRİM
               </div>
             </div>
           </div>

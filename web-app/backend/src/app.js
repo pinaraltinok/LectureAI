@@ -37,12 +37,16 @@ app.get('/api-docs.json', (req, res) => {
   res.send(swaggerSpec);
 });
 
+// ─── Serve uploaded files (videos, etc.) ─────────────────────
+app.use('/uploads', express.static(path.resolve(uploadDir)));
+
 // ─── Routes ──────────────────────────────────────────────────
 app.use('/api/auth', require('./routes/auth.routes'));
 app.use('/api/admin', require('./routes/admin.routes'));
 app.use('/api/teacher', require('./routes/teacher.routes'));
 app.use('/api/student', require('./routes/student.routes'));
 app.use('/api/parent', require('./routes/parent.routes'));
+app.use('/api/gcs', require('./routes/gcs.routes'));
 
 // ─── Health Check ────────────────────────────────────────────
 app.get('/health', (req, res) => {

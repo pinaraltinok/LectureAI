@@ -23,20 +23,35 @@ import StudentNotes from './student/StudentNotes.jsx'
 function AppContent() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [role, setRole] = useState('admin')
+  const [userName, setUserName] = useState('')
   const [workflowStep, setWorkflowStep] = useState('upload')
   const navigate = useNavigate()
 
-  const handleLogin = (userRole) => {
+  const handleLogin = (userRole, name) => {
     setIsLoggedIn(true)
     setRole(userRole || 'student')
+    setUserName(name || '')
     
     if (userRole === 'admin') navigate('/admin/kurum-ozeti')
     else if (userRole === 'teacher') navigate('/teacher/ders-ozeti')
-    else navigate('/student/derslerim') // Varsayılan derslerim
+    else navigate('/student/derslerim')
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('token')
+    setIsLoggedIn(false)
+    setRole('admin')
+    setUserName('')
+    navigate('/')
   }
 
   if (!isLoggedIn) {
     return <Login onLogin={handleLogin} />
+  }
+
+  const getInitials = (name) => {
+    if (!name) return role === 'admin' ? 'A' : '?'
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
   }
 
   return (
@@ -94,7 +109,7 @@ function AppContent() {
             </>
           )}
         </nav>
-        <button className="logout" onClick={() => { setIsLoggedIn(false); navigate('/'); }}>Çıkış Yap</button>
+        <button className="logout" onClick={handleLogout}>Çıkış Yap</button>
       </aside>
 
       <main className="content">
@@ -102,7 +117,7 @@ function AppContent() {
           <Routes>
             <Route path="/admin/*" element={
               <Routes>
-                <Route path="kurum-ozeti" element={<div><h1>Kurum Performansı</h1><p>32 Eğitmen / 120 Grup Aktif</p></div>} />
+                <Route path="kurum-ozeti" element={<div><h1>Kurum Performansı</h1><p>Kurum geneli analitik</p></div>} />
                 <Route path="egitmen-havuzu" element={<div><h1>Eğitmen Havuzu</h1><p>Eğitmenlerin raporlarını inceleyin.</p></div>} />
                 <Route path="analiz-atama" element={
                   workflowStep === 'upload' 
@@ -114,27 +129,27 @@ function AppContent() {
             
             <Route path="/teacher/*" element={
               <Routes>
-                <Route path="ders-ozeti" element={<div><h1>Ders Özeti</h1><p>Sıradaki Ders: Python-102</p></div>} />
-                <Route path="feedback" element={<div><h1>ATTENDANCE</h1><p>Hoş Geldiniz, TEACHER</p></div>} />
-                <Route path="anketler" element={<div><h1>Öğrenci Feedbackleri</h1><p>Sistem durumu: Aktif</p></div>} />
+                <Route path="ders-ozeti" element={<div><h1>Ders Özeti</h1><p>Dersleriniz ve Analizleriniz</p></div>} />
+                <Route path="feedback" element={<div><h1>Öğrenci Gelişim Notları</h1><p>Öğrencilerinize geri bildirim gönderin</p></div>} />
+                <Route path="anketler" element={<div><h1>Öğrenci Geri Bildirim Analizi</h1><p>Anket sonuçları</p></div>} />
               </Routes>
             } />
 
             <Route path="/student/*" element={
               <Routes>
-                <Route path="derslerim" element={<div><h1>Active Courses</h1><p>Your current learning modules</p></div>} />
-                <Route path="anket" element={<div><h1>Course Assessment</h1><p>Anonymous quality feedback</p></div>} />
-                <Route path="notlar" element={<div><h1>Instructor Notes</h1><p>Resource feedback & communication</p></div>} />
+                <Route path="derslerim" element={<div><h1>Derslerim</h1><p>Kayıtlı olduğunuz dersler</p></div>} />
+                <Route path="anket" element={<div><h1>Ders Anketi</h1><p>Anonim ders değerlendirmesi</p></div>} />
+                <Route path="notlar" element={<div><h1>Hocamın Notları</h1><p>Eğitmenlerinizden gelen geri bildirimler</p></div>} />
               </Routes>
             } />
           </Routes>
 
           <div className="user-chip">
             <div className="avatar" style={{background: role==='admin'?'#f59e0b':role==='teacher'?'#6366f1':'#10b981'}}>
-               {role==='admin'?'A':role==='teacher'?'ZB':'AV'}
+               {getInitials(userName)}
             </div>
             <div>
-              <strong>{role==='admin'?'Sistem Yöneticisi':role==='teacher'?'Zehra Bozkurt':'Ali Vural'}</strong>
+              <strong>{userName || (role==='admin'?'Yönetici':role==='teacher'?'Eğitmen':'Öğrenci')}</strong>
               <small style={{display:'block'}}>{role.toUpperCase()}</small>
             </div>
           </div>
