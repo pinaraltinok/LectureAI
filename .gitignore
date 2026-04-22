@@ -3,6 +3,8 @@
 scripts/.env
 service_account.json
 **/service_account.json
+senior-design-488908-1d5d3e1681ee.json
+*-*-*.json
 tests/service_account/*.json
 
 # Python
