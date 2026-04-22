@@ -1,0 +1,200 @@
+.login-container {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: #0f172a; /* Fallback */
+  background-image: url('./login_background_abstract_1776620288976.png');
+  background-size: cover;
+  background-position: center;
+  padding: 2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.background-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: radial-gradient(circle at 70% 30%, rgba(99, 102, 241, 0.15), transparent 40%),
+              radial-gradient(circle at 20% 80%, rgba(255, 0, 128, 0.1), transparent 40%);
+  pointer-events: none;
+}
+
+.login-card {
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  width: 100%;
+  max-width: 440px;
+  padding: 2.5rem 3.5rem;
+  border-radius: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 50px 100px -20px rgba(0, 0, 0, 0.5);
+  text-align: center;
+  animation: cardFadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 10;
+}
+
+@keyframes cardFadeUp {
+  from { opacity: 0; transform: translateY(40px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.login-header {
+  margin-bottom: 2rem;
+}
+
+.brand-icon-premium {
+  width: 52px;
+  height: 52px;
+  background: linear-gradient(135deg, #ff0080 0%, #7928ca 100%);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  margin: 0 auto 1.25rem;
+  box-shadow: 0 15px 30px -5px rgba(255, 0, 128, 0.5);
+  position: relative;
+  overflow: hidden;
+  color: white;
+}
+
+.brand-icon-premium::after {
+  content: '';
+  position: absolute;
+  top: -50%; left: -50%; width: 200%; height: 200%;
+  background: linear-gradient(45deg, transparent, rgba(255,255,255,0.3), transparent);
+  transform: rotate(45deg);
+  animation: shine 3s infinite;
+}
+
+@keyframes shine {
+  0% { left: -150%; }
+  100% { left: 150%; }
+}
+
+.brand-name {
+  margin: 0;
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.03em;
+  text-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.brand-tagline {
+  color: #94a3b8;
+  font-weight: 600;
+  font-size: 1rem;
+  margin-top: 0.5rem;
+  opacity: 0.8;
+}
+
+.role-tabs {
+  display: flex;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 6px;
+  border-radius: 22px;
+  margin-bottom: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.role-tabs button {
+  flex: 1;
+  padding: 0.9rem;
+  border: none;
+  background: transparent;
+  border-radius: 16px;
+  font-weight: 700;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-size: 0.9rem;
+}
+
+.role-tabs button.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+}
+
+.login-form .input-group {
+  text-align: left;
+  margin-bottom: 1.25rem;
+}
+
+.input-group label {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  color: #94a3b8;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.8rem;
+  text-transform: uppercase;
+}
+
+.input-group input {
+  width: 100%;
+  padding: 1.25rem 1.5rem;
+  background: rgba(255, 255, 255, 0.2); /* Targeted whiteness for inputs */
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 18px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  outline: none;
+  transition: all 0.3s;
+}
+
+.input-group input::placeholder {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.input-group input:focus {
+  border-color: #6366f1;
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.15);
+}
+
+.login-submit-btn {
+  width: 100%;
+  padding: 1.2rem;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  font-size: 1.1rem;
+  font-weight: 800;
+  cursor: pointer;
+  margin-top: 1rem;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 20px 40px -10px rgba(99, 102, 241, 0.5);
+}
+
+.login-submit-btn:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 30px 60px -15px rgba(99, 102, 241, 0.6);
+}
+
+.login-footer {
+  margin-top: 1.75rem;
+}
+
+.login-footer p {
+  color: #94a3b8;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.login-footer a {
+  color: #fff;
+  text-decoration: none;
+  font-weight: 800;
+  margin-left: 0.25rem;
+  transition: 0.2s;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.login-footer a:hover {
+  border-color: #6366f1;
+}
