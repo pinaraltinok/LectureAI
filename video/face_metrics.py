@@ -1,8 +1,9 @@
 import cv2
 import mediapipe as mp
+import mediapipe.python.solutions.face_mesh as mp_face_pkg
 import numpy as np
 
-mp_face = mp.solutions.face_mesh
+mp_face = mp_face_pkg
 
 
 class FaceMetrics:
