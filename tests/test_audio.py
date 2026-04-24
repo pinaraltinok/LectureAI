@@ -1,7 +1,7 @@
 """Unit tests for ``src.audio.assemblyai_client``.
 
-All external dependencies (GCS + AssemblyAI) are mocked so tests can run
-without credentials or network access.
+All external dependencies (GCS + AssemblyAI + ffmpeg) are mocked so tests
+can run without credentials, network, or a local ffmpeg binary.
 """
 
 from __future__ import annotations
@@ -114,11 +114,27 @@ def _ensure_blob(
     bucket = client._storage_client.bucket(bucket_name)
     return bucket.blob(object_key)
 
+
+def _patch_ffmpeg_run():
+    """Mock ``ffmpeg-python`` and pretend ``ffmpeg`` CLI is available."""
+    mock_input = MagicMock()
+    mock_out = MagicMock()
+    mock_out.run = MagicMock()
+    mock_input.output.return_value = mock_out
+    mock_ffmpeg_mod = MagicMock()
+    mock_ffmpeg_mod.input.return_value = mock_input
+    return patch.multiple(
+        "src.audio.assemblyai_client",
+        ffmpeg=mock_ffmpeg_mod,
+        resolve_ffmpeg_executable=MagicMock(return_value="ffmpeg"),
+    )
+
+
 # --------------------------------------------------------------------------- #
-#  Test 1 - happy path (MP4 download -> direct submit)
+#  Test 1 - happy path (MP4 download → ffmpeg → MP3 submit)
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
-async def test_analyze_happy_path_direct_mp4_submit():
+async def test_analyze_happy_path_mp3_pipeline():
     client = _make_client()
     _buckets, blobs = _install_bucket_router(client)
 
@@ -134,7 +150,9 @@ async def test_analyze_happy_path_direct_mp4_submit():
         "Lesson_Records/video-123.mp4",
     )
 
-    with patch("src.audio.assemblyai_client.aai.Transcriber") as mock_transcriber_cls, patch(
+    with _patch_ffmpeg_run(), patch(
+        "src.audio.assemblyai_client.aai.Transcriber"
+    ) as mock_transcriber_cls, patch(
         "src.audio.assemblyai_client.aai.Transcript"
     ) as mock_transcript_cls, patch(
         "src.audio.assemblyai_client.aai.TranscriptStatus"
@@ -161,9 +179,9 @@ async def test_analyze_happy_path_direct_mp4_submit():
 
     video_blob.download_to_filename.assert_called_once()
     transcriber_instance.submit.assert_called_once()
-    media_arg = transcriber_instance.submit.call_args.args[0]
-    assert isinstance(media_arg, str)
-    assert media_arg.endswith(".mp4")
+    mp3_arg = transcriber_instance.submit.call_args.args[0]
+    assert isinstance(mp3_arg, str)
+    assert mp3_arg.endswith(".mp3")
 
     json_blob = blobs[("lectureai_processed", "data/audio/video-123.json")]
     txt_blob = blobs[("lectureai_processed", "transcripts/video-123.txt")]
@@ -207,7 +225,9 @@ async def test_analyze_transcription_error_raises():
         "Lesson_Records/video-err.mp4",
     )
 
-    with patch("src.audio.assemblyai_client.aai.Transcriber") as mock_transcriber_cls, patch(
+    with _patch_ffmpeg_run(), patch(
+        "src.audio.assemblyai_client.aai.Transcriber"
+    ) as mock_transcriber_cls, patch(
         "src.audio.assemblyai_client.aai.Transcript"
     ) as mock_transcript_cls, patch(
         "src.audio.assemblyai_client.aai.TranscriptStatus"

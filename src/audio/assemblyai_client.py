@@ -5,11 +5,12 @@ Flow:
     1. If cached JSON exists at ``gs://{processed}/data/audio/{video_id}.json``,
        return it.
     2. Download the source MP4 from GCS to a tempfile.
-    3. Submit the MP4 file path to AssemblyAI (local upload, not URL).
-    4. Poll until completed/error.
-    5. Parse into ``AudioAnalysisResult`` (including ``SentimentSummary``).
-    6. Upload JSON + human-readable ``.txt`` transcript to the processed bucket.
-    7. Delete tempfiles.
+    3. Convert to MP3 with ffmpeg (audio only, 64 kbps).
+    4. Submit the MP3 file path to AssemblyAI (local upload, not URL).
+    5. Poll until completed/error.
+    6. Parse into ``AudioAnalysisResult`` (including ``SentimentSummary``).
+    7. Upload JSON + human-readable ``.txt`` transcript to the processed bucket.
+    8. Delete tempfiles.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import shutil
 import sys
 import tempfile
 import time
@@ -25,6 +27,7 @@ from datetime import datetime, timezone
 from typing import Iterator, List, Optional
 
 import assemblyai as aai
+import ffmpeg
 from google.cloud import storage
 
 from src.config import BucketConfig
@@ -39,6 +42,49 @@ from .transcript_format import build_transcript_txt
 logger = logging.getLogger(__name__)
 
 
+def resolve_ffmpeg_executable() -> Optional[str]:
+    """Return a usable ``ffmpeg`` binary path, or ``None`` if not found.
+
+    ``ffmpeg-python`` shells out to the real CLI. Set ``FFMPEG_BINARY`` or
+    ``FFMPEG_PATH`` to a full path (e.g. ``C:\\\\ffmpeg\\\\bin\\\\ffmpeg.exe``)
+    if ``ffmpeg`` is not on ``PATH`` (common on Windows).
+    """
+    for key in ("FFMPEG_BINARY", "FFMPEG_PATH"):
+        raw = (os.environ.get(key) or "").strip().strip('"')
+        if not raw:
+            continue
+        if os.path.isfile(raw):
+            return os.path.normpath(raw)
+        found = shutil.which(raw)
+        if found:
+            return found
+    found = shutil.which("ffmpeg")
+    if found:
+        return found
+    if sys.platform == "win32":
+        return shutil.which("ffmpeg.exe")
+    return None
+
+
+def _ffmpeg_not_found_message() -> str:
+    if sys.platform == "win32":
+        install = (
+            "Install ffmpeg (e.g. `winget install Gyan.FFmpeg` or "
+            "https://www.gyan.dev/ffmpeg/builds/) and add its `bin` folder "
+            "to your PATH, or set env var FFMPEG_BINARY to the full path "
+            "of ffmpeg.exe."
+        )
+    else:
+        install = (
+            "Install ffmpeg with your package manager and ensure `ffmpeg` "
+            "is on PATH, or set FFMPEG_BINARY to the full path of the binary."
+        )
+    return (
+        "ffmpeg executable not found. The audio pipeline requires the "
+        f"ffmpeg CLI (ffmpeg-python only wraps it). {install}"
+    )
+
+
 # --------------------------------------------------------------------------- #
 #  Custom exception
 # --------------------------------------------------------------------------- #
@@ -48,6 +94,7 @@ class AudioProcessingError(Exception):
     VALID_STAGES = {
         "download",
         "download_mp4",
+        "ffmpeg",
         "upload_assemblyai",
         "transcription",
         "gcs_save",
@@ -135,9 +182,12 @@ class AudioAnalysisClient:
             return cached_result
 
         mp4_path: Optional[str] = None
+        mp3_path: Optional[str] = None
         try:
             mp4_path = await self._download_mp4_to_tempfile(video_id)
-            transcript_id = await self._submit_transcription(video_id, mp4_path)
+            mp3_path = await self._convert_mp4_to_mp3(video_id, mp4_path)
+
+            transcript_id = await self._submit_transcription(video_id, mp3_path)
 
             transcript = await self._wait_for_transcription(
                 video_id, transcript_id
@@ -147,7 +197,7 @@ class AudioAnalysisClient:
 
             await self._save_result(video_id, result)
         finally:
-            for path in (mp4_path,):
+            for path in (mp4_path, mp3_path):
                 if path and os.path.isfile(path):
                     try:
                         os.unlink(path)
@@ -214,18 +264,73 @@ class AudioAnalysisClient:
                 ) from exc
             return mp4_path
 
+    async def _convert_mp4_to_mp3(self, video_id: str, mp4_path: str) -> str:
+        with self._stage(video_id, "ffmpeg"):
+            ffmpeg_cmd = resolve_ffmpeg_executable()
+            if not ffmpeg_cmd:
+                raise AudioProcessingError(
+                    video_id,
+                    "ffmpeg",
+                    _ffmpeg_not_found_message(),
+                )
+            logger.debug("[%s] using ffmpeg binary: %s", video_id, ffmpeg_cmd)
+
+            fd, mp3_path = tempfile.mkstemp(suffix=".mp3")
+            os.close(fd)
+
+            def _run_ffmpeg() -> None:
+                (
+                    ffmpeg.input(mp4_path)
+                    .output(
+                        mp3_path,
+                        vn=None,
+                        acodec="libmp3lame",
+                        audio_bitrate="64k",
+                    )
+                    .run(
+                        overwrite_output=True,
+                        quiet=True,
+                        cmd=ffmpeg_cmd,
+                    )
+                )
+
+            try:
+                await asyncio.to_thread(_run_ffmpeg)
+            except Exception as exc:
+                try:
+                    os.unlink(mp3_path)
+                except OSError:
+                    pass
+                hint = ""
+                err_s = str(exc)
+                if (
+                    "WinError 2" in err_s
+                    or "[Errno 2]" in err_s
+                    or "cannot find the file specified" in err_s.lower()
+                ):
+                    hint = (
+                        " (Likely cause: ffmpeg.exe missing or not on PATH; "
+                        "set FFMPEG_BINARY or install ffmpeg — see logs above.)"
+                    )
+                raise AudioProcessingError(
+                    video_id,
+                    "ffmpeg",
+                    f"ffmpeg MP3 conversion failed: {exc}{hint}",
+                ) from exc
+            return mp3_path
+
     async def _submit_transcription(
         self,
         video_id: str,
-        media_path: str,
+        mp3_path: str,
     ) -> str:
-        """Submit a local media file (MP4) to AssemblyAI."""
+        """Submit a local MP3 file to AssemblyAI."""
         with self._stage(video_id, "upload_assemblyai"):
             try:
                 config = self._build_transcription_config()
                 transcriber = aai.Transcriber(config=config)
                 transcript = await asyncio.to_thread(
-                    transcriber.submit, media_path
+                    transcriber.submit, mp3_path
                 )
                 if transcript.id is None:
                     raise RuntimeError(
