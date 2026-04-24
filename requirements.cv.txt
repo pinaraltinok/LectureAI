@@ -1,0 +1,12 @@
+opencv-python-headless
+easyocr
+torch
+mediapipe
+google-cloud-storage
+google-cloud-pubsub
+google-cloud-compute
+pydantic>=2.0
+pandas
+python-dotenv
+fastapi
+uvicorn
