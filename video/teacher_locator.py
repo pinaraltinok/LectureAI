@@ -1,7 +1,6 @@
 import cv2
 import easyocr
 import mediapipe as mp
-import mediapipe.python.solutions.face_detection as mp_face_detection
 import numpy as np
 import unicodedata
 from difflib import SequenceMatcher
@@ -41,7 +40,7 @@ class TeacherLocator:
             languages = ["en"]
 
         self.reader = easyocr.Reader(languages, gpu=torch.cuda.is_available())
-        self.face_detector = mp_face_detection.FaceDetection(
+        self.face_detector = mp.solutions.face_detection.FaceDetection(
             model_selection=0,
             min_detection_confidence=min_detection_confidence
         )

@@ -1,8 +1,7 @@
 import cv2
 import mediapipe as mp
-import mediapipe.python.solutions.hands as mp_hands_pkg
 
-mp_hands = mp_hands_pkg
+mp_hands = mp.solutions.hands
 
 
 class GestureMetrics:
