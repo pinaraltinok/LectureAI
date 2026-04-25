@@ -1,7 +1,10 @@
 const { Storage } = require('@google-cloud/storage');
+const path = require('path');
 
-// Initialize Storage with credentials from env (GOOGLE_APPLICATION_CREDENTIALS)
-const storage = new Storage();
+// Initialize Storage with explicit credentials
+const projectRoot = path.resolve(__dirname, '..', '..', '..', '..');
+const credentialPath = path.join(projectRoot, 'senior-design-488908-1d5d3e1681ee.json');
+const storage = new Storage({ keyFilename: credentialPath });
 
 // Signed URL expires in 15 minutes
 const SIGNED_URL_EXPIRY_MINUTES = 15;

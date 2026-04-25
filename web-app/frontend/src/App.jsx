@@ -118,7 +118,7 @@ function AppContent() {
             <Route path="/admin/*" element={
               <Routes>
                 <Route path="kurum-ozeti" element={<div><h1>Kurum Performansı</h1><p>Kurum geneli analitik</p></div>} />
-                <Route path="egitmen-havuzu" element={<div><h1>Eğitmen Havuzu</h1><p>Eğitmenlerin raporlarını inceleyin.</p></div>} />
+                <Route path="egitmen-havuzu" element={<div><h1>Eğitmenler & Raporlar</h1><p>Eğitmenlerin analiz raporlarını inceleyin.</p></div>} />
                 <Route path="analiz-atama" element={
                   workflowStep === 'upload' 
                     ? <div><h1>Ders Analizi Atama</h1><p>Yeni bir ders kaydı yükleyin.</p></div>

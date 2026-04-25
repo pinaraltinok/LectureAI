@@ -16,6 +16,8 @@ const {
   getAnalysisJobs,
   getCurricula,
   getAnalysisProgress,
+  getTeacherReports,
+  syncGCSReports,
 } = require('../controllers/admin.controller');
 
 // Multer configuration for video uploads
@@ -222,5 +224,7 @@ router.get('/lessons', auth, roleGuard('ADMIN'), getLessons);
 router.get('/analysis/jobs', auth, roleGuard('ADMIN'), getAnalysisJobs);
 router.get('/analysis/progress/:jobId', auth, roleGuard('ADMIN'), getAnalysisProgress);
 router.get('/curricula', auth, roleGuard('ADMIN'), getCurricula);
+router.get('/teacher/:teacherId/reports', auth, roleGuard('ADMIN'), getTeacherReports);
+router.post('/sync-reports', auth, roleGuard('ADMIN'), syncGCSReports);
 
 module.exports = router;

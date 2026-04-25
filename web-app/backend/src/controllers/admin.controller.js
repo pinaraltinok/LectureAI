@@ -89,25 +89,23 @@ async function getTeachers(req, res) {
         email: true,
         branch: true,
         analysisJobs: {
-          where: { status: 'FINALIZED', finalReport: { not: null } },
+          where: { status: { in: ['DRAFT', 'FINALIZED'] } },
           orderBy: { updatedAt: 'desc' },
-          take: 1,
-          select: { id: true, finalReport: true },
+          select: { id: true, finalReport: true, draftReport: true, status: true },
         },
       },
     });
 
     const result = teachers.map((t) => {
-      const latestJob = t.analysisJobs.length > 0 ? t.analysisJobs[0] : null;
-      const fr = latestJob?.finalReport || null;
+      const allReports = t.analysisJobs;
+      const latestJob = allReports.length > 0 ? allReports[0] : null;
+      const fr = latestJob?.finalReport || latestJob?.draftReport || null;
 
-      // Extract score from any available field
       let lastScore = null;
       if (fr) {
         if (fr.overallScore != null) {
           lastScore = fr.overallScore;
         } else if (fr.yeterlilikler) {
-          // Parse "92%" or "%92" → 92 → scale to /20 gives 4.6
           const match = String(fr.yeterlilikler).match(/(\d+)/);
           lastScore = match ? parseInt(match[1]) : null;
         }
@@ -120,6 +118,7 @@ async function getTeachers(req, res) {
         branch: t.branch,
         lastScore,
         latestJobId: latestJob?.id || null,
+        reportCount: allReports.length,
       };
     });
 
@@ -660,6 +659,144 @@ async function getAnalysisProgress(req, res) {
   }
 }
 
+/**
+ * GET /api/admin/teacher/:teacherId/reports
+ * Returns all analysis reports (DRAFT + FINALIZED) for a specific teacher.
+ */
+async function getTeacherReports(req, res) {
+  try {
+    const { teacherId } = req.params;
+
+    const teacher = await prisma.user.findUnique({
+      where: { id: teacherId },
+      select: { id: true, name: true, branch: true },
+    });
+    if (!teacher) {
+      return res.status(404).json({ error: 'Eğitmen bulunamadı.' });
+    }
+
+    const jobs = await prisma.analysisJob.findMany({
+      where: { teacherId, status: { in: ['DRAFT', 'FINALIZED'] } },
+      include: {
+        lesson: { select: { id: true, title: true, moduleCode: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const reports = jobs.map((j) => {
+      const report = j.finalReport || j.draftReport || {};
+      return {
+        jobId: j.id,
+        videoUrl: j.videoUrl,
+        videoFilename: j.videoFilename,
+        status: j.status,
+        createdAt: j.createdAt,
+        lessonTitle: j.lesson?.title || null,
+        moduleCode: j.lesson?.moduleCode || null,
+        genel_sonuc: report.genel_sonuc || null,
+        yeterlilikler: report.yeterlilikler || null,
+        speaking_time_rating: report.speaking_time_rating || null,
+        feedback_metni: report.feedback_metni || null,
+      };
+    });
+
+    return res.json({ teacher, reports });
+  } catch (err) {
+    console.error('GetTeacherReports error:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+}
+
+/**
+ * POST /api/admin/sync-reports
+ * Scans GCS lectureai_processed/reports/ for JSON files and creates
+ * AnalysisJob records for any reports not yet in the database.
+ */
+async function syncGCSReports(req, res) {
+  try {
+    if (!gcsStorage) {
+      return res.status(500).json({ error: 'GCS client not initialized' });
+    }
+
+    const bucket = gcsStorage.bucket(PROCESSED_BUCKET);
+    const [files] = await bucket.getFiles({ prefix: 'reports/' });
+
+    const jsonFiles = files.filter((f) => f.name.endsWith('.json'));
+    let synced = 0;
+    let skipped = 0;
+
+    for (const file of jsonFiles) {
+      // Extract video_id from filename: reports/my_video.json → my_video
+      const videoId = file.name.replace('reports/', '').replace('.json', '');
+      if (!videoId) continue;
+
+      // Check if we already have this report in DB (by videoFilename or videoUrl containing videoId)
+      const existing = await prisma.analysisJob.findFirst({
+        where: {
+          OR: [
+            { videoFilename: { contains: videoId } },
+            { videoUrl: { contains: videoId } },
+          ],
+          status: { in: ['DRAFT', 'FINALIZED'] },
+          draftReport: { not: null },
+        },
+      });
+
+      if (existing) {
+        skipped++;
+        continue;
+      }
+
+      // Also check if there's a PROCESSING/PENDING job that should be updated
+      const pendingJob = await prisma.analysisJob.findFirst({
+        where: {
+          OR: [
+            { videoFilename: { contains: videoId } },
+            { videoUrl: { contains: videoId } },
+          ],
+          status: { in: ['PROCESSING', 'PENDING'] },
+        },
+      });
+
+      // Download and parse the report
+      const [content] = await file.download();
+      let reportData = {};
+      try {
+        reportData = JSON.parse(content.toString());
+      } catch (e) {
+        console.error(`[Sync] Failed to parse ${file.name}:`, e.message);
+        continue;
+      }
+
+      if (pendingJob) {
+        // Update existing pending/processing job
+        await prisma.analysisJob.update({
+          where: { id: pendingJob.id },
+          data: { status: 'DRAFT', draftReport: reportData },
+        });
+        synced++;
+      } else {
+        // Create new job record for orphan GCS report
+        await prisma.analysisJob.create({
+          data: {
+            videoFilename: videoId,
+            videoUrl: `gs://lectureai_full_videos/Lesson_Records/${videoId}.mp4`,
+            status: 'DRAFT',
+            draftReport: reportData,
+          },
+        });
+        synced++;
+      }
+    }
+
+    console.log(`[Sync] GCS reports synced: ${synced} new, ${skipped} already exist, ${jsonFiles.length} total in bucket`);
+    return res.json({ synced, skipped, total: jsonFiles.length });
+  } catch (err) {
+    console.error('SyncGCSReports error:', err);
+    return res.status(500).json({ error: 'Senkronizasyon hatası: ' + err.message });
+  }
+}
+
 module.exports = {
   getStats,
   getTeachers,
@@ -672,4 +809,6 @@ module.exports = {
   getAnalysisJobs,
   getCurricula,
   getAnalysisProgress,
+  getTeacherReports,
+  syncGCSReports,
 };

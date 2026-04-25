@@ -84,10 +84,17 @@ const SharedReport = ({ report }) => {
   const videoRef = useRef(null)
   const [currentTime, setCurrentTime] = useState(0)
   const [videoDuration, setVideoDuration] = useState(0)
-  const [isVideoVisible, setIsVideoVisible] = useState(false)
+  const [isVideoVisible, setIsVideoVisible] = useState(true)
 
   const rawVideoUrl = report?.videoUrl || null
-  const rawPdfUrl = report?.pdfUrl || report?.draftReport?.pdfUrl || report?.finalReport?.pdfUrl || null
+  const rawPdfUrl = report?.pdfUrl || report?.draftReport?.pdfUrl || report?.finalReport?.pdfUrl || (() => {
+    // Auto-construct PDF URL from video URL if available
+    if (rawVideoUrl && rawVideoUrl.startsWith('gs://')) {
+      const filename = rawVideoUrl.split('/').pop()?.replace(/\.[^.]+$/, '')
+      if (filename) return `gs://lectureai_processed/pdfs/${filename}.pdf`
+    }
+    return null
+  })()
 
   // Convert GCS URLs to signed URLs
   const { signedUrl: videoUrl, loading: videoLoading } = useGcsUrl(rawVideoUrl)
