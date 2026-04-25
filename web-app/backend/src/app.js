@@ -47,6 +47,7 @@ app.use('/api/teacher', require('./routes/teacher.routes'));
 app.use('/api/student', require('./routes/student.routes'));
 app.use('/api/parent', require('./routes/parent.routes'));
 app.use('/api/gcs', require('./routes/gcs.routes'));
+app.use('/api', require('./routes/analysis.routes'));
 
 // ─── Health Check ────────────────────────────────────────────
 app.get('/health', (req, res) => {

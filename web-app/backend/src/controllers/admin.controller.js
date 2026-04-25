@@ -1,16 +1,28 @@
 const prisma = require('../config/db');
-const { spawn } = require('child_process');
 const path = require('path');
 const { Storage } = require('@google-cloud/storage');
+const { PubSub } = require('@google-cloud/pubsub');
 
-// GCS client for uploading videos to bucket
+// ─── GCP Config ─────────────────────────────────────────────
+const PROJECT_ID = 'senior-design-488908';
+const PUBSUB_TOPIC = 'lecture-analysis-requested';  // Orchestrator dinliyor
+const PROCESSED_BUCKET = 'lectureai_processed';     // Orchestrator sonuçları buraya yazar
+
 const projectRoot = path.resolve(__dirname, '..', '..', '..', '..');
 const credentialPath = path.join(projectRoot, 'senior-design-488908-1d5d3e1681ee.json');
+
 let gcsStorage;
 try {
   gcsStorage = new Storage({ keyFilename: credentialPath });
 } catch (e) {
-  console.warn('[GCS] Storage client init failed, video upload to bucket will not work:', e.message);
+  console.warn('[GCS] Storage client init failed:', e.message);
+}
+
+let pubsub;
+try {
+  pubsub = new PubSub({ projectId: PROJECT_ID, keyFilename: credentialPath });
+} catch (e) {
+  console.warn('[PubSub] Client init failed:', e.message);
 }
 
 const VIDEO_BUCKET = 'lectureai_full_videos';
@@ -186,116 +198,90 @@ async function uploadAnalysis(req, res) {
 }
 
 /**
- * Submits a Vertex AI Custom Job with GPU for video analysis.
- * Polls for completion and updates the AnalysisJob status.
+ * Publishes analysis request to Pub/Sub topic.
+ * The orchestrator pipeline listens on `lecture-analysis-requested`,
+ * processes the video, and writes results to GCS:
+ *   - lectureai_processed/reports/{video_id}.json
+ *   - lectureai_processed/pdfs/{video_id}.pdf
  */
-function triggerVideoAnalysis(jobId, videoUri, teacherName) {
-  const projectRoot = path.resolve(__dirname, '..', '..', '..', '..');
-  const credentialPath = path.join(projectRoot, 'senior-design-488908-1d5d3e1681ee.json');
-  const scriptPath = path.join(projectRoot, 'scripts', 'submit_vertex_job.py');
+async function triggerVideoAnalysis(jobId, videoUri, teacherName) {
+  // Extract video_id from the GCS URI (filename without extension)
+  const videoId = extractVideoId(videoUri);
 
-  console.log(`[Analysis] Triggering Vertex AI job for ${jobId}: ${videoUri}`);
+  console.log(`[Analysis] Publishing to Pub/Sub for jobId=${jobId}, video_id=${videoId}`);
 
   // Initialize progress
   analysisProgress.set(jobId, {
     stage: 'queued',
-    message: 'GPU analiz işi kuyruğa alınıyor...',
+    message: 'Analiz isteği gönderiliyor...',
     percent: 5,
     startedAt: new Date().toISOString(),
+    videoId,
   });
 
-  // Update status to PROCESSING
-  prisma.analysisJob.update({
+  // Update DB status to PROCESSING
+  await prisma.analysisJob.update({
     where: { id: jobId },
     data: { status: 'PROCESSING' },
   }).catch((err) => console.error(`[Analysis] Status update error for ${jobId}:`, err));
 
-  // Submit Vertex AI job
-  const args = [
-    scriptPath,
-    '--video-uri', videoUri,
-    '--teacher-name', teacherName || 'Unknown',
-    '--credential-path', credentialPath,
-  ];
+  // Publish message to Pub/Sub
+  try {
+    if (!pubsub) throw new Error('PubSub client not initialized');
 
-  const child = spawn('python', args, {
-    cwd: projectRoot,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    detached: false,
-    env: {
-      ...process.env,
-      PYTHONIOENCODING: 'utf-8',
-      GOOGLE_APPLICATION_CREDENTIALS: credentialPath,
-    },
-  });
-
-  let stdout = '';
-  let stderr = '';
-
-  child.stdout.on('data', (data) => {
-    const text = data.toString();
-    stdout += text;
-    console.log(`[Vertex:${jobId}] ${text.trim()}`);
-  });
-
-  child.stderr.on('data', (data) => {
-    stderr += data.toString();
-  });
-
-  child.on('close', async (code) => {
-    if (code !== 0) {
-      console.error(`[Vertex] Submit failed for ${jobId} (code ${code}): ${stderr}`);
-      analysisProgress.set(jobId, { stage: 'failed', message: 'GPU job gönderilemedi', percent: 0 });
-      await prisma.analysisJob.update({
-        where: { id: jobId },
-        data: { status: 'PENDING', adminFeedback: `Vertex AI submit failed: ${stderr.slice(0, 500)}` },
-      }).catch(() => {});
-      return;
-    }
-
-    // Extract Vertex AI job name from output
-    let vertexJobName = '';
-    try {
-      const resultLine = stdout.split('\n').find((l) => l.includes('[RESULT]'));
-      if (resultLine) {
-        const parsed = JSON.parse(resultLine.substring(resultLine.indexOf('{')));
-        vertexJobName = parsed.job_name;
-      }
-    } catch (e) { /* ignore */ }
-
-    console.log(`[Vertex] Job submitted for ${jobId}: ${vertexJobName}`);
-
-    analysisProgress.set(jobId, {
-      stage: 'processing',
-      message: 'GPU üzerinde video analiz ediliyor...',
-      percent: 30,
-      vertexJobName,
+    const topic = pubsub.topic(PUBSUB_TOPIC);
+    const payload = JSON.stringify({
+      video_id: videoId,
+      teacher_name: teacherName || 'Teacher',  // Orchestrator bunu bekliyor
     });
 
-    // Poll Vertex AI job for completion
-    pollVertexJob(jobId, vertexJobName, videoUri, credentialPath);
-  });
+    const messageId = await topic.publishMessage({ data: Buffer.from(payload) });
+    console.log(`[PubSub] Message ${messageId} published to ${PUBSUB_TOPIC} for video_id=${videoId}`);
 
-  child.on('error', (err) => {
-    console.error(`[Vertex] Spawn error for ${jobId}:`, err.message);
-  });
+    analysisProgress.set(jobId, {
+      ...analysisProgress.get(jobId),
+      stage: 'processing',
+      message: 'Video analiz ediliyor...',
+      percent: 20,
+    });
+
+    // Start polling GCS for the report
+    pollGCSForReport(jobId, videoId);
+
+  } catch (err) {
+    console.error(`[PubSub] Publish failed for ${jobId}:`, err.message);
+    analysisProgress.set(jobId, { stage: 'failed', message: 'Pub/Sub mesajı gönderilemedi', percent: 0 });
+    await prisma.analysisJob.update({
+      where: { id: jobId },
+      data: { status: 'PENDING', adminFeedback: `PubSub publish failed: ${err.message}` },
+    }).catch(() => {});
+  }
 }
 
 /**
- * Polls a Vertex AI Custom Job until completion.
- * When done, reads the report from GCS and updates the DB.
+ * Extracts video_id from a GCS URI.
+ * e.g. "gs://lectureai_full_videos/Lesson_Records/my_video.mp4" → "my_video"
  */
-function pollVertexJob(jobId, vertexJobName, videoUri, credentialPath) {
-  const POLL_INTERVAL = 15000; // 15 seconds
-  const MAX_POLLS = 240; // max ~60 minutes
+function extractVideoId(videoUri) {
+  const filename = videoUri.split('/').pop();
+  return filename.replace(/\.[^.]+$/, ''); // Remove extension
+}
+
+/**
+ * Polls GCS bucket for report completion.
+ * Checks lectureai_processed/reports/{video_id}.json every 5 seconds.
+ */
+function pollGCSForReport(jobId, videoId) {
+  const POLL_INTERVAL = 5000; // 5 seconds — as recommended
+  const MAX_POLLS = 720;      // max ~60 minutes
   let pollCount = 0;
 
   const stageMessages = [
-    { at: 3, stage: 'downloading', message: 'Video GPU sunucusuna indiriliyor...', percent: 20 },
-    { at: 8, stage: 'processing', message: 'Görüntü işleme devam ediyor...', percent: 40 },
-    { at: 15, stage: 'processing', message: 'Yüz ve jest analizi yapılıyor...', percent: 55 },
-    { at: 25, stage: 'processing', message: 'Metrikler hesaplanıyor...', percent: 70 },
-    { at: 35, stage: 'reporting', message: 'Rapor oluşturuluyor...', percent: 85 },
+    { at: 6,  stage: 'processing', message: 'Video işleniyor...', percent: 30 },
+    { at: 24, stage: 'processing', message: 'Görüntü analizi devam ediyor...', percent: 45 },
+    { at: 60, stage: 'processing', message: 'Yüz ve jest analizi yapılıyor...', percent: 60 },
+    { at: 120, stage: 'reporting', message: 'Metrikler hesaplanıyor...', percent: 75 },
+    { at: 180, stage: 'reporting', message: 'Rapor oluşturuluyor...', percent: 85 },
   ];
 
   const interval = setInterval(async () => {
@@ -312,107 +298,63 @@ function pollVertexJob(jobId, vertexJobName, videoUri, credentialPath) {
       });
     }
 
-    // Check Vertex AI job status via Python
+    // Check if report JSON exists in GCS
     try {
-      const check = spawn('python', ['-c', `
-import os, json
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = '${credentialPath.replace(/\\/g, '/')}'
-from google.cloud import aiplatform
-job = aiplatform.CustomJob.get('${vertexJobName}')
-print(json.dumps({'state': str(job.state).split('.')[-1], 'error': str(job.error) if job.error else None}))
-`], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, PYTHONIOENCODING: 'utf-8' } });
+      if (!gcsStorage) throw new Error('GCS client not initialized');
 
-      let out = '';
-      check.stdout.on('data', (d) => { out += d.toString(); });
-      check.on('close', async (code) => {
-        if (code !== 0) return;
+      const reportBlob = gcsStorage.bucket(PROCESSED_BUCKET).file(`reports/${videoId}.json`);
+      const [exists] = await reportBlob.exists();
+
+      if (exists) {
+        clearInterval(interval);
+        console.log(`[GCS] Report found for video_id=${videoId}, downloading...`);
+
+        analysisProgress.set(jobId, {
+          ...analysisProgress.get(jobId),
+          stage: 'uploading',
+          message: 'Rapor okunuyor...',
+          percent: 95,
+        });
+
+        // Download and parse the report
+        const [content] = await reportBlob.download();
+        let draftReport = {};
         try {
-          const status = JSON.parse(out.trim().split('\n').pop());
-          console.log(`[Vertex:${jobId}] Poll #${pollCount}: ${status.state}`);
+          draftReport = JSON.parse(content.toString());
+        } catch (e) {
+          console.error(`[GCS] Report parse error for ${jobId}:`, e.message);
+        }
 
-          if (status.state === 'JOB_STATE_SUCCEEDED') {
-            clearInterval(interval);
-            analysisProgress.set(jobId, { stage: 'uploading', message: "Rapor bucket'tan okunuyor...", percent: 95 });
+        // Update DB with the draft report
+        await prisma.analysisJob.update({
+          where: { id: jobId },
+          data: { status: 'DRAFT', draftReport },
+        });
 
-            // Read report from GCS
-            await fetchReportFromGCS(jobId, videoUri, credentialPath);
-
-          } else if (status.state === 'JOB_STATE_FAILED' || status.state === 'JOB_STATE_CANCELLED') {
-            clearInterval(interval);
-            console.error(`[Vertex] Job ${jobId} failed: ${status.error}`);
-            analysisProgress.set(jobId, { stage: 'failed', message: 'GPU analizi başarısız oldu', percent: 0 });
-            await prisma.analysisJob.update({
-              where: { id: jobId },
-              data: { status: 'PENDING', adminFeedback: `Vertex AI failed: ${status.error || 'Unknown'}` },
-            }).catch(() => {});
-            setTimeout(() => analysisProgress.delete(jobId), 5 * 60 * 1000);
-          }
-        } catch (e) { /* ignore parse errors */ }
-      });
-    } catch (e) { /* ignore */ }
+        console.log(`[Analysis] Job ${jobId} completed successfully (video_id=${videoId}).`);
+        analysisProgress.set(jobId, { stage: 'completed', message: 'Analiz tamamlandı!', percent: 100, videoId });
+        setTimeout(() => analysisProgress.delete(jobId), 5 * 60 * 1000);
+      } else {
+        if (pollCount % 12 === 0) { // Log every ~60 seconds
+          console.log(`[GCS] Poll #${pollCount}: report not ready yet for video_id=${videoId}`);
+        }
+      }
+    } catch (e) {
+      if (pollCount % 12 === 0) {
+        console.error(`[GCS] Poll error for ${jobId}:`, e.message);
+      }
+    }
 
     if (pollCount >= MAX_POLLS) {
       clearInterval(interval);
-      console.error(`[Vertex] Job ${jobId} timed out after ${MAX_POLLS} polls`);
+      console.error(`[Analysis] Job ${jobId} timed out after ${MAX_POLLS} polls`);
       analysisProgress.set(jobId, { stage: 'failed', message: 'Analiz zaman aşımına uğradı', percent: 0 });
-    }
-  }, POLL_INTERVAL);
-}
-
-/**
- * Reads the analysis report from GCS after Vertex AI job completes.
- */
-async function fetchReportFromGCS(jobId, videoUri, credentialPath) {
-  try {
-    // Parse the expected report path from the video URI
-    const uriPath = videoUri.replace('gs://lectureai_full_videos/', '');
-    const parentPath = uriPath.split('/').slice(0, -1).join('/');
-    const reportGcsPath = `results/${parentPath}/lecture_report.json`;
-
-    const readScript = `
-import os, json
-os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = '${credentialPath.replace(/\\/g, '/')}'
-from google.cloud import storage
-client = storage.Client()
-bucket = client.bucket('lectureai_processed')
-blob = bucket.blob('${reportGcsPath}')
-if blob.exists():
-    print(blob.download_as_text())
-else:
-    print('NOT_FOUND')
-`;
-
-    const child = spawn('python', ['-c', readScript], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
-    });
-
-    let out = '';
-    child.stdout.on('data', (d) => { out += d.toString(); });
-
-    child.on('close', async (code) => {
-      let draftReport = {};
-      if (code === 0 && out.trim() !== 'NOT_FOUND') {
-        try {
-          draftReport = JSON.parse(out.trim());
-        } catch (e) {
-          console.error(`[Vertex] Report parse error for ${jobId}:`, e.message);
-        }
-      }
-
       await prisma.analysisJob.update({
         where: { id: jobId },
-        data: { status: 'DRAFT', draftReport },
-      });
-
-      console.log(`[Vertex] Job ${jobId} completed successfully.`);
-      analysisProgress.set(jobId, { stage: 'completed', message: 'Analiz tamamlandı!', percent: 100 });
-      setTimeout(() => analysisProgress.delete(jobId), 5 * 60 * 1000);
-    });
-  } catch (err) {
-    console.error(`[Vertex] Report fetch error for ${jobId}:`, err.message);
-    analysisProgress.set(jobId, { stage: 'failed', message: 'Rapor okunamadı', percent: 0 });
-  }
+        data: { status: 'PENDING', adminFeedback: 'Analysis timed out waiting for report' },
+      }).catch(() => {});
+    }
+  }, POLL_INTERVAL);
 }
 
 /**
