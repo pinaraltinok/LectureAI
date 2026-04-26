@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, useNavigate, Navigate } from 'react-router-dom'
 import Login from './Login.jsx'
 
@@ -25,7 +25,35 @@ function AppContent() {
   const [role, setRole] = useState('admin')
   const [userName, setUserName] = useState('')
   const [workflowStep, setWorkflowStep] = useState('upload')
+  const [sessionLoading, setSessionLoading] = useState(true)
   const navigate = useNavigate()
+
+  // Restore session from localStorage token on page load / refresh
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    if (!token) {
+      setSessionLoading(false)
+      return
+    }
+
+    fetch('/api/auth/me', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => {
+        if (!res.ok) throw new Error('Token expired')
+        return res.json()
+      })
+      .then(data => {
+        setIsLoggedIn(true)
+        setRole(data.role.toLowerCase())
+        setUserName(data.name || '')
+      })
+      .catch(() => {
+        // Token invalid or expired — clear it
+        localStorage.removeItem('token')
+      })
+      .finally(() => setSessionLoading(false))
+  }, [])
 
   const handleLogin = (userRole, name) => {
     setIsLoggedIn(true)
@@ -43,6 +71,23 @@ function AppContent() {
     setRole('admin')
     setUserName('')
     navigate('/')
+  }
+
+  // Show loading spinner while checking session
+  if (sessionLoading) {
+    return (
+      <div style={{display:'grid', placeItems:'center', minHeight:'100vh', background:'#0f172a'}}>
+        <div style={{textAlign:'center', color:'#94a3b8'}}>
+          <div style={{
+            width:'48px', height:'48px', borderRadius:'50%',
+            border:'3px solid #334155', borderTopColor:'#6366f1',
+            animation:'spin 0.8s linear infinite', margin:'0 auto 1rem'
+          }}></div>
+          <p style={{fontWeight:600, fontSize:'0.9rem'}}>Oturum doğrulanıyor...</p>
+        </div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+      </div>
+    )
   }
 
   if (!isLoggedIn) {

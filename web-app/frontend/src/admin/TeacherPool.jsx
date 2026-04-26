@@ -182,9 +182,33 @@ const TeacherPool = () => {
         ) : (
           <div style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
             {teacherReports.map((report, idx) => {
-              const statusConfig = report.status === 'FINALIZED'
-                ? { label: 'ONAYLANDI', bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0' }
-                : { label: 'TASLAK', bg: '#fefce8', color: '#a16207', border: '#fde68a' }
+              let statusConfig;
+              if (report.isUnassigned) {
+                statusConfig = { label: 'ATANMAMIŞ', bg: '#fef2f2', color: '#dc2626', border: '#fecaca' }
+              } else if (report.status === 'FINALIZED') {
+                statusConfig = { label: 'ONAYLANDI', bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0' }
+              } else if (report.status === 'DRAFT') {
+                statusConfig = { label: 'TASLAK', bg: '#fefce8', color: '#a16207', border: '#fde68a' }
+              } else if (report.status === 'PROCESSING') {
+                statusConfig = { label: 'İŞLENİYOR', bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' }
+              } else {
+                statusConfig = { label: report.status || 'BEKLİYOR', bg: '#f8fafc', color: '#64748b', border: '#e2e8f0' }
+              }
+
+              const handleAssign = async (e) => {
+                e.stopPropagation()
+                try {
+                  await apiPost('/admin/analysis/assign', {
+                    jobId: report.jobId,
+                    teacherId: selectedTeacher.id,
+                  })
+                  // Refresh reports
+                  const data = await apiGet(`/admin/teacher/${selectedTeacher.id}/reports`)
+                  setTeacherReports(data.reports || [])
+                } catch (err) {
+                  setError('Atama hatası: ' + err.message)
+                }
+              }
 
               return (
                 <div
@@ -193,8 +217,8 @@ const TeacherPool = () => {
                   style={{
                     display: 'grid', gridTemplateColumns: 'auto 1fr auto',
                     alignItems: 'center', gap: '1.5rem',
-                    padding: '1.5rem 2rem', background: '#fff',
-                    border: '1px solid #e2e8f0', borderRadius: '20px',
+                    padding: '1.5rem 2rem', background: report.isUnassigned ? '#fffbeb' : '#fff',
+                    border: `1px solid ${report.isUnassigned ? '#fde68a' : '#e2e8f0'}`, borderRadius: '20px',
                     cursor: 'pointer', transition: 'all 0.2s ease',
                     boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
                   }}
@@ -204,7 +228,7 @@ const TeacherPool = () => {
                     e.currentTarget.style.transform = 'translateY(-2px)'
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = '#e2e8f0'
+                    e.currentTarget.style.borderColor = report.isUnassigned ? '#fde68a' : '#e2e8f0'
                     e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.02)'
                     e.currentTarget.style.transform = 'translateY(0)'
                   }}
@@ -212,10 +236,14 @@ const TeacherPool = () => {
                   {/* Left: Index circle */}
                   <div style={{
                     width: '44px', height: '44px', borderRadius: '14px',
-                    background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                    background: report.isUnassigned
+                      ? 'linear-gradient(135deg, #f59e0b, #ef4444)'
+                      : 'linear-gradient(135deg, #6366f1, #a855f7)',
                     color: '#fff', display: 'grid', placeItems: 'center',
                     fontWeight: 900, fontSize: '0.9rem',
-                    boxShadow: '0 4px 12px rgba(99,102,241,0.3)',
+                    boxShadow: report.isUnassigned
+                      ? '0 4px 12px rgba(245,158,11,0.3)'
+                      : '0 4px 12px rgba(99,102,241,0.3)',
                   }}>
                     #{idx + 1}
                   </div>
@@ -237,6 +265,7 @@ const TeacherPool = () => {
                       <span>📅 {new Date(report.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                       {report.moduleCode && <span>📖 {report.moduleCode}</span>}
                       {report.genel_sonuc && <span>📊 {report.genel_sonuc}</span>}
+                      {report.isUnassigned && <span style={{color: '#dc2626'}}>⚠ Eğitmene atanmamış</span>}
                     </div>
                     {report.feedback_metni && (
                       <p style={{margin: '8px 0 0', fontSize: '0.82rem', color: '#94a3b8', lineHeight: 1.5, fontWeight: 500}}>
@@ -245,15 +274,30 @@ const TeacherPool = () => {
                     )}
                   </div>
 
-                  {/* Right: Arrow */}
-                  <div style={{
-                    width: '40px', height: '40px', borderRadius: '12px',
-                    background: '#f8fafc', border: '1px solid #e2e8f0',
-                    display: 'grid', placeItems: 'center', fontSize: '1.1rem', color: '#94a3b8',
-                    transition: '0.2s',
-                  }}>
-                    →
-                  </div>
+                  {/* Right: Arrow or Assign button */}
+                  {report.isUnassigned ? (
+                    <button
+                      onClick={handleAssign}
+                      style={{
+                        padding: '10px 20px', borderRadius: '12px', border: 'none',
+                        background: 'linear-gradient(135deg, #f59e0b, #ef4444)',
+                        color: '#fff', fontSize: '0.8rem', fontWeight: 800,
+                        cursor: 'pointer', boxShadow: '0 4px 12px rgba(245,158,11,0.3)',
+                        transition: '0.2s', whiteSpace: 'nowrap',
+                      }}
+                    >
+                      Bu Eğitmene Ata
+                    </button>
+                  ) : (
+                    <div style={{
+                      width: '40px', height: '40px', borderRadius: '12px',
+                      background: '#f8fafc', border: '1px solid #e2e8f0',
+                      display: 'grid', placeItems: 'center', fontSize: '1.1rem', color: '#94a3b8',
+                      transition: '0.2s',
+                    }}>
+                      →
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -273,7 +317,7 @@ const TeacherPool = () => {
     initials: t.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2),
     color: colorPalette[idx % colorPalette.length],
     score: t.lastScore ? (t.lastScore / 20).toFixed(1) : '—',
-    hasReport: (t.reportCount || 0) > 0,
+    hasReport: true,
     idx,
   }))
 
@@ -365,7 +409,6 @@ const TeacherPool = () => {
                 <div style={{ textAlign: 'right' }}>
                   <button
                     onClick={() => handleViewReports(r, r.idx)}
-                    disabled={!r.hasReport}
                     style={{
                       padding: '10px 28px', borderRadius: '12px', border: 'none',
                       background: r.hasReport ? 'linear-gradient(135deg, #6366f1, #a855f7)' : '#f1f5f9',

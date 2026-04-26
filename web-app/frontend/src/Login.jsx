@@ -30,8 +30,22 @@ export default function Login({ onLogin }) {
         setErrorMsg('Sunucuya bağlanılamadı. Lütfen backend sunucusunun çalıştığından emin olun.')
       }
     } else {
-      alert("Kayıt işlemi şu an aktif değil, lütfen var olan test hesaplarıyla giriş yapın.")
-      setIsLogin(true)
+      try {
+        const response = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, password, role })
+        })
+        const data = await response.json()
+        if (response.ok) {
+          localStorage.setItem('token', data.token)
+          onLogin(data.role.toLowerCase(), data.name || '')
+        } else {
+          setErrorMsg(data.error || 'Kayıt başarısız oldu')
+        }
+      } catch (err) {
+        setErrorMsg('Sunucuya bağlanılamadı. Lütfen backend sunucusunun çalıştığından emin olun.')
+      }
     }
   }
 

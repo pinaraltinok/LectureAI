@@ -81,20 +81,22 @@ async function getStats(req, res) {
  */
 async function getTeachers(req, res) {
   try {
-    const teachers = await prisma.user.findMany({
-      where: { role: 'TEACHER' },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        branch: true,
-        analysisJobs: {
-          where: { status: { in: ['DRAFT', 'FINALIZED'] } },
-          orderBy: { updatedAt: 'desc' },
-          select: { id: true, finalReport: true, draftReport: true, status: true },
+    const [teachers, unassignedCount] = await Promise.all([
+      prisma.user.findMany({
+        where: { role: 'TEACHER' },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          branch: true,
+          analysisJobs: {
+            orderBy: { updatedAt: 'desc' },
+            select: { id: true, finalReport: true, draftReport: true, status: true },
+          },
         },
-      },
-    });
+      }),
+      prisma.analysisJob.count({ where: { teacherId: null } }),
+    ]);
 
     const result = teachers.map((t) => {
       const allReports = t.analysisJobs;
@@ -118,7 +120,7 @@ async function getTeachers(req, res) {
         branch: t.branch,
         lastScore,
         latestJobId: latestJob?.id || null,
-        reportCount: allReports.length,
+        reportCount: allReports.length + unassignedCount,
       };
     });
 
@@ -661,7 +663,8 @@ async function getAnalysisProgress(req, res) {
 
 /**
  * GET /api/admin/teacher/:teacherId/reports
- * Returns all analysis reports (DRAFT + FINALIZED) for a specific teacher.
+ * Returns all analysis reports for a specific teacher (all statuses),
+ * plus any unassigned reports (teacherId is null) so admin can see them.
  */
 async function getTeacherReports(req, res) {
   try {
@@ -675,10 +678,17 @@ async function getTeacherReports(req, res) {
       return res.status(404).json({ error: 'Eğitmen bulunamadı.' });
     }
 
+    // Get this teacher's reports AND unassigned reports
     const jobs = await prisma.analysisJob.findMany({
-      where: { teacherId, status: { in: ['DRAFT', 'FINALIZED'] } },
+      where: {
+        OR: [
+          { teacherId },
+          { teacherId: null },
+        ],
+      },
       include: {
         lesson: { select: { id: true, title: true, moduleCode: true } },
+        teacher: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -693,6 +703,8 @@ async function getTeacherReports(req, res) {
         createdAt: j.createdAt,
         lessonTitle: j.lesson?.title || null,
         moduleCode: j.lesson?.moduleCode || null,
+        assignedTeacher: j.teacher?.name || null,
+        isUnassigned: j.teacherId === null,
         genel_sonuc: report.genel_sonuc || null,
         yeterlilikler: report.yeterlilikler || null,
         speaking_time_rating: report.speaking_time_rating || null,

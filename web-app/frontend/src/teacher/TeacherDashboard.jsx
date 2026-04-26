@@ -63,7 +63,8 @@ const TeacherDashboard = () => {
       module: r.lessonTitle || '',
       date: r.createdAt ? new Date(r.createdAt).toLocaleDateString('tr-TR') : '',
       group: r.moduleCode || '',
-      evaluator: fr.approvedBy ? 'Admin Onaylı' : 'Sistem (AI)',
+      evaluator: r.status === 'FINALIZED' ? 'Admin Onaylı' : 'AI Taslak',
+      status: r.status || 'DRAFT',
       quality: fr.yeterlilikler || fr.quality || '—',
       ttt: fr.speaking_time_rating || '—',
       duration: fr.actual_duration_min ? `${fr.actual_duration_min}dk` : '—',
@@ -100,8 +101,8 @@ const TeacherDashboard = () => {
       {reports.length === 0 ? (
         <div style={{textAlign:'center', padding:'4rem', color:'#64748b'}}>
           <div style={{fontSize:'3rem', marginBottom:'1rem'}}>📋</div>
-          <h3 style={{fontWeight:800, color:'#1e293b'}}>Henüz onaylanmış rapor bulunmuyor</h3>
-          <p>Admin tarafından onaylanan raporlar burada görünecektir.</p>
+          <h3 style={{fontWeight:800, color:'#1e293b'}}>Henüz rapor bulunmuyor</h3>
+          <p>Size atanan analiz raporları burada görünecektir.</p>
         </div>
       ) : (
         <div style={{display: 'grid', gridTemplateColumns: '320px 1fr', gap: '2rem'}}>
@@ -110,7 +111,7 @@ const TeacherDashboard = () => {
           <div style={{display:'flex', flexDirection:'column', gap:'1.25rem'}}>
             <h3 style={{fontSize:'0.9rem', fontWeight:800, color:'#64748b', display:'flex', alignItems:'center', gap:'8px'}}>
               <span style={{width:'8px', height:'8px', background:'#10b981', borderRadius:'50%'}}></span>
-              ONAYLANMIŞ ANALİZLER ({reports.length})
+              ANALİZ RAPORLARI ({reports.length})
             </h3>
             
             {reports.map(report => (
@@ -129,7 +130,16 @@ const TeacherDashboard = () => {
                   <span style={{fontSize:'10px', fontWeight:800, color: selectedReport === report.jobId ? 'var(--primary)' : '#94a3b8'}}>{report.moduleCode || '—'}</span>
                   <span style={{fontSize:'10px', color:'#94a3b8'}}>{report.createdAt ? new Date(report.createdAt).toLocaleDateString('tr-TR') : ''}</span>
                 </div>
-                <h4 style={{margin:0, fontSize:'0.9rem', fontWeight:800, color:'#1e293b'}}>{report.lessonTitle || 'Ders Analizi'}</h4>
+                <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
+                  <h4 style={{margin:0, fontSize:'0.9rem', fontWeight:800, color:'#1e293b', flex:1}}>{report.lessonTitle || 'Ders Analizi'}</h4>
+                  <span style={{
+                    fontSize:'9px', fontWeight:800, padding:'3px 8px', borderRadius:'6px',
+                    background: report.status === 'FINALIZED' ? '#dcfce7' : '#fef3c7',
+                    color: report.status === 'FINALIZED' ? '#16a34a' : '#d97706',
+                  }}>
+                    {report.status === 'FINALIZED' ? '✓ Onaylı' : '◎ Taslak'}
+                  </span>
+                </div>
               </div>
             ))}
           </div>

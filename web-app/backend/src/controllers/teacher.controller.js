@@ -115,14 +115,15 @@ async function getMyFeedbacks(req, res) {
 
 /**
  * GET /api/teacher/reports
- * Returns admin-approved (finalized) analysis reports for this teacher.
+ * Returns analysis reports (DRAFT + FINALIZED) for this teacher.
+ * Teachers can see reports as soon as they are generated.
  */
 async function getReports(req, res) {
   try {
     const teacherId = req.user.userId;
 
     const jobs = await prisma.analysisJob.findMany({
-      where: { teacherId, status: 'FINALIZED' },
+      where: { teacherId, status: { in: ['DRAFT', 'FINALIZED'] } },
       include: {
         lesson: { select: { id: true, title: true, moduleCode: true } },
       },
@@ -136,7 +137,8 @@ async function getReports(req, res) {
       moduleCode: j.lesson?.moduleCode || null,
       videoUrl: j.videoUrl,
       videoFilename: j.videoFilename,
-      finalReport: j.finalReport,
+      status: j.status,
+      finalReport: j.status === 'FINALIZED' ? j.finalReport : j.draftReport,
       createdAt: j.createdAt,
       updatedAt: j.updatedAt,
     }));

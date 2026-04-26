@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
-const { login, getMe, logout } = require('../controllers/auth.controller');
+const { login, register, getMe, logout } = require('../controllers/auth.controller');
 
 /**
  * @swagger
@@ -39,6 +39,39 @@ const { login, getMe, logout } = require('../controllers/auth.controller');
  *               $ref: '#/components/schemas/Error'
  */
 router.post('/login', login);
+
+/**
+ * @swagger
+ * /api/auth/register:
+ *   post:
+ *     summary: Yeni hesap oluştur
+ *     description: Ad, email, şifre ve rol ile yeni kullanıcı kaydı oluşturur. Otomatik giriş yapar.
+ *     tags: [Auth]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name, email, password]
+ *             properties:
+ *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *                 enum: [student, teacher, admin]
+ *     responses:
+ *       201:
+ *         description: Hesap oluşturuldu ve giriş yapıldı
+ *       409:
+ *         description: Email zaten kayıtlı
+ */
+router.post('/register', register);
 
 /**
  * @swagger
