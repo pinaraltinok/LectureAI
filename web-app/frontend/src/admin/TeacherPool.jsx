@@ -71,9 +71,9 @@ const TeacherPool = () => {
       setSelectedReport({
         id: report.jobId?.slice(0, 8),
         name: selectedTeacher?.name || '',
-        module: draft.lesson?.title || report.lessonTitle || selectedTeacher?.name + ' Analizi',
+        module: draft.lesson?.course || report.courseName || selectedTeacher?.name + ' Analizi',
         date: report.createdAt ? new Date(report.createdAt).toLocaleDateString('tr-TR') : '',
-        group: draft.lesson?.moduleCode || report.moduleCode || '',
+        group: report.lessonNo ? `Ders ${report.lessonNo}` : '',
         evaluator: fr.approvedBy ? 'Admin Onaylı' : 'Sistem (AI)',
         quality: fr.yeterlilikler || '—',
         ttt: fr.speaking_time_rating || '—',
@@ -153,7 +153,7 @@ const TeacherPool = () => {
               {selectedTeacher.name}
             </h2>
             <p style={{margin: '4px 0 0', color: '#64748b', fontSize: '0.9rem', fontWeight: 600}}>
-              {selectedTeacher.branch || 'Branş belirtilmemiş'} • {teacherReports.length} Rapor
+              {selectedTeacher.startOfDate ? new Date(selectedTeacher.startOfDate).toLocaleDateString('tr-TR') + ' tarihinden beri' : ''} • {teacherReports.length} Rapor
             </p>
           </div>
         </div>
@@ -252,7 +252,7 @@ const TeacherPool = () => {
                   <div>
                     <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px'}}>
                       <span style={{fontSize: '1.05rem', fontWeight: 800, color: '#0f172a'}}>
-                        {report.videoFilename || report.moduleCode || `Rapor #${idx + 1}`}
+                        {report.videoFilename || report.courseName || `Rapor #${idx + 1}`}
                       </span>
                       <span style={{
                         fontSize: '10px', fontWeight: 800, padding: '3px 10px', borderRadius: '6px',
@@ -263,7 +263,7 @@ const TeacherPool = () => {
                     </div>
                     <div style={{display: 'flex', gap: '1.5rem', fontSize: '0.8rem', color: '#64748b', fontWeight: 600}}>
                       <span>📅 {new Date(report.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-                      {report.moduleCode && <span>📖 {report.moduleCode}</span>}
+                      {report.courseName && <span>📖 {report.courseName}</span>}
                       {report.genel_sonuc && <span>📊 {report.genel_sonuc}</span>}
                       {report.isUnassigned && <span style={{color: '#dc2626'}}>⚠ Eğitmene atanmamış</span>}
                     </div>
@@ -384,7 +384,7 @@ const TeacherPool = () => {
                   </div>
                   <div>
                     <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>{r.name}</div>
-                    <div style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: 600 }}>{r.branch || '—'}</div>
+                    <div style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: 600 }}>{r.email}</div>
                   </div>
                 </div>
 

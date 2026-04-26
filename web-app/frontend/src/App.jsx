@@ -6,6 +6,7 @@ import Login from './Login.jsx'
 import AdminSummary from './admin/AdminSummary.jsx'
 import TeacherPool from './admin/TeacherPool.jsx'
 import AnalysisWorkflow from './admin/AnalysisWorkflow.jsx'
+import AdminManagement from './admin/AdminManagement.jsx'
 
 // TEACHER sayfaları
 import TeacherDashboard from './teacher/TeacherDashboard.jsx'
@@ -19,6 +20,7 @@ import SharedReport from './components/SharedReport.jsx'
 import StudentDashboard from './student/StudentDashboard.jsx'
 import StudentSurvey from './student/StudentSurvey.jsx'
 import StudentNotes from './student/StudentNotes.jsx'
+import ProfilePage from './components/ProfilePage.jsx'
 
 function AppContent() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
@@ -129,6 +131,7 @@ function AppContent() {
               <NavLink to="/admin/kurum-ozeti" className={({isActive})=>isActive?"menu-link active":"menu-link"}>▦ Kurum Özeti</NavLink>
               <NavLink to="/admin/egitmen-havuzu" className={({isActive})=>isActive?"menu-link active":"menu-link"}>👥 Eğitmenler & Raporlar</NavLink>
               <NavLink to="/admin/analiz-atama" className={({isActive})=>isActive?"menu-link active":"menu-link"}>☁ Ders Analizi Atama</NavLink>
+              <NavLink to="/admin/yonetim" className={({isActive})=>isActive?"menu-link active":"menu-link"}>⚙ Kullanıcı & Grup Yönetimi</NavLink>
             </>
           )}
 
@@ -169,6 +172,7 @@ function AppContent() {
                     ? <div><h1>Ders Analizi Atama</h1><p>Yeni bir ders kaydı yükleyin.</p></div>
                     : <div><h1>Taslak Rapor Önizleme</h1><p>Raporu onaylayın veya revize edin.</p></div>
                 } />
+                <Route path="yonetim" element={<div><h1>Kullanıcı & Grup Yönetimi</h1><p>Öğrenci, eğitmen ve grup işlemlerini yönetin.</p></div>} />
               </Routes>
             } />
             
@@ -187,9 +191,14 @@ function AppContent() {
                 <Route path="notlar" element={<div><h1>Hocamın Notları</h1><p>Eğitmenlerinizden gelen geri bildirimler</p></div>} />
               </Routes>
             } />
+
+            <Route path="/profil" element={<div><h1>Profilim</h1><p>Hesap bilgileriniz</p></div>} />
           </Routes>
 
-          <div className="user-chip">
+          <div className="user-chip" onClick={() => navigate('/profil')} style={{ cursor: 'pointer' }}
+            onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+            onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+          >
             <div className="avatar" style={{background: role==='admin'?'#f59e0b':role==='teacher'?'#6366f1':'#10b981'}}>
                {getInitials(userName)}
             </div>
@@ -204,6 +213,7 @@ function AppContent() {
           <Route path="/admin/kurum-ozeti" element={<AdminSummary />} />
           <Route path="/admin/egitmen-havuzu" element={<TeacherPool />} />
           <Route path="/admin/analiz-atama" element={<AnalysisWorkflow onStepChange={setWorkflowStep} />} />
+          <Route path="/admin/yonetim" element={<AdminManagement />} />
           
           <Route path="/teacher/ders-ozeti" element={<TeacherDashboard />} />
           <Route path="/teacher/feedback" element={<TeacherAttendance />} />
@@ -212,6 +222,8 @@ function AppContent() {
           <Route path="/student/derslerim" element={<StudentDashboard />} />
           <Route path="/student/anket" element={<StudentSurvey />} />
           <Route path="/student/notlar" element={<StudentNotes />} />
+
+          <Route path="/profil" element={<ProfilePage />} />
 
           <Route path="/" element={<Navigate to={role==='admin'?'/admin/kurum-ozeti':role==='teacher'?'/teacher/ders-ozeti':'/student/derslerim'} />} />
         </Routes>

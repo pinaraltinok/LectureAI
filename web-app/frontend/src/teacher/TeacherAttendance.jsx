@@ -2,194 +2,123 @@ import { useState, useEffect } from 'react'
 import { apiGet, apiPost } from '../api'
 
 const TeacherAttendance = () => {
-  const [lessons, setLessons] = useState([])
-  const [selectedLessonId, setSelectedLessonId] = useState('')
+  const [groups, setGroups] = useState([])
+  const [selectedGroup, setSelectedGroup] = useState(null)
   const [students, setStudents] = useState([])
+  const [evaluations, setEvaluations] = useState([])
+  const [selectedStudent, setSelectedStudent] = useState(null)
+  const [note, setNote] = useState('')
+  const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
 
-  // Load lessons first
   useEffect(() => {
-    apiGet('/teacher/lessons')
-      .then(data => {
-        setLessons(data)
-        if (data.length > 0) setSelectedLessonId(data[0].id)
-      })
+    Promise.all([apiGet('/teacher/lessons'), apiGet('/teacher/my-evaluations')])
+      .then(([g, e]) => { setGroups(g); setEvaluations(e); if (g.length > 0) setSelectedGroup(g[0].groupId) })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
   }, [])
 
-  // Load students when lesson changes
   useEffect(() => {
-    if (!selectedLessonId) return
-    apiGet(`/teacher/lessons/${selectedLessonId}/students`)
-      .then(data => {
-        setStudents(data.map(s => ({ ...s, note: '', sent: false, sending: false })))
-      })
+    if (!selectedGroup) return
+    apiGet(`/teacher/lessons/${selectedGroup}/students`)
+      .then(data => setStudents(data))
       .catch(err => setError(err.message))
-  }, [selectedLessonId])
+  }, [selectedGroup])
 
-  const handleSend = async (studentId) => {
-    const student = students.find(s => s.id === studentId)
-    if (!student || !student.note) return
-
-    setStudents(prev => prev.map(s =>
-      s.id === studentId ? { ...s, sending: true } : s
-    ))
-
+  const handleSend = async () => {
+    if (!selectedStudent || !note.trim()) return
+    setSending(true); setError(''); setSuccess('')
     try {
-      await apiPost('/teacher/mentor-feedback', {
-        studentId,
-        lessonId: selectedLessonId,
-        note: student.note,
-      })
-      setStudents(prev => prev.map(s =>
-        s.id === studentId ? { ...s, sent: true, sending: false } : s
-      ))
-      setTimeout(() => {
-        setStudents(prev => prev.map(s =>
-          s.id === studentId ? { ...s, sent: false, note: '' } : s
-        ))
-      }, 3000)
-    } catch (err) {
-      setError(err.message)
-      setStudents(prev => prev.map(s =>
-        s.id === studentId ? { ...s, sending: false } : s
-      ))
-    }
+      await apiPost('/teacher/student-evaluation', { studentId: selectedStudent, note })
+      setSuccess('Değerlendirme notu başarıyla gönderildi!')
+      setNote(''); setSelectedStudent(null)
+      const updated = await apiGet('/teacher/my-evaluations')
+      setEvaluations(updated)
+    } catch (err) { setError(err.message) }
+    finally { setSending(false) }
   }
 
-  if (loading) {
-    return (
-      <div style={{display:'grid', placeItems:'center', minHeight:'400px'}}>
-        <div style={{textAlign:'center', color:'#64748b'}}>
-          <div style={{fontSize:'2rem', marginBottom:'1rem'}}>⏳</div>
-          <p style={{fontWeight:700}}>Veriler yükleniyor...</p>
-        </div>
-      </div>
-    )
-  }
+  if (loading) return (<div style={{display:'grid', placeItems:'center', minHeight:'400px'}}><div style={{textAlign:'center', color:'#64748b'}}><div style={{fontSize:'2rem', marginBottom:'1rem'}}>⏳</div><p style={{fontWeight:700}}>Yükleniyor...</p></div></div>)
+
+  const currentGroup = groups.find(g => g.groupId === selectedGroup)
 
   return (
-    <div style={{padding: '1.5rem'}}>
-      {/* Header Area */}
-      <div style={{marginBottom: '2.5rem'}}>
-         <h1 style={{fontSize: '1.8rem', fontWeight: 900, color: '#0f172a', marginBottom: '8px'}}>Öğrenci Gelişim Notları</h1>
-         <p style={{color: '#64748b', fontSize: '1rem'}}>Öğrencilerinizle doğrudan iletişim kurun ve gelişim notlarını iletin.</p>
-      </div>
+    <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', animation: 'fadeIn 0.5s ease'}}>
+      {/* Left: Send Evaluation */}
+      <div className="report-card-internal" style={{padding: '2rem'}}>
+        <h3 style={{fontSize:'1rem', fontWeight:800, color:'#0f172a', marginBottom:'1.5rem'}}>📝 Öğrenci Değerlendirmesi</h3>
 
-      {error && (
-        <div style={{color: '#f43f5e', background: '#ffe4e6', padding: '0.75rem 1.5rem', borderRadius: '12px', fontSize: '0.9rem', marginBottom: '1.5rem', fontWeight: 600}}>
-          {error}
-        </div>
-      )}
-
-      {/* Lesson Selector */}
-      {lessons.length > 0 && (
-        <div style={{marginBottom: '2rem'}}>
-          <label style={{fontSize: '11px', fontWeight: 800, color: '#64748b', marginBottom: '8px', display: 'block'}}>DERS SEÇİMİ</label>
-          <select
-            value={selectedLessonId}
-            onChange={(e) => setSelectedLessonId(e.target.value)}
-            style={{padding:'0.9rem 1.5rem', borderRadius:'14px', border:'1px solid #e2e8f0', fontWeight:700, outline:'none', background:'#fff', minWidth:'300px'}}
-          >
-            {lessons.map(l => (
-              <option key={l.id} value={l.id}>{l.title} ({l.moduleCode}) — {l.studentCount} öğrenci</option>
-            ))}
+        {/* Group Selector */}
+        <div style={{marginBottom:'1.5rem'}}>
+          <label style={{fontSize:'11px', fontWeight:800, color:'#64748b', display:'block', marginBottom:'8px', textTransform:'uppercase', letterSpacing:'0.05em'}}>GRUP</label>
+          <select value={selectedGroup || ''} onChange={e => setSelectedGroup(e.target.value)}
+            style={{width:'100%', padding:'12px', borderRadius:'12px', border:'1px solid #e2e8f0', fontSize:'0.9rem', fontWeight:600, background:'#f8fafc', outline:'none'}}>
+            {groups.map(g => <option key={g.groupId} value={g.groupId}>{g.courseName} ({g.age} yaş) — {g.schedule}</option>)}
           </select>
         </div>
-      )}
 
-      {students.length === 0 ? (
-        <div style={{textAlign:'center', padding:'4rem', color:'#64748b'}}>
-          <div style={{fontSize:'3rem', marginBottom:'1rem'}}>👥</div>
-          <h3 style={{fontWeight:800, color:'#1e293b'}}>
-            {lessons.length === 0 ? 'Henüz ders atanmamış' : 'Bu derse kayıtlı öğrenci bulunamadı'}
-          </h3>
-          <p>Öğrenciler derse kaydedildiğinde burada görünecektir.</p>
-        </div>
-      ) : (
-        <div className="report-card-internal" style={{padding: '0', background: '#fff', border: '1px solid #e2e8f0', overflow: 'hidden'}}>
-          {/* Table Header */}
-          <div style={{
-            display:'grid', gridTemplateColumns:'2fr 3.5fr 1fr', padding:'1.25rem 2.5rem', 
-            background: '#f8fafc', borderBottom: '1px solid #e2e8f0',
-            color:'#64748b', fontSize:'11px', fontWeight:900, letterSpacing: '0.05em'
-          }}>
-            <span>ÖĞRENCİ PROFİLİ</span>
-            <span>GELİŞİM NOTU YAZ</span>
-            <span style={{textAlign: 'right'}}>AKSİYON</span>
-          </div>
-
-          {/* Student Rows */}
-          <div style={{display: 'flex', flexDirection: 'column'}}>
+        {/* Student Selector */}
+        <div style={{marginBottom:'1.5rem'}}>
+          <label style={{fontSize:'11px', fontWeight:800, color:'#64748b', display:'block', marginBottom:'8px', textTransform:'uppercase', letterSpacing:'0.05em'}}>ÖĞRENCİ</label>
+          <div style={{display:'flex', flexDirection:'column', gap:'8px'}}>
             {students.map(s => (
-              <div key={s.id} style={{
-                display:'grid', gridTemplateColumns:'2fr 3.5fr 1fr', alignItems:'center', 
-                padding:'1.75rem 2.5rem', borderBottom: '1px solid #f1f5f9',
-                background: s.sent ? 'rgba(16, 185, 129, 0.02)' : 'transparent',
-                transition: '0.3s ease'
-              }}>
-                {/* Profile Column */}
-                <div style={{display: 'flex', alignItems: 'center', gap: '1rem'}}>
-                  <div style={{
-                    width: '46px', height: '46px', borderRadius: '14px', 
-                    background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
-                    display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 900, fontSize: '0.9rem'
-                  }}>
-                    {s.name.split(' ').map(n=>n[0]).join('').slice(0, 2)}
-                  </div>
-                  <div>
-                    <div style={{fontSize: '1rem', fontWeight: 800, color: '#1e293b'}}>{s.name}</div>
-                    <div style={{fontSize: '0.75rem', color: '#94a3b8'}}>{s.email}</div>
-                  </div>
+              <div key={s.id} onClick={() => setSelectedStudent(s.id)}
+                style={{
+                  padding:'12px 16px', borderRadius:'12px', cursor:'pointer', transition:'all 0.2s',
+                  border: `1px solid ${selectedStudent === s.id ? 'var(--primary)' : '#e2e8f0'}`,
+                  background: selectedStudent === s.id ? '#f5f3ff' : '#fff',
+                  display:'flex', alignItems:'center', gap:'12px',
+                }}>
+                <div style={{width:'32px', height:'32px', borderRadius:'10px', background: selectedStudent === s.id ? 'var(--primary)' : '#e2e8f0', display:'grid', placeItems:'center', color: selectedStudent === s.id ? '#fff' : '#64748b', fontSize:'11px', fontWeight:800}}>
+                  {s.name.split(' ').map(n=>n[0]).join('').slice(0,2)}
                 </div>
-
-                {/* Input Column */}
-                <div style={{paddingRight: '2rem'}}>
-                  <div style={{position: 'relative', width: '100%'}}>
-                     <input 
-                      placeholder={s.sent ? "Gelişim notu iletildi..." : "Öğrenciye özel geri bildirim veya övgü yazın..."} 
-                      value={s.note}
-                      disabled={s.sent || s.sending}
-                      onChange={(e) => {
-                        const val = e.target.value
-                        setStudents(prev => prev.map(st => st.id === s.id ? { ...st, note: val } : st))
-                      }}
-                      style={{
-                        width: '100%', outline: 'none', border: '1px solid #e2e8f0',
-                        background: s.sent ? '#f0fdf4' : '#f8fafc',
-                        padding: '0.9rem 1.25rem 0.9rem 2.5rem', borderRadius: '14px',
-                        fontSize: '0.9rem', color: '#334155', fontWeight: 500, transition: '0.3s'
-                      }}
-                      onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
-                      onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
-                    />
-                    <span style={{position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', fontSize: '0.9rem', opacity: 0.4}}>✉️</span>
-                  </div>
-                </div>
-
-                {/* Action Column */}
-                <div style={{textAlign: 'right'}}>
-                  <button 
-                    className="primary-btn" 
-                    onClick={() => handleSend(s.id)}
-                    disabled={s.sent || s.sending || !s.note}
-                    style={{
-                      padding:'10px 24px', fontSize:'0.85rem', fontWeight: 800,
-                      background: s.sent ? '#10b981' : 'var(--primary)',
-                      boxShadow: (s.sent || !s.note) ? 'none' : '0 10px 20px -5px rgba(99, 102, 241, 0.3)',
-                      transition: '0.4s'
-                    }}
-                  >
-                    {s.sent ? '✓ İLETİLDİ' : s.sending ? '...' : 'GÖNDER'}
-                  </button>
+                <div>
+                  <span style={{fontWeight:700, fontSize:'0.9rem', color:'#1e293b'}}>{s.name}</span>
+                  {s.age && <span style={{display:'block', fontSize:'0.75rem', color:'#94a3b8'}}>{s.age} yaş</span>}
                 </div>
               </div>
             ))}
+            {students.length === 0 && <p style={{color:'#94a3b8', fontSize:'0.85rem'}}>Bu grupta öğrenci bulunmuyor.</p>}
           </div>
         </div>
-      )}
+
+        {/* Note */}
+        <div style={{marginBottom:'1.5rem'}}>
+          <label style={{fontSize:'11px', fontWeight:800, color:'#64748b', display:'block', marginBottom:'8px', textTransform:'uppercase', letterSpacing:'0.05em'}}>DEĞERLENDİRME NOTU</label>
+          <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Öğrenci hakkındaki değerlendirmenizi yazın..."
+            style={{width:'100%', minHeight:'120px', padding:'1rem', borderRadius:'12px', border:'1px solid #e2e8f0', fontSize:'0.9rem', outline:'none', background:'#f8fafc'}} />
+        </div>
+
+        {error && <div style={{color:'#f43f5e', background:'#ffe4e6', padding:'0.75rem', borderRadius:'8px', fontSize:'0.85rem', marginBottom:'1rem'}}>{error}</div>}
+        {success && <div style={{color:'#16a34a', background:'#dcfce7', padding:'0.75rem', borderRadius:'8px', fontSize:'0.85rem', marginBottom:'1rem'}}>{success}</div>}
+
+        <button className="primary-btn" onClick={handleSend} disabled={!selectedStudent || !note.trim() || sending}
+          style={{width:'100%', padding:'12px', fontWeight:800, background: selectedStudent && note.trim() ? 'var(--primary)' : '#e2e8f0', color: selectedStudent && note.trim() ? '#fff' : '#94a3b8'}}>
+          {sending ? 'GÖNDERİLİYOR...' : 'DEĞERLENDİRME GÖNDER'}
+        </button>
+      </div>
+
+      {/* Right: Past Evaluations */}
+      <div className="report-card-internal" style={{padding: '2rem', maxHeight:'600px', overflowY:'auto'}}>
+        <h3 style={{fontSize:'1rem', fontWeight:800, color:'#0f172a', marginBottom:'1.5rem'}}>💬 Gönderilen Değerlendirmeler ({evaluations.length})</h3>
+        {evaluations.length === 0 ? (
+          <p style={{color:'#94a3b8', textAlign:'center', padding:'3rem'}}>Henüz değerlendirme gönderilmedi.</p>
+        ) : (
+          <div style={{display:'flex', flexDirection:'column', gap:'1rem'}}>
+            {evaluations.map(ev => (
+              <div key={ev.id} style={{padding:'1.25rem', borderRadius:'14px', background:'#f8fafc', border:'1px solid #f1f5f9'}}>
+                <div style={{display:'flex', justifyContent:'space-between', marginBottom:'8px'}}>
+                  <span style={{fontWeight:800, fontSize:'0.9rem', color:'#1e293b'}}>{ev.studentName}</span>
+                  <span style={{fontSize:'0.75rem', color:'#94a3b8'}}>{new Date(ev.createdAt).toLocaleDateString('tr-TR')}</span>
+                </div>
+                <p style={{margin:0, fontSize:'0.85rem', color:'#475569', lineHeight:1.6, fontStyle:'italic'}}>"{ev.note}"</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

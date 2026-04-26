@@ -7,6 +7,10 @@ export default function Login({ onLogin }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [phone, setPhone] = useState('')
+  const [age, setAge] = useState('')
+  const [parentName, setParentName] = useState('')
+  const [parentPhone, setParentPhone] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
 
   const handleSubmit = async (e) => {
@@ -31,10 +35,16 @@ export default function Login({ onLogin }) {
       }
     } else {
       try {
+        const body = { name, email, password, phone, role }
+        if (role === 'student') {
+          body.age = age
+          body.parent = parentName
+          body.parentPhone = parentPhone
+        }
         const response = await fetch('/api/auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, email, password, role })
+          body: JSON.stringify(body)
         })
         const data = await response.json()
         if (response.ok) {
@@ -76,37 +86,44 @@ export default function Login({ onLogin }) {
             </div>
           )}
           {!isLogin && (
-            <div className="input-group">
-              <label>AD SOYAD</label>
-              <input
-                type="text"
-                placeholder="Adınız ve Soyadınız"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
+            <>
+              <div className="input-group">
+                <label>AD SOYAD</label>
+                <input type="text" placeholder="Adınız ve Soyadınız" value={name} onChange={(e) => setName(e.target.value)} required />
+              </div>
+              <div className="input-group">
+                <label>TELEFON</label>
+                <input type="tel" placeholder="05XX XXX XXXX" value={phone} onChange={(e) => setPhone(e.target.value)} />
+              </div>
+            </>
           )}
           <div className="input-group">
             <label>E-POSTA ADRESİ</label>
-            <input
-              type="email"
-              placeholder={`${role}@lectureai.com`}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
+            <input type="email" placeholder={`${role}@lectureai.com`} value={email} onChange={(e) => setEmail(e.target.value)} required />
           </div>
           <div className="input-group">
             <label>ŞİFRE</label>
-            <input
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+            <input type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
           </div>
+
+          {/* Student-specific fields */}
+          {!isLogin && role === 'student' && (
+            <>
+              <div className="input-group">
+                <label>YAŞ</label>
+                <input type="number" placeholder="Yaşınız" value={age} onChange={(e) => setAge(e.target.value)} min="5" max="18" />
+              </div>
+              <div className="input-group">
+                <label>VELİ ADI</label>
+                <input type="text" placeholder="Veli Adı Soyadı" value={parentName} onChange={(e) => setParentName(e.target.value)} />
+              </div>
+              <div className="input-group">
+                <label>VELİ TELEFONU</label>
+                <input type="tel" placeholder="05XX XXX XXXX" value={parentPhone} onChange={(e) => setParentPhone(e.target.value)} />
+              </div>
+            </>
+          )}
+
           <button type="submit" className="login-submit-btn">
             {isLogin ? "Giriş Yap" : "Hesap Oluştur"}
           </button>

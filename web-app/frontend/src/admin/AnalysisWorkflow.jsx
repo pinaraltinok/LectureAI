@@ -10,47 +10,47 @@ const AnalysisWorkflow = ({ onStepChange }) => {
   const [isRegenerating, setIsRegenerating] = useState(false)
   const [selectedFile, setSelectedFile] = useState(null)
   const [selectedTeacherId, setSelectedTeacherId] = useState('')
-  const [selectedCurriculumId, setSelectedCurriculumId] = useState('')
+  const [selectedCourseId, setSelectedCourseId] = useState('')
   const [selectedLessonCode, setSelectedLessonCode] = useState('M1L1')
   const [currentJobId, setCurrentJobId] = useState(null)
   const [draftData, setDraftData] = useState(null)
   const [teachers, setTeachers] = useState([])
-  const [curricula, setCurricula] = useState([])
+  const [courses, setCourses] = useState([])
   const [error, setError] = useState('')
   const fileInputRef = useRef(null)
   const navigate = useNavigate()
 
-  // Helper: generate module/lesson codes from a curriculum object
+  // Helper: generate module/lesson codes from a course object
   const generateLessonCodes = (c) => {
     if (!c) return []
     const codes = []
-    for (let m = 1; m <= c.modules; m++) {
-      for (let l = 1; l <= c.lessonsPerModule; l++) {
+    for (let m = 1; m <= (c.moduleNum || 1); m++) {
+      for (let l = 1; l <= (c.moduleSize || 1); l++) {
         codes.push({ code: `M${m}L${l}`, module: m, lesson: l })
       }
     }
     return codes
   }
 
-  const selectedCurriculum = curricula.find(c => c.id === selectedCurriculumId) || curricula[0] || null
-  const lessonCodes = generateLessonCodes(selectedCurriculum)
+  const selectedCourse = courses.find(c => c.id === selectedCourseId) || courses[0] || null
+  const lessonCodes = generateLessonCodes(selectedCourse)
 
   useEffect(() => {
     Promise.all([
       apiGet('/admin/teachers'),
-      apiGet('/admin/curricula'),
+      apiGet('/admin/courses'),
     ]).then(([t, c]) => {
       setTeachers(t)
       if (t.length > 0) setSelectedTeacherId(t[0].id)
-      setCurricula(c)
-      if (c.length > 0) setSelectedCurriculumId(c[0].id)
+      setCourses(c)
+      if (c.length > 0) setSelectedCourseId(c[0].id)
     }).catch(err => setError(err.message))
   }, [])
 
   // Reset lesson code when curriculum changes
   useEffect(() => {
     setSelectedLessonCode('M1L1')
-  }, [selectedCurriculumId])
+  }, [selectedCourseId])
 
   const handleUploadAndAnalyze = async () => {
     if (!selectedTeacherId) {
@@ -74,15 +74,10 @@ const AnalysisWorkflow = ({ onStepChange }) => {
       setCurrentJobId(jobId)  // Set early so progress polling starts
 
       // Step 2: Assign with curriculum + lesson code metadata
-      const curriculumLabel = selectedCurriculum
-        ? `[${selectedCurriculum.code}] ${selectedCurriculum.name} [${selectedCurriculum.year}][${selectedCurriculum.ageRange}][${selectedCurriculum.durationMin}m][${selectedCurriculum.totalLessons}L][${selectedCurriculum.language}]`
-        : ''
       await apiPost('/admin/analysis/assign', {
         jobId,
         teacherId: selectedTeacherId,
-        curriculumId: selectedCurriculumId,
-        curriculumName: curriculumLabel,
-        lessonCode: selectedLessonCode,
+        lessonId: null,
       })
 
       setCurrentJobId(jobId)
@@ -97,7 +92,7 @@ const AnalysisWorkflow = ({ onStepChange }) => {
           status: 'PROCESSING',
           draftReport: null,
           teacher: teachers.find(t => t.id === selectedTeacherId),
-          curriculum: selectedCurriculum,
+          course: selectedCourse,
           lessonCode: selectedLessonCode,
         })
       }
@@ -324,35 +319,35 @@ const AnalysisWorkflow = ({ onStepChange }) => {
               </select>
             </div>
             
-            {/* 2. Müfredat Seçimi */}
+            {/* 2. Kurs Seçimi */}
             <div>
-              <label style={{fontSize: '11px', fontWeight: 800, color: '#64748b', marginBottom: '8px', display: 'block', letterSpacing: '0.05em'}}>MÜFREDAT PROGRAMI</label>
+              <label style={{fontSize: '11px', fontWeight: 800, color: '#64748b', marginBottom: '8px', display: 'block', letterSpacing: '0.05em'}}>KURS PROGRAMI</label>
               <select
-                value={selectedCurriculumId}
-                onChange={(e) => setSelectedCurriculumId(e.target.value)}
+                value={selectedCourseId}
+                onChange={(e) => setSelectedCourseId(e.target.value)}
                 style={{width:'100%', padding:'1rem', borderRadius:'14px', border:'1px solid #e2e8f0', fontWeight:700, outline: 'none', background:'#fff', fontSize: '0.9rem'}}
               >
-                {curricula.length === 0 && <option value="">Yükleniyor...</option>}
-                {curricula.map(c => (
+                {courses.length === 0 && <option value="">Yükleniyor...</option>}
+                {courses.map(c => (
                   <option key={c.id} value={c.id}>
-                    [{c.code}] {c.name} [{c.year}][{c.ageRange}][{c.durationMin}m][{c.totalLessons}L][{c.language}][{c.status}]
+                    {c.course} [{c.age}]
                   </option>
                 ))}
               </select>
-              {/* Curriculum info badge */}
-              {selectedCurriculum && (
+              {/* Course info badge */}
+              {selectedCourse && (
                 <div style={{display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap'}}>
                   <span style={{fontSize: '10px', fontWeight: 800, color: '#6366f1', background: '#f5f3ff', padding: '4px 10px', borderRadius: '6px'}}>
-                    {selectedCurriculum.modules} Modül
+                    {selectedCourse.moduleNum} Modül
                   </span>
                   <span style={{fontSize: '10px', fontWeight: 800, color: '#10b981', background: '#f0fdf4', padding: '4px 10px', borderRadius: '6px'}}>
-                    {selectedCurriculum.totalLessons} Ders
+                    {selectedCourse.moduleNum * selectedCourse.moduleSize} Ders
                   </span>
                   <span style={{fontSize: '10px', fontWeight: 800, color: '#f59e0b', background: '#fffbeb', padding: '4px 10px', borderRadius: '6px'}}>
-                    {selectedCurriculum.durationMin}dk
+                    {selectedCourse.lessonSize}dk
                   </span>
                   <span style={{fontSize: '10px', fontWeight: 800, color: '#64748b', background: '#f1f5f9', padding: '4px 10px', borderRadius: '6px'}}>
-                    Yaş: {selectedCurriculum.ageRange}
+                    Yaş: {selectedCourse.age}
                   </span>
                 </div>
               )}
@@ -371,7 +366,7 @@ const AnalysisWorkflow = ({ onStepChange }) => {
                   }}
                   style={{padding:'1rem', borderRadius:'14px', border:'1px solid #e2e8f0', fontWeight:700, outline: 'none', background:'#fff'}}
                 >
-                  {Array.from({ length: selectedCurriculum?.modules || 1 }, (_, i) => i + 1).map(m => (
+                  {Array.from({ length: selectedCourse?.moduleNum || 1 }, (_, i) => i + 1).map(m => (
                     <option key={m} value={m}>Modül {m}</option>
                   ))}
                 </select>
@@ -384,7 +379,7 @@ const AnalysisWorkflow = ({ onStepChange }) => {
                   }}
                   style={{padding:'1rem', borderRadius:'14px', border:'1px solid #e2e8f0', fontWeight:700, outline: 'none', background:'#fff'}}
                 >
-                  {Array.from({ length: selectedCurriculum?.lessonsPerModule || 1 }, (_, i) => i + 1).map(l => (
+                  {Array.from({ length: selectedCourse?.moduleSize || 1 }, (_, i) => i + 1).map(l => (
                     <option key={l} value={l}>Ders {l}</option>
                   ))}
                 </select>
@@ -402,7 +397,7 @@ const AnalysisWorkflow = ({ onStepChange }) => {
                   📖 {selectedLessonCode}
                 </div>
                 <span style={{fontSize: '0.8rem', color: '#94a3b8', fontWeight: 600}}>
-                  {selectedCurriculum?.name} — Modül {selectedLessonCode.match(/M(\d+)/)?.[1]}, Ders {selectedLessonCode.match(/L(\d+)/)?.[1]}
+                  {selectedCourse?.course} — Modül {selectedLessonCode.match(/M(\d+)/)?.[1]}, Ders {selectedLessonCode.match(/L(\d+)/)?.[1]}
                 </span>
               </div>
             </div>
@@ -445,18 +440,18 @@ const AnalysisWorkflow = ({ onStepChange }) => {
 
   // Preview step
   const draftReport = draftData?.draftReport || {}
-  const curriculumLabel = draftData?.curriculum?.label || selectedCurriculum?.label || ''
+  const courseLabel = draftData?.course?.course || selectedCourse?.course || ''
   const lessonCode = draftData?.lessonCode || selectedLessonCode
   const previewReport = {
     id: currentJobId?.slice(0, 8) || 'DRAFT',
     name: draftData?.teacher?.name || '',
-    module: `${curriculumLabel} — ${lessonCode}`,
+    module: `${courseLabel} — ${lessonCode}`,
     date: draftData?.createdAt ? new Date(draftData.createdAt).toLocaleDateString('tr-TR') : new Date().toLocaleDateString('tr-TR'),
     group: lessonCode,
     evaluator: 'Sistem (AI)',
     quality: draftReport.yeterlilikler || draftReport.quality || '—',
     ttt: draftReport.speaking_time_rating || '—',
-    duration: draftReport.actual_duration_min ? `${draftReport.actual_duration_min}dk` : `${selectedCurriculum?.duration || 60}dk`,
+    duration: draftReport.actual_duration_min ? `${draftReport.actual_duration_min}dk` : `${selectedCourse?.lessonSize || 60}dk`,
     obs: draftReport.feedback_metni 
       ? [{ t: 'AI Değerlendirmesi', c: draftReport.feedback_metni }]
       : [{ t: 'Durum', c: draftData?.status === 'PROCESSING' ? 'Analiz devam ediyor. Pipeline tamamlandığında rapor burada görünecektir.' : 'Taslak rapor henüz oluşturulmadı.' }],

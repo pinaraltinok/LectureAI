@@ -14,7 +14,14 @@ async function login(req, res) {
       return res.status(400).json({ error: 'Email ve şifre gereklidir.' });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: {
+        admin: true,
+        teacher: true,
+        student: true,
+      },
+    });
     if (!user) {
       return res.status(401).json({ error: 'Geçersiz email veya şifre.' });
     }
@@ -55,13 +62,10 @@ async function getMe(req, res) {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.userId },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        branch: true,
-        createdAt: true,
+      include: {
+        admin: true,
+        teacher: true,
+        student: true,
       },
     });
 
@@ -69,14 +73,26 @@ async function getMe(req, res) {
       return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
     }
 
-    return res.json({
+    const result = {
       userId: user.id,
       email: user.email,
       name: user.name,
+      phone: user.phone,
       role: user.role,
-      branch: user.branch,
       createdAt: user.createdAt,
-    });
+    };
+
+    // Add profile-specific fields
+    if (user.role === 'STUDENT' && user.student) {
+      result.age = user.student.age;
+      result.parent = user.student.parent;
+      result.parentPhone = user.student.parentPhone;
+    }
+    if (user.role === 'TEACHER' && user.teacher) {
+      result.startOfDate = user.teacher.startOfDate;
+    }
+
+    return res.json(result);
   } catch (err) {
     console.error('GetMe error:', err);
     return res.status(500).json({ error: 'Sunucu hatası.' });
@@ -85,11 +101,11 @@ async function getMe(req, res) {
 
 /**
  * POST /api/auth/register
- * Creates a new user account and returns JWT token.
+ * Creates a new user account with profile and returns JWT token.
  */
 async function register(req, res) {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, phone, role, age, parent: parentName, parentPhone } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'Ad, email ve şifre gereklidir.' });
@@ -112,14 +128,37 @@ async function register(req, res) {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-        role: userRole,
-      },
+    // Create user + profile in a transaction
+    const user = await prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          name,
+          email,
+          password: hashedPassword,
+          phone: phone || null,
+          role: userRole,
+        },
+      });
+
+      // Create role-specific profile
+      if (userRole === 'ADMIN') {
+        await tx.admin.create({ data: { id: newUser.id } });
+      } else if (userRole === 'TEACHER') {
+        await tx.teacher.create({
+          data: { id: newUser.id, startOfDate: new Date() },
+        });
+      } else if (userRole === 'STUDENT') {
+        await tx.student.create({
+          data: {
+            id: newUser.id,
+            age: age ? parseInt(age) : null,
+            parent: parentName || null,
+            parentPhone: parentPhone || null,
+          },
+        });
+      }
+
+      return newUser;
     });
 
     // Auto-login: generate JWT
@@ -152,7 +191,6 @@ async function register(req, res) {
  */
 async function logout(req, res) {
   // With JWT, logout is handled client-side by discarding the token.
-  // A more robust solution would use a token blacklist (Redis etc.)
   return res.json({ message: 'Oturum başarıyla sonlandırıldı.' });
 }
 

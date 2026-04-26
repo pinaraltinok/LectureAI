@@ -4,19 +4,19 @@ import { apiGet } from '../api'
 
 const StudentDashboard = () => {
   const navigate = useNavigate()
-  const [courses, setCourses] = useState([])
+  const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
     apiGet('/student/courses')
-      .then(data => setCourses(data))
+      .then(data => setGroups(data))
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
   }, [])
 
-  const goToSurvey = (course) => {
-    navigate('/student/anket', { state: { lessonId: course.lessonId, courseName: course.title, instructor: course.teacherName } })
+  const goToSurvey = (lesson, group) => {
+    navigate('/student/anket', { state: { lessonId: lesson.lessonId, courseName: group.courseName, instructor: group.teacherName, lessonNo: lesson.lessonNo } })
   }
 
   if (loading) {
@@ -41,13 +41,13 @@ const StudentDashboard = () => {
     )
   }
 
-  if (courses.length === 0) {
+  if (groups.length === 0) {
     return (
       <div style={{display:'grid', placeItems:'center', minHeight:'400px'}}>
         <div style={{textAlign:'center', color:'#64748b'}}>
           <div style={{fontSize:'3rem', marginBottom:'1rem'}}>📚</div>
           <h3 style={{fontWeight:800, color:'#1e293b'}}>Henüz kayıtlı ders bulunmuyor</h3>
-          <p>Bir derse kaydolduğunuzda burada görünecektir.</p>
+          <p>Bir gruba kaydolduğunuzda burada görünecektir.</p>
         </div>
       </div>
     )
@@ -56,89 +56,57 @@ const StudentDashboard = () => {
   const courseIcons = ['🐍', '🧩', '🤖', '🎨', '📐', '💻']
 
   return (
-    <div className="student-dashboard" style={{display:'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap:'2rem'}}>
-      {courses.map((course, idx) => (
-        <div 
-          key={course.lessonId}
-          className="report-card-internal" 
-          onClick={() => goToSurvey(course)}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-6px)';
-            e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(99, 102, 241, 0.1)';
-            e.currentTarget.style.borderColor = 'var(--primary)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
-            e.currentTarget.style.borderColor = 'var(--border)';
-          }}
-          style={{
-            cursor: 'pointer',
-            padding: '1.75rem',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1.5rem',
-            transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-            background: course.hasSurvey 
-              ? 'linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%)' 
-              : 'linear-gradient(135deg, #ffffff 0%, #f5f3ff 100%)',
-            border: `1px solid ${course.hasSurvey ? 'rgba(16, 185, 129, 0.2)' : 'var(--border)'}`,
-            borderRadius: '16px',
-            position: 'relative'
-          }}
-        >
-          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-            <div style={{
-              fontSize: '10px', fontWeight: 800, padding: '4px 10px', borderRadius: '6px',
-              background: course.hasSurvey ? '#10b981' : 'var(--primary)',
-              color: '#fff',
-              letterSpacing: '0.05em',
-              boxShadow: `0 4px 10px ${course.hasSurvey ? 'rgba(16, 185, 129, 0.3)' : 'rgba(99, 102, 241, 0.3)'}`
-            }}>
-              {course.hasSurvey ? 'ANKET GÖNDERİLDİ' : 'DEVAM EDİYOR'}
+    <div style={{display:'flex', flexDirection:'column', gap:'2rem', animation: 'fadeIn 0.5s ease'}}>
+      {groups.map((group, gIdx) => (
+        <div key={group.groupId} className="report-card-internal" style={{padding: '2rem', borderRadius: '20px'}}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem'}}>
+            <div style={{display:'flex', gap:'1rem', alignItems:'center'}}>
+              <div style={{
+                width: '48px', height: '48px', background: '#f5f3ff', borderRadius: '14px',
+                display: 'grid', placeItems: 'center', fontSize: '1.5rem',
+                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9'
+              }}>
+                {courseIcons[gIdx % courseIcons.length]}
+              </div>
+              <div>
+                <h3 style={{fontSize:'1.2rem', fontWeight:800, color:'#0f172a', letterSpacing:'-0.03em', margin:0}}>
+                  {group.courseName}
+                </h3>
+                <span style={{color:'var(--text-muted)', fontSize:'0.85rem', fontWeight:600}}>
+                  {group.teacherName} • {group.age} yaş • {group.schedule || ''}
+                </span>
+              </div>
             </div>
-            {course.hasSurvey && <span style={{color:'#10b981', fontSize:'11px', fontWeight:800}}>✓ TAMAMLANDI</span>}
           </div>
 
-          <div style={{display:'flex', gap:'1.25rem', alignItems:'center'}}>
-            <div style={{
-              width: '48px', height: '48px', 
-              background: course.hasSurvey ? '#f0fdf4' : '#fff', 
-              borderRadius: '12px',
-              display: 'grid', placeItems: 'center', fontSize: '1.5rem', 
-              boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
-              border: `1px solid ${course.hasSurvey ? 'rgba(16, 185, 129, 0.1)' : '#f1f5f9'}`
-            }}>
-               {courseIcons[idx % courseIcons.length]}
-            </div>
-            <div>
-              <h3 style={{fontSize:'1.15rem', fontWeight:800, marginBottom:'2px', color:'#0f172a', letterSpacing:'-0.03em'}}>
-                {course.title}
-              </h3>
-              <span style={{color:'var(--text-muted)', fontSize:'0.85rem', fontWeight:600}}>
-                {course.teacherName}
-              </span>
-              {course.moduleCode && (
-                <span style={{display:'block', fontSize:'0.75rem', color:'#94a3b8', fontWeight:700, marginTop:'4px'}}>
-                  {course.moduleCode}
+          <div style={{display:'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap:'1rem'}}>
+            {group.lessons.map(lesson => (
+              <div
+                key={lesson.lessonId}
+                onClick={() => !lesson.hasSurvey && goToSurvey(lesson, group)}
+                onMouseEnter={(e) => { if (!lesson.hasSurvey) { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 10px 20px -5px rgba(99, 102, 241, 0.15)'; } }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
+                style={{
+                  padding: '1.25rem', borderRadius: '14px', cursor: lesson.hasSurvey ? 'default' : 'pointer',
+                  background: lesson.hasSurvey ? 'linear-gradient(135deg, #f0fdf4, #dcfce7)' : '#f8fafc',
+                  border: `1px solid ${lesson.hasSurvey ? 'rgba(16, 185, 129, 0.2)' : '#e2e8f0'}`,
+                  transition: 'all 0.3s ease',
+                }}
+              >
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'8px'}}>
+                  <span style={{fontSize:'0.9rem', fontWeight:800, color:'#1e293b'}}>Ders {lesson.lessonNo}</span>
+                  <span style={{
+                    fontSize:'9px', fontWeight:800, padding:'3px 8px', borderRadius:'6px',
+                    background: lesson.hasSurvey ? '#10b981' : 'var(--primary)', color: '#fff',
+                  }}>
+                    {lesson.hasSurvey ? '✓ GÖNDERİLDİ' : 'ANKET BEKLİYOR'}
+                  </span>
+                </div>
+                <span style={{fontSize:'0.75rem', color:'#94a3b8', fontWeight:600}}>
+                  {new Date(lesson.dateTime).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' })}
                 </span>
-              )}
-            </div>
-          </div>
-          
-          <div style={{marginTop:'auto'}}>
-            <button 
-              className="primary-btn" 
-              style={{
-                width:'100%', padding:'0.75rem', fontSize:'0.9rem', fontWeight: 800,
-                background: course.hasSurvey 
-                  ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' 
-                  : 'var(--primary)',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-              }}
-            >
-              {course.hasSurvey ? 'ANKET GÖNDERİLDİ ✓' : 'DERS ANKETİNE GİT'}
-            </button>
+              </div>
+            ))}
           </div>
         </div>
       ))}

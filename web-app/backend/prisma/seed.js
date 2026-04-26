@@ -3,241 +3,365 @@ const bcrypt = require('bcryptjs');
 
 const prisma = new PrismaClient();
 
-// ── Curricula from the real system ────────────────────────────
-const CURRICULA_DATA = [
-  // ─── Roblox Game Developer ───────────────────────────────────
-  {
-    code: '1719',
-    name: 'Roblox Game Developer',
-    year: 2025, ageRange: '8-9', durationMin: 60, totalLessons: 40,
-    modules: 10, lessonsPerModule: 4, language: 'TUR', status: 'Actual',
-    bucketCode: 'TUR40W1719',
-  },
-  {
-    code: '1495',
-    name: 'Roblox Game Developer',
-    year: 2024, ageRange: '10-12', durationMin: 90, totalLessons: 40,
-    modules: 10, lessonsPerModule: 4, language: 'TUR', status: 'In Progress',
-    bucketCode: 'TUR40W1495',
-  },
-  {
-    code: '1494',
-    name: 'Roblox Game Developer',
-    year: 2024, ageRange: '8-9', durationMin: 60, totalLessons: 40,
-    modules: 10, lessonsPerModule: 4, language: 'TUR', status: 'In Progress',
-    bucketCode: 'TUR40W1494',
-  },
-  {
-    code: '1041',
-    name: 'Roblox Game Developer',
-    year: 2023, ageRange: '10-12', durationMin: 90, totalLessons: 32,
-    modules: 8, lessonsPerModule: 4, language: 'TUR', status: 'In Progress',
-    bucketCode: 'TUR32W1041',
-  },
-  {
-    code: '955',
-    name: 'Roblox Game Developer',
-    year: 2023, ageRange: '8-9', durationMin: 60, totalLessons: 32,
-    modules: 8, lessonsPerModule: 4, language: 'TUR', status: 'Actual',
-    bucketCode: 'TUR32W955',
-  },
-  // ─── Python Developer ─────────────────────────────────────────
-  {
-    code: '1500',
-    name: 'Python Developer',
-    year: 2024, ageRange: '10-11', durationMin: 60, totalLessons: 40,
-    modules: 10, lessonsPerModule: 4, language: 'TUR', status: 'In Progress',
-    bucketCode: 'TUR40W1500',
-  },
-  {
-    code: '1501',
-    name: 'Python Developer',
-    year: 2024, ageRange: '12-13', durationMin: 60, totalLessons: 40,
-    modules: 10, lessonsPerModule: 4, language: 'TUR', status: 'In Progress',
-    bucketCode: 'TUR40W1501',
-  },
-  // ─── Scratch Jr. ──────────────────────────────────────────────
-  {
-    code: '1510',
-    name: 'Scratch Jr.',
-    year: 2024, ageRange: '6-7', durationMin: 60, totalLessons: 24,
-    modules: 6, lessonsPerModule: 4, language: 'TUR', status: 'In Progress',
-    bucketCode: 'TUR24W1510',
-  },
-  // ─── Web Development ─────────────────────────────────────────
-  {
-    code: '1520',
-    name: 'Web Development',
-    year: 2024, ageRange: '12-14', durationMin: 60, totalLessons: 40,
-    modules: 10, lessonsPerModule: 4, language: 'TUR', status: 'In Progress',
-    bucketCode: 'TUR40W1520',
-  },
-  // ─── Unity Game Development ───────────────────────────────────
-  {
-    code: '1530',
-    name: 'Unity Game Development',
-    year: 2024, ageRange: '12-14', durationMin: 60, totalLessons: 40,
-    modules: 10, lessonsPerModule: 4, language: 'TUR', status: 'In Progress',
-    bucketCode: 'TUR40W1530',
-  },
-];
-
 async function main() {
   console.log('🌱 Seeding database...');
 
-  // Clean existing data
-  await prisma.badge.deleteMany();
+  // ── Clean existing data (order matters for FK constraints) ──
+  await prisma.reportStudent.deleteMany();
+  await prisma.reportTeacher.deleteMany();
   await prisma.survey.deleteMany();
-  await prisma.mentorFeedback.deleteMany();
-  await prisma.personalNote.deleteMany();
-  await prisma.analysisJob.deleteMany();
-  await prisma.lessonEnrollment.deleteMany();
-  await prisma.parentStudent.deleteMany();
+  await prisma.studentEvaluation.deleteMany();
+  await prisma.report.deleteMany();
   await prisma.lesson.deleteMany();
-  await prisma.curriculum.deleteMany();
+  await prisma.studentGroup.deleteMany();
+  await prisma.group.deleteMany();
+  await prisma.teacherCourse.deleteMany();
+  await prisma.course.deleteMany();
+  await prisma.admin.deleteMany();
+  await prisma.teacher.deleteMany();
+  await prisma.student.deleteMany();
   await prisma.user.deleteMany();
 
   const hash = await bcrypt.hash('password123', 10);
 
-  // ── Curricula ─────────────────────────────────────────────────
-  console.log('📚 Seeding curricula...');
-  const createdCurricula = {};
-  for (const c of CURRICULA_DATA) {
-    const curriculum = await prisma.curriculum.create({ data: c });
-    createdCurricula[c.code] = curriculum;
-  }
-  console.log(`   ✓ ${CURRICULA_DATA.length} curricula created`);
+  // ════════════════════════════════════════════════════════════
+  // ── COURSES ────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════
+  console.log('📚 Seeding courses...');
 
-  // ── Users ──────────────────────────────────────────────────
-  const admin = await prisma.user.create({
+  const courseRoblox89 = await prisma.course.create({
+    data: {
+      course: 'Roblox Game Developer',
+      age: '8-9',
+      lessonSize: 60,
+      moduleNum: 10,
+      moduleSize: 4,
+    },
+  });
+
+  const courseRoblox1012 = await prisma.course.create({
+    data: {
+      course: 'Roblox Game Developer',
+      age: '10-12',
+      lessonSize: 90,
+      moduleNum: 10,
+      moduleSize: 4,
+    },
+  });
+
+  const coursePython = await prisma.course.create({
+    data: {
+      course: 'Python Developer',
+      age: '10-11',
+      lessonSize: 60,
+      moduleNum: 10,
+      moduleSize: 4,
+    },
+  });
+
+  const courseScratch = await prisma.course.create({
+    data: {
+      course: 'Scratch Jr.',
+      age: '6-7',
+      lessonSize: 60,
+      moduleNum: 6,
+      moduleSize: 4,
+    },
+  });
+
+  const courseWeb = await prisma.course.create({
+    data: {
+      course: 'Web Development',
+      age: '12-14',
+      lessonSize: 60,
+      moduleNum: 10,
+      moduleSize: 4,
+    },
+  });
+
+  const courseUnity = await prisma.course.create({
+    data: {
+      course: 'Unity Game Development',
+      age: '12-14',
+      lessonSize: 60,
+      moduleNum: 10,
+      moduleSize: 4,
+    },
+  });
+
+  console.log('   ✓ 6 courses created');
+
+  // ════════════════════════════════════════════════════════════
+  // ── USERS + PROFILES ───────────────────────────────────────
+  // ════════════════════════════════════════════════════════════
+  console.log('👤 Seeding users...');
+
+  // ── Admin ──
+  const adminUser = await prisma.user.create({
     data: {
       email: 'admin@lectureai.com',
       password: hash,
       name: 'Sistem Yöneticisi',
+      phone: '0500 000 0000',
       role: 'ADMIN',
     },
   });
-
-  const teacher1 = await prisma.user.create({
-    data: {
-      email: 'ahmet.hoca@lectureai.com',
-      password: hash,
-      name: 'Ahmet Yılmaz',
-      role: 'TEACHER',
-    },
+  const admin = await prisma.admin.create({
+    data: { id: adminUser.id },
   });
 
-  const teacher2 = await prisma.user.create({
-    data: {
-      email: 'ayse.hoca@lectureai.com',
-      password: hash,
-      name: 'Ayşe Demir',
-      role: 'TEACHER',
-    },
-  });
-
-  const teacher3 = await prisma.user.create({
+  // ── Teacher: Zehra Bozkurt (korunacak) ──
+  const zehraUser = await prisma.user.create({
     data: {
       email: 'zehra.bozkurt@lectureai.com',
       password: hash,
       name: 'Zehra Bozkurt',
+      phone: '0532 000 0001',
       role: 'TEACHER',
     },
   });
+  const zehraTeacher = await prisma.teacher.create({
+    data: {
+      id: zehraUser.id,
+      startOfDate: new Date('2024-09-01'),
+    },
+  });
 
-  const student1 = await prisma.user.create({
+  // ── Teacher: Ahmet Yılmaz ──
+  const ahmetUser = await prisma.user.create({
+    data: {
+      email: 'ahmet.hoca@lectureai.com',
+      password: hash,
+      name: 'Ahmet Yılmaz',
+      phone: '0532 000 0002',
+      role: 'TEACHER',
+    },
+  });
+  const ahmetTeacher = await prisma.teacher.create({
+    data: {
+      id: ahmetUser.id,
+      startOfDate: new Date('2023-03-15'),
+    },
+  });
+
+  // ── Teacher: Ayşe Demir ──
+  const ayseUser = await prisma.user.create({
+    data: {
+      email: 'ayse.hoca@lectureai.com',
+      password: hash,
+      name: 'Ayşe Demir',
+      phone: '0532 000 0003',
+      role: 'TEACHER',
+    },
+  });
+  const ayseTeacher = await prisma.teacher.create({
+    data: {
+      id: ayseUser.id,
+      startOfDate: new Date('2024-01-10'),
+    },
+  });
+
+  // ── Student: Mehmet Kaya ──
+  const mehmetUser = await prisma.user.create({
     data: {
       email: 'ogrenci1@lectureai.com',
       password: hash,
       name: 'Mehmet Kaya',
+      phone: '0555 000 0001',
       role: 'STUDENT',
     },
   });
+  const mehmetStudent = await prisma.student.create({
+    data: {
+      id: mehmetUser.id,
+      age: 10,
+      parent: 'Ali Kaya',
+      parentPhone: '0555 000 0010',
+    },
+  });
 
-  const student2 = await prisma.user.create({
+  // ── Student: Zeynep Arslan ──
+  const zeynepUser = await prisma.user.create({
     data: {
       email: 'ogrenci2@lectureai.com',
       password: hash,
       name: 'Zeynep Arslan',
+      phone: '0555 000 0002',
       role: 'STUDENT',
     },
   });
-
-  const parent1 = await prisma.user.create({
+  const zeynepStudent = await prisma.student.create({
     data: {
-      email: 'veli1@lectureai.com',
-      password: hash,
-      name: 'Ali Kaya',
-      role: 'PARENT',
+      id: zeynepUser.id,
+      age: 9,
+      parent: 'Fatma Arslan',
+      parentPhone: '0555 000 0020',
     },
   });
 
-  // ── Lessons ────────────────────────────────────────────────
+  // ── Student: Emre Çelik ──
+  const emreUser = await prisma.user.create({
+    data: {
+      email: 'ogrenci3@lectureai.com',
+      password: hash,
+      name: 'Emre Çelik',
+      phone: '0555 000 0003',
+      role: 'STUDENT',
+    },
+  });
+  const emreStudent = await prisma.student.create({
+    data: {
+      id: emreUser.id,
+      age: 12,
+      parent: 'Hasan Çelik',
+      parentPhone: '0555 000 0030',
+    },
+  });
+
+  console.log('   ✓ 7 users created (1 admin, 3 teachers, 3 students)');
+
+  // ════════════════════════════════════════════════════════════
+  // ── TEACHER_COURSE ─────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════
+  console.log('🔗 Seeding teacher-course assignments...');
+
+  await prisma.teacherCourse.createMany({
+    data: [
+      { teacherId: zehraTeacher.id, courseId: courseRoblox89.id },
+      { teacherId: zehraTeacher.id, courseId: coursePython.id },
+      { teacherId: ahmetTeacher.id, courseId: courseRoblox1012.id },
+      { teacherId: ahmetTeacher.id, courseId: courseWeb.id },
+      { teacherId: ayseTeacher.id, courseId: courseScratch.id },
+      { teacherId: ayseTeacher.id, courseId: courseUnity.id },
+    ],
+  });
+
+  console.log('   ✓ 6 teacher-course assignments');
+
+  // ════════════════════════════════════════════════════════════
+  // ── GROUPS ─────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════
+  console.log('👥 Seeding groups...');
+
+  const groupZehraRoblox = await prisma.group.create({
+    data: {
+      courseId: courseRoblox89.id,
+      teacherId: zehraTeacher.id,
+      schedule: 'Pazartesi 14:00 - 15:00',
+    },
+  });
+
+  const groupZehraPython = await prisma.group.create({
+    data: {
+      courseId: coursePython.id,
+      teacherId: zehraTeacher.id,
+      schedule: 'Çarşamba 10:00 - 11:00',
+    },
+  });
+
+  const groupAhmetRoblox = await prisma.group.create({
+    data: {
+      courseId: courseRoblox1012.id,
+      teacherId: ahmetTeacher.id,
+      schedule: 'Salı 16:00 - 17:30',
+    },
+  });
+
+  const groupAyseScratch = await prisma.group.create({
+    data: {
+      courseId: courseScratch.id,
+      teacherId: ayseTeacher.id,
+      schedule: 'Perşembe 13:00 - 14:00',
+    },
+  });
+
+  console.log('   ✓ 4 groups created');
+
+  // ════════════════════════════════════════════════════════════
+  // ── STUDENT_GROUP ──────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════
+  console.log('📋 Seeding student-group enrollments...');
+
+  await prisma.studentGroup.createMany({
+    data: [
+      { studentId: mehmetStudent.id, groupId: groupZehraRoblox.id },
+      { studentId: zeynepStudent.id, groupId: groupZehraRoblox.id },
+      { studentId: mehmetStudent.id, groupId: groupZehraPython.id },
+      { studentId: emreStudent.id, groupId: groupAhmetRoblox.id },
+      { studentId: zeynepStudent.id, groupId: groupAyseScratch.id },
+    ],
+  });
+
+  console.log('   ✓ 5 student-group enrollments');
+
+  // ════════════════════════════════════════════════════════════
+  // ── LESSONS ────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════
+  console.log('📖 Seeding lessons...');
+
   const lesson1 = await prisma.lesson.create({
     data: {
-      title: 'Roblox Game Developer [2024][8-9][60m][40L][TUR][In Progress]',
-      moduleCode: 'M1L1',
-      teacherId: teacher1.id,
-      curriculumId: createdCurricula['1494'].id,
+      groupId: groupZehraRoblox.id,
+      teacherId: zehraTeacher.id,
+      dateTime: new Date('2025-03-10T14:00:00'),
+      lessonNo: 1,
     },
   });
 
   const lesson2 = await prisma.lesson.create({
     data: {
-      title: 'Python Developer [2024][10-11][60m][40L][TUR][In Progress]',
-      moduleCode: 'M1L1',
-      teacherId: teacher2.id,
-      curriculumId: createdCurricula['1500'].id,
+      groupId: groupZehraRoblox.id,
+      teacherId: zehraTeacher.id,
+      dateTime: new Date('2025-03-17T14:00:00'),
+      lessonNo: 2,
     },
   });
 
-  // ── Enrollments ────────────────────────────────────────────
-  await prisma.lessonEnrollment.createMany({
-    data: [
-      { lessonId: lesson1.id, studentId: student1.id },
-      { lessonId: lesson1.id, studentId: student2.id },
-      { lessonId: lesson2.id, studentId: student1.id },
-    ],
-  });
-
-  // ── Parent-Student Links ──────────────────────────────────
-  await prisma.parentStudent.create({
+  const lesson3 = await prisma.lesson.create({
     data: {
-      parentId: parent1.id,
-      studentId: student1.id,
+      groupId: groupZehraPython.id,
+      teacherId: zehraTeacher.id,
+      dateTime: new Date('2025-03-12T10:00:00'),
+      lessonNo: 1,
     },
   });
 
-  // ── Analysis Jobs ──────────────────────────────────────────
-  await prisma.analysisJob.create({
+  const lesson4 = await prisma.lesson.create({
     data: {
+      groupId: groupAhmetRoblox.id,
+      teacherId: ahmetTeacher.id,
+      dateTime: new Date('2025-03-11T16:00:00'),
+      lessonNo: 1,
+    },
+  });
+
+  console.log('   ✓ 4 lessons created');
+
+  // ════════════════════════════════════════════════════════════
+  // ── REPORTS + REPORT_TEACHER + REPORT_STUDENT ──────────────
+  // ════════════════════════════════════════════════════════════
+  console.log('📊 Seeding reports...');
+
+  // Report 1: FINALIZED for Zehra's Roblox lesson 1
+  const report1 = await prisma.report.create({
+    data: {
+      adminId: admin.id,
+      lessonId: lesson1.id,
       videoUrl: 'https://storage.googleapis.com/lectureai/video1.mp4',
       videoFilename: 'video1.mp4',
-      teacherId: teacher1.id,
-      lessonId: lesson1.id,
-      status: 'PROCESSING',
-    },
-  });
-
-  await prisma.analysisJob.create({
-    data: {
-      videoUrl: 'https://storage.googleapis.com/lectureai/video2.mp4',
-      videoFilename: 'video2.mp4',
-      teacherId: teacher1.id,
-      lessonId: lesson1.id,
       status: 'FINALIZED',
       draftReport: {
-        overallScore: 90,
+        overallScore: 92,
         engagement: 'Çok Yüksek',
-        feedback_metni: 'Eğitmen ders içeriğine hakimiyeti ve öğrencilerle kurduğu dinamik iletişimle standardın üzerinde bir performans sergilemiştir.',
+        feedback_metni: 'Zehra Hoca ders içeriğine hakimiyeti ve öğrencilerle kurduğu dinamik iletişimle standardın üzerinde bir performans sergilemiştir.',
         speaking_time_rating: '%65',
         actual_duration_min: 60,
         yeterlilikler: '%95',
       },
       finalReport: {
-        overallScore: 90,
+        overallScore: 92,
         engagement: 'Çok Yüksek',
-        feedback_metni: 'Eğitmen ders içeriğine hakimiyeti ve öğrencilerle kurduğu dinamik iletişimle standardın üzerinde bir performans sergilemiştir.',
+        feedback_metni: 'Zehra Hoca ders içeriğine hakimiyeti ve öğrencilerle kurduğu dinamik iletişimle standardın üzerinde bir performans sergilemiştir.',
         speaking_time_rating: '%65',
         actual_duration_min: 60,
         yeterlilikler: '%95',
@@ -247,70 +371,121 @@ async function main() {
     },
   });
 
-  // ── Mentor Feedbacks ───────────────────────────────────────
-  await prisma.mentorFeedback.createMany({
+  await prisma.reportTeacher.create({
+    data: {
+      reportId: report1.id,
+      teacherId: zehraTeacher.id,
+      score: 92,
+    },
+  });
+
+  await prisma.reportStudent.createMany({
+    data: [
+      { reportId: report1.id, studentId: mehmetStudent.id },
+      { reportId: report1.id, studentId: zeynepStudent.id },
+    ],
+  });
+
+  // Report 2: DRAFT for Zehra's Roblox lesson 2
+  const report2 = await prisma.report.create({
+    data: {
+      adminId: admin.id,
+      lessonId: lesson2.id,
+      videoUrl: 'https://storage.googleapis.com/lectureai/video2.mp4',
+      videoFilename: 'video2.mp4',
+      status: 'DRAFT',
+      draftReport: {
+        overallScore: 88,
+        engagement: 'Yüksek',
+        feedback_metni: 'İkinci derste de iyi bir performans görülmüştür. Öğrenci katılımı yüksek düzeyde devam etmektedir.',
+        speaking_time_rating: '%60',
+        actual_duration_min: 58,
+        yeterlilikler: '%90',
+      },
+    },
+  });
+
+  await prisma.reportTeacher.create({
+    data: {
+      reportId: report2.id,
+      teacherId: zehraTeacher.id,
+      score: 88,
+    },
+  });
+
+  // Report 3: PROCESSING for Ahmet's lesson
+  await prisma.report.create({
+    data: {
+      lessonId: lesson4.id,
+      videoUrl: 'https://storage.googleapis.com/lectureai/video3.mp4',
+      videoFilename: 'video3.mp4',
+      status: 'PROCESSING',
+    },
+  });
+
+  console.log('   ✓ 3 reports created');
+
+  // ════════════════════════════════════════════════════════════
+  // ── STUDENT_EVALUATIONS ────────────────────────────────────
+  // ════════════════════════════════════════════════════════════
+  console.log('💬 Seeding student evaluations...');
+
+  await prisma.studentEvaluation.createMany({
     data: [
       {
-        teacherId: teacher1.id,
-        studentId: student1.id,
-        lessonId: lesson1.id,
+        teacherId: zehraTeacher.id,
+        studentId: mehmetStudent.id,
         note: 'Mehmet, bu derste çok iyi bir ilerleme gösterdin. Devam et!',
       },
       {
-        teacherId: teacher1.id,
-        studentId: student2.id,
-        lessonId: lesson1.id,
+        teacherId: zehraTeacher.id,
+        studentId: zeynepStudent.id,
         note: 'Zeynep, ödev teslimlerinde biraz daha dikkatli olmalısın.',
       },
+      {
+        teacherId: ahmetTeacher.id,
+        studentId: emreStudent.id,
+        note: 'Emre, Roblox projesinde yaratıcılığını gösterdin, harika!',
+      },
     ],
   });
 
-  // ── Surveys ────────────────────────────────────────────────
-  await prisma.survey.create({
-    data: {
-      studentId: student1.id,
-      lessonId: lesson1.id,
-      contentQuality: 5,
-      teachingMethod: 4,
-      engagement: 5,
-      materials: 4,
-      overall: 5,
-      anonymousComment: 'Çok faydalı bir ders, hoca çok ilgili.',
-    },
-  });
+  console.log('   ✓ 3 student evaluations');
 
-  // ── Personal Notes ─────────────────────────────────────────
-  await prisma.personalNote.create({
-    data: {
-      teacherId: teacher1.id,
-      content: 'Bir sonraki derste M1L2 konusuna geçilecek.',
-      lessonTag: 'M1L1',
-    },
-  });
+  // ════════════════════════════════════════════════════════════
+  // ── SURVEYS ────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════
+  console.log('📝 Seeding surveys...');
 
-  // ── Badges ─────────────────────────────────────────────────
-  await prisma.badge.createMany({
+  await prisma.survey.createMany({
     data: [
       {
-        studentId: student1.id,
-        title: 'Aktif Katılımcı',
-        description: 'Ders içi etkileşimlerde üst sıralarda yer aldı.',
+        studentId: mehmetStudent.id,
+        lessonId: lesson1.id,
+        rating: 5,
+        note: 'Çok faydalı bir ders, hoca çok ilgili.',
       },
       {
-        studentId: student1.id,
-        title: 'Lider',
-        description: 'Grup çalışmalarında liderlik rolü üstlendi.',
+        studentId: zeynepStudent.id,
+        lessonId: lesson1.id,
+        rating: 4,
+        note: 'Dersi sevdim ama biraz hızlı geçti.',
       },
     ],
   });
 
-  console.log('✅ Seed completed successfully!');
-  console.log(`   Admin:    ${admin.email}`);
-  console.log(`   Teacher:  ${teacher1.email}, ${teacher2.email}, ${teacher3.email}`);
-  console.log(`   Student:  ${student1.email}, ${student2.email}`);
-  console.log(`   Parent:   ${parent1.email}`);
-  console.log(`   Curricula: ${CURRICULA_DATA.length} programmes`);
+  console.log('   ✓ 2 surveys');
+
+  // ════════════════════════════════════════════════════════════
+  console.log('\n✅ Seed completed successfully!');
+  console.log(`   Admin:    ${adminUser.email}`);
+  console.log(`   Teachers: ${zehraUser.email}, ${ahmetUser.email}, ${ayseUser.email}`);
+  console.log(`   Students: ${mehmetUser.email}, ${zeynepUser.email}, ${emreUser.email}`);
   console.log('   Password for all: password123');
+  console.log(`   Courses:  6`);
+  console.log(`   Groups:   4`);
+  console.log(`   Lessons:  4`);
+  console.log(`   Reports:  3`);
 }
 
 main()
