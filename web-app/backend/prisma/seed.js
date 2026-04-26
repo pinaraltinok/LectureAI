@@ -305,6 +305,8 @@ async function main() {
       teacherId: zehraTeacher.id,
       dateTime: new Date('2025-03-10T14:00:00'),
       lessonNo: 1,
+      videoUrl: 'https://storage.googleapis.com/lectureai/video1.mp4',
+      videoFilename: 'video1.mp4',
     },
   });
 
@@ -314,6 +316,8 @@ async function main() {
       teacherId: zehraTeacher.id,
       dateTime: new Date('2025-03-17T14:00:00'),
       lessonNo: 2,
+      videoUrl: 'https://storage.googleapis.com/lectureai/video2.mp4',
+      videoFilename: 'video2.mp4',
     },
   });
 
@@ -332,6 +336,8 @@ async function main() {
       teacherId: ahmetTeacher.id,
       dateTime: new Date('2025-03-11T16:00:00'),
       lessonNo: 1,
+      videoUrl: 'https://storage.googleapis.com/lectureai/video3.mp4',
+      videoFilename: 'video3.mp4',
     },
   });
 
@@ -347,8 +353,6 @@ async function main() {
     data: {
       adminId: admin.id,
       lessonId: lesson1.id,
-      videoUrl: 'https://storage.googleapis.com/lectureai/video1.mp4',
-      videoFilename: 'video1.mp4',
       status: 'FINALIZED',
       draftReport: {
         overallScore: 92,
@@ -391,8 +395,6 @@ async function main() {
     data: {
       adminId: admin.id,
       lessonId: lesson2.id,
-      videoUrl: 'https://storage.googleapis.com/lectureai/video2.mp4',
-      videoFilename: 'video2.mp4',
       status: 'DRAFT',
       draftReport: {
         overallScore: 88,
@@ -417,8 +419,6 @@ async function main() {
   await prisma.report.create({
     data: {
       lessonId: lesson4.id,
-      videoUrl: 'https://storage.googleapis.com/lectureai/video3.mp4',
-      videoFilename: 'video3.mp4',
       status: 'PROCESSING',
     },
   });

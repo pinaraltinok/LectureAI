@@ -149,11 +149,13 @@ model StudentGroup {
 // ─── Lesson ─────────────────────────────────────────────────
 
 model Lesson {
-  id        String   @id @default(uuid())
-  groupId   String
-  teacherId String
-  dateTime  DateTime @default(now())
-  lessonNo  Int
+  id            String   @id @default(uuid())
+  groupId       String
+  teacherId     String
+  dateTime      DateTime @default(now())
+  lessonNo      Int
+  videoUrl      String?
+  videoFilename String?
 
   group   Group   @relation(fields: [groupId], references: [id], onDelete: Cascade)
   teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
@@ -170,9 +172,6 @@ model Report {
   id            String       @id @default(uuid())
   adminId       String?
   lessonId      String?
-  // Video analysis pipeline fields
-  videoUrl      String?
-  videoFilename String?
   status        ReportStatus @default(PENDING)
   draftReport   Json?
   finalReport   Json?

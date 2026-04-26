@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { apiPost } from '../api'
 
+const EMOJIS = ['😢', '😕', '😐', '😊', '🤩']
+const EMOJI_LABELS = ['Kötü', 'Geliştirilebilir', 'Fena Değil', 'İyi', 'Mükemmel']
+
 const StudentSurvey = () => {
   const location = useLocation()
   const navigate = useNavigate()
@@ -32,11 +35,24 @@ const StudentSurvey = () => {
   if (!lessonId) {
     return (
       <div style={{display:'grid', placeItems:'center', minHeight:'400px'}}>
-        <div style={{textAlign:'center', color:'#64748b'}}>
-          <div style={{fontSize:'3rem', marginBottom:'1rem'}}>📋</div>
-          <h3 style={{fontWeight:800, color:'#1e293b'}}>Ders seçilmedi</h3>
-          <p>Lütfen önce "Derslerim" sayfasından bir ders seçin.</p>
-          <button className="primary-btn" style={{marginTop:'1rem', padding:'0.75rem 2rem'}} onClick={() => navigate('/student/derslerim')}>Derslerime Git</button>
+        <div style={{
+          textAlign:'center', padding:'3rem', background:'#fff',
+          borderRadius:'28px', border:'1px solid #f1f5f9',
+          boxShadow:'0 4px 20px rgba(0,0,0,0.04)',
+        }}>
+          <div style={{fontSize:'4rem', marginBottom:'1rem'}}>📋</div>
+          <h3 style={{fontWeight:900, color:'#1e293b', fontSize:'1.3rem'}}>Ders seçilmedi</h3>
+          <p style={{color:'#94a3b8', margin:'0.5rem 0 1.5rem'}}>Lütfen önce "Derslerim" sayfasından bir ders seçin.</p>
+          <button onClick={() => navigate('/student/derslerim')} style={{
+            padding:'14px 32px', borderRadius:'100px', border:'none',
+            background:'#1e1b4b', color:'#fff', fontSize:'0.95rem',
+            fontWeight:800, cursor:'pointer', transition:'all 0.3s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.05)' }}
+          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
+          >
+            Derslerime Git →
+          </button>
         </div>
       </div>
     )
@@ -44,103 +60,161 @@ const StudentSurvey = () => {
 
   if (isSubmitted) {
     return (
-      <div className="report-card-internal" style={{ maxWidth: '400px', margin: '100px auto', textAlign: 'center', padding: '3rem', border: 'none', background: 'linear-gradient(135deg, #6366f1, #a855f7)', color: 'white' }}>
-        <div style={{ fontSize: '3.5rem', marginBottom: '1.5rem' }}>🦁</div>
-        <h1 style={{ fontSize: '1.75rem', fontWeight: 800, marginBottom: '0.5rem' }}>Başarılı!</h1>
-        <p style={{ opacity: 0.9, fontSize: '0.95rem', marginBottom: '2.5rem' }}>Anketiniz başarıyla gönderildi. Teşekkürler!</p>
-        <button className="primary-btn" style={{ margin: '0 auto', padding: '0.75rem 2.5rem', background: 'white', color: 'var(--primary)' }} onClick={() => navigate('/student/derslerim')}>Derslerime Dön</button>
+      <div style={{display:'grid', placeItems:'center', minHeight:'400px', animation:'fadeIn 0.5s ease'}}>
+        <div style={{
+          textAlign:'center', padding:'3.5rem', borderRadius:'32px',
+          background:'linear-gradient(135deg, #1e1b4b 0%, #4338ca 100%)',
+          color:'white', maxWidth:'420px', width:'100%',
+          boxShadow:'0 20px 60px rgba(67, 56, 202, 0.3)',
+        }}>
+          <div style={{fontSize:'4.5rem', marginBottom:'1.5rem'}}>🎉</div>
+          <h1 style={{fontSize:'2rem', fontWeight:900, marginBottom:'0.5rem', letterSpacing:'-0.03em'}}>Harika!</h1>
+          <p style={{opacity:0.85, fontSize:'1rem', marginBottom:'2.5rem', fontWeight:500}}>
+            Anketin başarıyla gönderildi. Teşekkürler! 💜
+          </p>
+          <button onClick={() => navigate('/student/derslerim')} style={{
+            padding:'14px 36px', borderRadius:'100px', border:'none',
+            background:'white', color:'#4338ca', fontSize:'1rem',
+            fontWeight:800, cursor:'pointer', transition:'all 0.3s',
+            boxShadow:'0 8px 20px rgba(0,0,0,0.15)',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)' }}
+          onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)' }}
+          >
+            Derslerime Dön
+          </button>
+        </div>
       </div>
     )
   }
 
   return (
-    <div style={{ minHeight: '80vh', paddingBottom: '3rem', position: 'relative' }}>
-      <div style={{ maxWidth: '640px', margin: '0 auto', animation: 'fadeIn 0.5s ease' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', alignItems: 'center' }}>
-          <button onClick={() => navigate('/student/derslerim')} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontWeight: 700, fontSize: '12px', cursor: 'pointer' }}>
-            ← DERSLERİME DÖN
-          </button>
-          <div style={{ background: 'linear-gradient(135deg, #ef4444, #f43f5e)', color: '#fff', padding: '4px 12px', borderRadius: '100px', fontSize: '9px', fontWeight: 800 }}>ANONİM MOD AKTİF</div>
+    <div style={{ maxWidth:'600px', margin:'0 auto', paddingBottom:'3rem', animation:'fadeIn 0.5s ease' }}>
+      {/* Back + Anonymous */}
+      <div style={{display:'flex', justifyContent:'space-between', marginBottom:'1.25rem', alignItems:'center'}}>
+        <button onClick={() => navigate('/student/derslerim')} style={{
+          background:'none', border:'none', color:'#64748b', fontWeight:700,
+          fontSize:'0.85rem', cursor:'pointer', display:'flex', alignItems:'center', gap:'6px',
+        }}>
+          ← Derslerime Dön
+        </button>
+        <div style={{
+          background:'linear-gradient(135deg, #ef4444, #f43f5e)', color:'#fff',
+          padding:'5px 14px', borderRadius:'100px', fontSize:'10px', fontWeight:800,
+        }}>
+          🔒 ANONİM
+        </div>
+      </div>
+
+      {/* Survey Card */}
+      <div style={{
+        background:'#fff', borderRadius:'28px', overflow:'hidden',
+        border:'1px solid #f1f5f9',
+        boxShadow:'0 8px 30px rgba(0,0,0,0.06)',
+      }}>
+        {/* Header */}
+        <div style={{
+          background:'linear-gradient(135deg, #1e1b4b 0%, #4338ca 100%)',
+          padding:'2rem 2rem 2.5rem', color:'white', position:'relative', overflow:'hidden',
+        }}>
+          <div style={{position:'absolute', top:'-20px', right:'10px', fontSize:'5rem', opacity:0.08}}>📝</div>
+          <p style={{margin:'0 0 4px', fontSize:'0.8rem', fontWeight:700, opacity:0.6, textTransform:'uppercase', letterSpacing:'0.1em'}}>Ders Anketi</p>
+          <h2 style={{fontSize:'1.5rem', fontWeight:900, letterSpacing:'-0.03em', margin:'0 0 4px'}}>
+            {courseName || 'Ders Değerlendirmesi'}
+          </h2>
+          <p style={{opacity:0.75, fontSize:'0.9rem', fontWeight:600, margin:0}}>
+            {instructor ? `${instructor} • Ders ${lessonNo || ''}` : ''}
+          </p>
         </div>
 
-        <div className="report-card-internal" style={{ padding: '0', overflow: 'hidden', borderRadius: '16px', boxShadow: '0 12px 32px -8px rgba(0, 0, 0, 0.08)' }}>
-          {/* Header */}
-          <div style={{ background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)', padding: '2.5rem 2rem', color: 'white', position: 'relative' }}>
-            <h2 style={{ fontSize: '1.8rem', fontWeight: 800, letterSpacing: '-0.03em', marginBottom: '0.2rem' }}>{courseName || 'Ders Anketi'}</h2>
-            <p style={{ opacity: 0.9, fontSize: '1rem', fontWeight: 600 }}>{instructor ? `${instructor} • Ders ${lessonNo || ''}` : 'Ders değerlendirmesi'}</p>
-          </div>
+        <div style={{padding:'2rem'}}>
+          {error && (
+            <div style={{
+              color:'#dc2626', background:'#fef2f2', padding:'12px 16px',
+              borderRadius:'14px', fontSize:'0.85rem', marginBottom:'1.5rem',
+              fontWeight:700, border:'1px solid #fecaca',
+            }}>
+              ⚠️ {error}
+            </div>
+          )}
 
-          <div style={{ padding: '2.5rem 2rem' }}>
-            {error && (
-              <div style={{color: '#f43f5e', background: '#ffe4e6', padding: '0.75rem 1.5rem', borderRadius: '12px', fontSize: '0.9rem', marginBottom: '1.5rem', fontWeight: 600}}>
-                {error}
-              </div>
-            )}
-
-            {/* Rating */}
-            <div style={{ marginBottom: '2rem' }}>
-              <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block', marginBottom: '1rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                Dersi Puanlayın (1-5)
-              </label>
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                {[1, 2, 3, 4, 5].map(num => (
+          {/* Emoji Rating */}
+          <div style={{textAlign:'center', marginBottom:'2rem'}}>
+            <p style={{fontSize:'0.75rem', fontWeight:800, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:'1.25rem'}}>
+              Bu dersi nasıl buldun?
+            </p>
+            <div style={{display:'flex', gap:'12px', justifyContent:'center'}}>
+              {EMOJIS.map((emoji, idx) => {
+                const num = idx + 1
+                const isSelected = rating === num
+                return (
                   <button
                     key={num}
                     onClick={() => setRating(num)}
                     style={{
-                      width: '64px', height: '64px', borderRadius: '16px',
-                      border: rating === num ? 'none' : '2px solid #e2e8f0',
-                      background: rating === num ? 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)' : '#fff',
-                      color: rating === num ? 'white' : '#64748b',
-                      fontSize: '1.5rem', fontWeight: 900, cursor: 'pointer',
-                      transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                      boxShadow: rating === num ? '0 8px 25px rgba(99, 102, 241, 0.4)' : 'none',
-                      transform: rating === num ? 'scale(1.1)' : 'scale(1)',
+                      width:'68px', height:'68px', borderRadius:'20px',
+                      border: isSelected ? '3px solid #4338ca' : '2px solid #e2e8f0',
+                      background: isSelected ? '#ede9fe' : '#fff',
+                      fontSize:'2rem', cursor:'pointer',
+                      transition:'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                      transform: isSelected ? 'scale(1.15)' : 'scale(1)',
+                      boxShadow: isSelected ? '0 8px 25px rgba(67, 56, 202, 0.2)' : 'none',
+                      display:'grid', placeItems:'center',
                     }}
                   >
-                    {num}
+                    {emoji}
                   </button>
-                ))}
-              </div>
-              <div style={{ textAlign: 'center', marginTop: '12px', fontSize: '0.85rem', fontWeight: 700, color: rating > 0 ? '#6366f1' : '#94a3b8' }}>
-                {rating === 0 ? 'Henüz puan verilmedi' : rating <= 2 ? 'Geliştirilmeli' : rating === 3 ? 'Orta' : rating === 4 ? 'İyi' : 'Mükemmel'}
-              </div>
+                )
+              })}
             </div>
-
-            {/* Note */}
-            <div style={{ marginTop: '2rem', borderTop: '1px solid #f1f5f9', paddingTop: '2rem' }}>
-              <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block', marginBottom: '1rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                Anonim Not (İsteğe bağlı)
-              </label>
-              <textarea
-                placeholder="Deneyiminizi anonim olarak paylaşın..."
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                style={{
-                  width: '100%', minHeight: '120px', border: '1px solid #e2e8f0', borderRadius: '16px',
-                  padding: '1.25rem', fontSize: '1rem', outline: 'none', background: '#f8fafc',
-                  transition: 'all 0.3s ease',
-                }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.background = '#fff'; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = '#f8fafc'; }}
-              ></textarea>
-
-              <button
-                className="primary-btn"
-                onClick={handleSubmit}
-                disabled={!canSubmit || isSubmitting}
-                style={{
-                  marginTop: '2rem', width: '100%', padding: '1.25rem', fontSize: '1.1rem', fontWeight: 800,
-                  background: canSubmit ? 'linear-gradient(135deg, #6366f1, #a855f7)' : '#e2e8f0',
-                  color: canSubmit ? 'white' : '#94a3b8', border: 'none', borderRadius: '16px',
-                  cursor: canSubmit ? 'pointer' : 'not-allowed',
-                  boxShadow: canSubmit ? '0 15px 30px -5px rgba(99, 102, 241, 0.4)' : 'none',
-                }}
-              >
-                {isSubmitting ? 'GÖNDERİLİYOR...' : 'ANKETİ GÖNDER'}
-              </button>
-            </div>
+            <p style={{
+              marginTop:'12px', fontSize:'0.9rem', fontWeight:800,
+              color: rating > 0 ? '#4338ca' : '#cbd5e1',
+              transition:'color 0.3s',
+            }}>
+              {rating > 0 ? EMOJI_LABELS[rating - 1] : 'Bir emoji seç!'}
+            </p>
           </div>
+
+          {/* Note */}
+          <div style={{borderTop:'1px solid #f1f5f9', paddingTop:'1.5rem'}}>
+            <p style={{fontSize:'0.75rem', fontWeight:800, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:'0.75rem'}}>
+              Notun (isteğe bağlı)
+            </p>
+            <textarea
+              placeholder="Aklına ne geliyorsa yaz... 💭"
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              style={{
+                width:'100%', minHeight:'100px', border:'2px solid #f1f5f9',
+                borderRadius:'16px', padding:'1rem 1.2rem', fontSize:'0.95rem',
+                outline:'none', background:'#fafafe', resize:'vertical',
+                transition:'all 0.3s', fontFamily:'inherit',
+              }}
+              onFocus={e => { e.currentTarget.style.borderColor = '#4338ca'; e.currentTarget.style.background = '#fff'; }}
+              onBlur={e => { e.currentTarget.style.borderColor = '#f1f5f9'; e.currentTarget.style.background = '#fafafe'; }}
+            />
+          </div>
+
+          {/* Submit */}
+          <button
+            onClick={handleSubmit}
+            disabled={!canSubmit || isSubmitting}
+            style={{
+              marginTop:'1.5rem', width:'100%', padding:'16px',
+              fontSize:'1.05rem', fontWeight:900, border:'none',
+              borderRadius:'100px', cursor: canSubmit ? 'pointer' : 'not-allowed',
+              background: canSubmit ? 'linear-gradient(135deg, #1e1b4b, #4338ca)' : '#f1f5f9',
+              color: canSubmit ? 'white' : '#94a3b8',
+              boxShadow: canSubmit ? '0 12px 30px rgba(67, 56, 202, 0.3)' : 'none',
+              transition:'all 0.3s',
+              letterSpacing:'-0.01em',
+            }}
+            onMouseEnter={e => { if (canSubmit) e.currentTarget.style.transform = 'translateY(-2px)' }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)' }}
+          >
+            {isSubmitting ? '⏳ Gönderiliyor...' : '🚀 Anketi Gönder'}
+          </button>
         </div>
       </div>
     </div>

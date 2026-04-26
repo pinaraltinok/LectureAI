@@ -349,7 +349,45 @@ const AdminManagement = () => {
                   {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
               </div>
-              <InputField label="PROGRAM (Opsiyonel)" value={groupForm.schedule} onChange={v => setGroupForm(f => ({ ...f, schedule: v }))} placeholder="Pazartesi 14:00, Çarşamba 16:00" />
+              <div>
+                <label style={labelStyle}>PROGRAM</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '4px' }}>
+                  <select value={groupForm._day || ''} onChange={e => {
+                    const day = e.target.value
+                    setGroupForm(f => {
+                      const start = f._startTime || '14:00'
+                      const end = f._endTime || '15:00'
+                      return { ...f, _day: day, _startTime: start, _endTime: end, schedule: day ? `${day} ${start} - ${end}` : '' }
+                    })
+                  }} style={selectStyle}>
+                    <option value="">Gün seçin</option>
+                    <option value="Pazartesi">Pazartesi</option>
+                    <option value="Salı">Salı</option>
+                    <option value="Çarşamba">Çarşamba</option>
+                    <option value="Perşembe">Perşembe</option>
+                    <option value="Cuma">Cuma</option>
+                    <option value="Cumartesi">Cumartesi</option>
+                    <option value="Pazar">Pazar</option>
+                  </select>
+                  <div>
+                    <input type="time" value={groupForm._startTime || '14:00'} onChange={e => {
+                      const start = e.target.value
+                      setGroupForm(f => ({ ...f, _startTime: start, schedule: f._day ? `${f._day} ${start} - ${f._endTime || '15:00'}` : '' }))
+                    }} style={{ width: '100%', padding: '12px', borderRadius: '14px', border: '1px solid #e2e8f0', fontSize: '0.9rem', fontWeight: 600, background: '#f8fafc' }} />
+                  </div>
+                  <div>
+                    <input type="time" value={groupForm._endTime || '15:00'} onChange={e => {
+                      const end = e.target.value
+                      setGroupForm(f => ({ ...f, _endTime: end, schedule: f._day ? `${f._day} ${f._startTime || '14:00'} - ${end}` : '' }))
+                    }} style={{ width: '100%', padding: '12px', borderRadius: '14px', border: '1px solid #e2e8f0', fontSize: '0.9rem', fontWeight: 600, background: '#f8fafc' }} />
+                  </div>
+                </div>
+                {groupForm.schedule && (
+                  <div style={{ marginTop: '8px', padding: '6px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', fontSize: '0.8rem', fontWeight: 700, color: '#16a34a' }}>
+                    📅 {groupForm.schedule}
+                  </div>
+                )}
+              </div>
               <button className="primary-btn" onClick={handleCreateGroup} style={{ padding: '14px 40px', fontWeight: 800 }}>
                 Grup Oluştur
               </button>

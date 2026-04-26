@@ -138,8 +138,8 @@ async function getReports(req, res) {
           jobId: j.id,
           courseName: j.lesson?.group?.course?.course || null,
           lessonNo: j.lesson?.lessonNo || null,
-          videoUrl: j.videoUrl,
-          videoFilename: j.videoFilename,
+          videoUrl: j.lesson?.videoUrl || null,
+          videoFilename: j.lesson?.videoFilename || null,
           status: j.status,
           score: rt.score,
           finalReport: j.status === 'FINALIZED' ? j.finalReport : j.draftReport,
@@ -224,7 +224,53 @@ async function getTeacherStats(req, res) {
   }
 }
 
+/**
+ * PUT /api/teacher/student-evaluation/:id
+ * Updates an existing evaluation note (only by the original teacher).
+ */
+async function updateStudentEvaluation(req, res) {
+  try {
+    const { id } = req.params;
+    const { note } = req.body;
+    const teacherId = req.user.userId;
+
+    if (!note) return res.status(400).json({ error: 'Not alanı gereklidir.' });
+
+    const evaluation = await prisma.studentEvaluation.findUnique({ where: { id } });
+    if (!evaluation) return res.status(404).json({ error: 'Değerlendirme bulunamadı.' });
+    if (evaluation.teacherId !== teacherId) return res.status(403).json({ error: 'Bu değerlendirmeyi düzenleme yetkiniz yok.' });
+
+    await prisma.studentEvaluation.update({ where: { id }, data: { note } });
+    return res.json({ message: 'Değerlendirme başarıyla güncellendi.' });
+  } catch (err) {
+    console.error('UpdateStudentEvaluation error:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+}
+
+/**
+ * DELETE /api/teacher/student-evaluation/:id
+ * Deletes an evaluation note (only by the original teacher).
+ */
+async function deleteStudentEvaluation(req, res) {
+  try {
+    const { id } = req.params;
+    const teacherId = req.user.userId;
+
+    const evaluation = await prisma.studentEvaluation.findUnique({ where: { id } });
+    if (!evaluation) return res.status(404).json({ error: 'Değerlendirme bulunamadı.' });
+    if (evaluation.teacherId !== teacherId) return res.status(403).json({ error: 'Bu değerlendirmeyi silme yetkiniz yok.' });
+
+    await prisma.studentEvaluation.delete({ where: { id } });
+    return res.json({ message: 'Değerlendirme başarıyla silindi.' });
+  } catch (err) {
+    console.error('DeleteStudentEvaluation error:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+}
+
 module.exports = {
   getTeacherLessons, getGroupStudents, createStudentEvaluation,
+  updateStudentEvaluation, deleteStudentEvaluation,
   getMyEvaluations, getReports, getSurveys, getTeacherStats,
 };

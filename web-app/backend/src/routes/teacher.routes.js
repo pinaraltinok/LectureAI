@@ -4,6 +4,7 @@ const auth = require('../middleware/auth');
 const roleGuard = require('../middleware/roleGuard');
 const {
   getTeacherLessons, getGroupStudents, createStudentEvaluation,
+  updateStudentEvaluation, deleteStudentEvaluation,
   getMyEvaluations, getReports, getSurveys, getTeacherStats,
 } = require('../controllers/teacher.controller');
 
@@ -14,5 +15,7 @@ router.get('/reports', auth, roleGuard('TEACHER'), getReports);
 router.get('/reports/:lessonId/surveys', auth, roleGuard('TEACHER'), getSurveys);
 router.get('/my-evaluations', auth, roleGuard('TEACHER'), getMyEvaluations);
 router.post('/student-evaluation', auth, roleGuard('TEACHER'), createStudentEvaluation);
+router.put('/student-evaluation/:id', auth, roleGuard('TEACHER'), updateStudentEvaluation);
+router.delete('/student-evaluation/:id', auth, roleGuard('TEACHER'), deleteStudentEvaluation);
 
 module.exports = router;

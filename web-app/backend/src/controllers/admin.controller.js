@@ -107,7 +107,13 @@ async function uploadAnalysis(req, res) {
       resolvedUrl = `/uploads/${file.filename}`;
     }
 
-    const report = await prisma.report.create({ data: { videoUrl: resolvedUrl, videoFilename, status: 'PENDING' } });
+    const report = await prisma.report.create({ data: { status: 'PENDING' } });
+
+    // Store video info temporarily in report metadata (will be moved to lesson on assign)
+    // For now, we track it by creating a placeholder lesson or storing in report's draftReport
+    if (resolvedUrl) {
+      await prisma.report.update({ where: { id: report.id }, data: { draftReport: { _videoUrl: resolvedUrl, _videoFilename: videoFilename } } });
+    }
 
     if (resolvedUrl && (resolvedUrl.startsWith('gs://') || resolvedUrl.startsWith('https://storage.googleapis.com/'))) {
       triggerVideoAnalysis(report.id, resolvedUrl, teacherName);
@@ -226,7 +232,7 @@ async function getDraft(req, res) {
 
     const teacher = report.reportTeachers[0];
     return res.json({
-      jobId: report.id, status: report.status, videoUrl: report.videoUrl, videoFilename: report.videoFilename,
+      jobId: report.id, status: report.status, videoUrl: report.lesson?.videoUrl || null, videoFilename: report.lesson?.videoFilename || null,
       draftReport: report.draftReport, finalReport: report.finalReport,
       teacher: teacher ? { id: teacher.teacherId, name: teacher.teacher.user.name } : null,
       lesson: report.lesson ? { id: report.lesson.id, lessonNo: report.lesson.lessonNo, course: report.lesson.group?.course?.course } : null,
@@ -342,7 +348,7 @@ async function getAnalysisJobs(req, res) {
       orderBy: { createdAt: 'desc' },
     });
     const result = jobs.map(j => ({
-      jobId: j.id, videoFilename: j.videoFilename, status: j.status,
+      jobId: j.id, videoFilename: j.lesson?.videoFilename || null, status: j.status,
       teacherId: j.reportTeachers[0]?.teacherId || null,
       teacherName: j.reportTeachers[0]?.teacher?.user?.name || null,
       lessonId: j.lesson?.id || null,
@@ -405,7 +411,7 @@ async function getTeacherReports(req, res) {
         const j = rt.report;
         const rpt = j.finalReport || j.draftReport || {};
         return {
-          jobId: j.id, videoUrl: j.videoUrl, videoFilename: j.videoFilename, status: j.status, createdAt: j.createdAt,
+          jobId: j.id, videoUrl: j.lesson?.videoUrl || null, videoFilename: j.lesson?.videoFilename || null, status: j.status, createdAt: j.createdAt,
           courseName: j.lesson?.group?.course?.course || null, lessonNo: j.lesson?.lessonNo || null,
           assignedTeacher: teacher.user.name, isUnassigned: false, score: rt.score,
           genel_sonuc: rpt.genel_sonuc || null, yeterlilikler: rpt.yeterlilikler || null,
@@ -415,7 +421,7 @@ async function getTeacherReports(req, res) {
       ...unassigned.map(j => {
         const rpt = j.finalReport || j.draftReport || {};
         return {
-          jobId: j.id, videoUrl: j.videoUrl, videoFilename: j.videoFilename, status: j.status, createdAt: j.createdAt,
+          jobId: j.id, videoUrl: j.lesson?.videoUrl || null, videoFilename: j.lesson?.videoFilename || null, status: j.status, createdAt: j.createdAt,
           courseName: j.lesson?.group?.course?.course || null, lessonNo: j.lesson?.lessonNo || null,
           assignedTeacher: null, isUnassigned: true, score: null,
           genel_sonuc: rpt.genel_sonuc || null, yeterlilikler: rpt.yeterlilikler || null,
@@ -444,12 +450,12 @@ async function syncGCSReports(req, res) {
       const videoId = file.name.replace('reports/', '').replace('.json', '');
       if (!videoId) continue;
       const existing = await prisma.report.findFirst({
-        where: { OR: [{ videoFilename: { contains: videoId } }, { videoUrl: { contains: videoId } }], status: { in: ['DRAFT', 'FINALIZED'] }, draftReport: { not: null } },
+        where: { OR: [{ lesson: { videoFilename: { contains: videoId } } }, { lesson: { videoUrl: { contains: videoId } } }], status: { in: ['DRAFT', 'FINALIZED'] }, draftReport: { not: null } },
       });
       if (existing) { skipped++; continue; }
 
       const pendingJob = await prisma.report.findFirst({
-        where: { OR: [{ videoFilename: { contains: videoId } }, { videoUrl: { contains: videoId } }], status: { in: ['PROCESSING', 'PENDING'] } },
+        where: { OR: [{ lesson: { videoFilename: { contains: videoId } } }, { lesson: { videoUrl: { contains: videoId } } }], status: { in: ['PROCESSING', 'PENDING'] } },
       });
 
       const [content] = await file.download();
@@ -459,7 +465,7 @@ async function syncGCSReports(req, res) {
       if (pendingJob) {
         await prisma.report.update({ where: { id: pendingJob.id }, data: { status: 'DRAFT', draftReport: reportData } });
       } else {
-        await prisma.report.create({ data: { videoFilename: videoId, videoUrl: `gs://lectureai_full_videos/Lesson_Records/${videoId}.mp4`, status: 'DRAFT', draftReport: reportData } });
+        await prisma.report.create({ data: { status: 'DRAFT', draftReport: reportData } });
       }
       synced++;
     }

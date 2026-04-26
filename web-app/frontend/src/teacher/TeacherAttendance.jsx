@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { apiGet, apiPost } from '../api'
+import { apiGet, apiPost, apiPut, apiDelete } from '../api'
 
 const TeacherAttendance = () => {
   const [groups, setGroups] = useState([])
@@ -12,6 +12,11 @@ const TeacherAttendance = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+
+  // Edit state
+  const [editingId, setEditingId] = useState(null)
+  const [editNote, setEditNote] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
 
   useEffect(() => {
     Promise.all([apiGet('/teacher/lessons'), apiGet('/teacher/my-evaluations')])
@@ -38,6 +43,40 @@ const TeacherAttendance = () => {
       setEvaluations(updated)
     } catch (err) { setError(err.message) }
     finally { setSending(false) }
+  }
+
+  const handleEdit = (ev) => {
+    setEditingId(ev.id)
+    setEditNote(ev.note)
+  }
+
+  const handleEditCancel = () => {
+    setEditingId(null)
+    setEditNote('')
+  }
+
+  const handleEditSave = async (id) => {
+    if (!editNote.trim()) return
+    setEditSaving(true)
+    try {
+      await apiPut(`/teacher/student-evaluation/${id}`, { note: editNote })
+      setEvaluations(prev => prev.map(ev => ev.id === id ? { ...ev, note: editNote } : ev))
+      setEditingId(null)
+      setEditNote('')
+      setSuccess('Değerlendirme güncellendi!')
+      setTimeout(() => setSuccess(''), 2500)
+    } catch (err) { setError(err.message) }
+    finally { setEditSaving(false) }
+  }
+
+  const handleDelete = async (id) => {
+    if (!confirm('Bu değerlendirmeyi silmek istediğinize emin misiniz?')) return
+    try {
+      await apiDelete(`/teacher/student-evaluation/${id}`)
+      setEvaluations(prev => prev.filter(ev => ev.id !== id))
+      setSuccess('Değerlendirme silindi.')
+      setTimeout(() => setSuccess(''), 2500)
+    } catch (err) { setError(err.message) }
   }
 
   if (loading) return (<div style={{display:'grid', placeItems:'center', minHeight:'400px'}}><div style={{textAlign:'center', color:'#64748b'}}><div style={{fontSize:'2rem', marginBottom:'1rem'}}>⏳</div><p style={{fontWeight:700}}>Yükleniyor...</p></div></div>)
@@ -108,12 +147,60 @@ const TeacherAttendance = () => {
         ) : (
           <div style={{display:'flex', flexDirection:'column', gap:'1rem'}}>
             {evaluations.map(ev => (
-              <div key={ev.id} style={{padding:'1.25rem', borderRadius:'14px', background:'#f8fafc', border:'1px solid #f1f5f9'}}>
-                <div style={{display:'flex', justifyContent:'space-between', marginBottom:'8px'}}>
+              <div key={ev.id} style={{
+                padding:'1.25rem', borderRadius:'14px',
+                background: editingId === ev.id ? '#fff' : '#f8fafc',
+                border: `1.5px solid ${editingId === ev.id ? '#6366f1' : '#f1f5f9'}`,
+                transition:'all 0.25s',
+              }}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'8px'}}>
                   <span style={{fontWeight:800, fontSize:'0.9rem', color:'#1e293b'}}>{ev.studentName}</span>
-                  <span style={{fontSize:'0.75rem', color:'#94a3b8'}}>{new Date(ev.createdAt).toLocaleDateString('tr-TR')}</span>
+                  <div style={{display:'flex', alignItems:'center', gap:'6px'}}>
+                    <span style={{fontSize:'0.72rem', color:'#94a3b8'}}>{new Date(ev.createdAt).toLocaleDateString('tr-TR')}</span>
+                    {editingId !== ev.id && (
+                      <>
+                        <button onClick={() => handleEdit(ev)} style={{
+                          background:'none', border:'none', cursor:'pointer',
+                          fontSize:'0.85rem', padding:'2px', color:'#6366f1',
+                          transition:'all 0.2s',
+                        }} title="Düzenle">✏️</button>
+                        <button onClick={() => handleDelete(ev.id)} style={{
+                          background:'none', border:'none', cursor:'pointer',
+                          fontSize:'0.85rem', padding:'2px', color:'#ef4444',
+                          transition:'all 0.2s',
+                        }} title="Sil">🗑️</button>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <p style={{margin:0, fontSize:'0.85rem', color:'#475569', lineHeight:1.6, fontStyle:'italic'}}>"{ev.note}"</p>
+
+                {editingId === ev.id ? (
+                  <div>
+                    <textarea value={editNote} onChange={e => setEditNote(e.target.value)}
+                      style={{
+                        width:'100%', minHeight:'80px', padding:'10px 12px', borderRadius:'10px',
+                        border:'1.5px solid #6366f1', fontSize:'0.85rem', outline:'none',
+                        background:'#fafafe', fontFamily:'inherit', resize:'vertical',
+                      }}
+                      onFocus={e => { e.currentTarget.style.borderColor = '#6366f1' }}
+                    />
+                    <div style={{display:'flex', gap:'8px', marginTop:'10px', justifyContent:'flex-end'}}>
+                      <button onClick={handleEditCancel} style={{
+                        padding:'6px 16px', borderRadius:'100px', border:'none',
+                        background:'#f1f5f9', color:'#64748b', fontSize:'0.78rem',
+                        fontWeight:800, cursor:'pointer',
+                      }}>İptal</button>
+                      <button onClick={() => handleEditSave(ev.id)} disabled={editSaving || !editNote.trim()} style={{
+                        padding:'6px 16px', borderRadius:'100px', border:'none',
+                        background:'#6366f1', color:'#fff', fontSize:'0.78rem',
+                        fontWeight:800, cursor: editSaving ? 'wait' : 'pointer',
+                        boxShadow:'0 4px 12px rgba(99,102,241,0.3)',
+                      }}>{editSaving ? '⏳ Kaydediliyor...' : '💾 Kaydet'}</button>
+                    </div>
+                  </div>
+                ) : (
+                  <p style={{margin:0, fontSize:'0.85rem', color:'#475569', lineHeight:1.6, fontStyle:'italic'}}>"{ev.note}"</p>
+                )}
               </div>
             ))}
           </div>

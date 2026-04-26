@@ -186,12 +186,55 @@ async function register(req, res) {
 }
 
 /**
+ * PUT /api/auth/me
+ * Updates the current user's profile.
+ */
+async function updateProfile(req, res) {
+  try {
+    const { name, phone, age, parent: parentName, parentPhone } = req.body;
+    const userId = req.user.userId;
+
+    // Update base user fields
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (phone !== undefined) updateData.phone = phone || null;
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+    });
+
+    // Update role-specific fields
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+
+    if (user.role === 'STUDENT') {
+      const studentData = {};
+      if (age !== undefined) studentData.age = age ? parseInt(age) : null;
+      if (parentName !== undefined) studentData.parent = parentName || null;
+      if (parentPhone !== undefined) studentData.parentPhone = parentPhone || null;
+
+      if (Object.keys(studentData).length > 0) {
+        await prisma.student.update({
+          where: { id: userId },
+          data: studentData,
+        });
+      }
+    }
+
+    // Return updated profile (reuse getMe logic)
+    return getMe(req, res);
+  } catch (err) {
+    console.error('UpdateProfile error:', err);
+    return res.status(500).json({ error: 'Profil güncellenirken hata oluştu.' });
+  }
+}
+
+/**
  * POST /api/auth/logout
  * Stateless logout — client should discard the token.
  */
 async function logout(req, res) {
-  // With JWT, logout is handled client-side by discarding the token.
   return res.json({ message: 'Oturum başarıyla sonlandırıldı.' });
 }
 
-module.exports = { login, register, getMe, logout };
+module.exports = { login, register, getMe, updateProfile, logout };

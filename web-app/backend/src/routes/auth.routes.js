@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
-const { login, register, getMe, logout } = require('../controllers/auth.controller');
+const { login, register, getMe, updateProfile, logout } = require('../controllers/auth.controller');
 
 /**
  * @swagger
@@ -93,6 +93,7 @@ router.post('/register', register);
  *         description: Yetkilendirme hatası
  */
 router.get('/me', auth, getMe);
+router.put('/me', auth, updateProfile);
 
 /**
  * @swagger
