@@ -382,7 +382,7 @@ const SharedReport = ({ report }) => {
 
           {/* Verbatim Feedback Block */}
           {feedbackText && (
-            <div style={{padding: '2rem', background: 'linear-gradient(to bottom right, #f5f3ff, #fff)', borderRadius: '24px', border: '1px solid #ddd6fe'}}>
+            <div style={{padding: '2rem', background: 'linear-gradient(to bottom right, #f5f3ff, #fff)', borderRadius: '16px', border: '1px solid #ddd6fe'}}>
               <h4 style={{margin:'0 0 1rem 0', fontSize: '1.1rem', fontWeight: 800, color: '#4c1d95'}}>Geribildirim Özeti</h4>
               <p style={{fontSize: '0.92rem', color: '#4c1d95', lineHeight: 1.8}}>
                 {parseTimestamps(feedbackText, seekTo)}
@@ -391,7 +391,7 @@ const SharedReport = ({ report }) => {
           )}
 
           {!feedbackText && (
-            <div style={{padding: '2rem', background: 'linear-gradient(to bottom right, #f5f3ff, #fff)', borderRadius: '24px', border: '1px solid #ddd6fe'}}>
+            <div style={{padding: '2rem', background: 'linear-gradient(to bottom right, #f5f3ff, #fff)', borderRadius: '16px', border: '1px solid #ddd6fe'}}>
               <h4 style={{margin:'0 0 1rem 0', fontSize: '1.1rem', fontWeight: 800, color: '#4c1d95'}}>Geribildirim Özeti</h4>
               <p style={{fontSize: '0.92rem', color: '#4c1d95', lineHeight: 1.8}}>
                 Eğitmen ders içeriğine hakimiyeti ve öğrencilerle kurduğu dinamik iletişimle standardın üzerinde bir performans sergilemiştir.

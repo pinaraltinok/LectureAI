@@ -63,7 +63,7 @@ const StudentSurvey = () => {
           <div style={{ background: 'linear-gradient(135deg, #ef4444, #f43f5e)', color: '#fff', padding: '4px 12px', borderRadius: '100px', fontSize: '9px', fontWeight: 800 }}>ANONİM MOD AKTİF</div>
         </div>
 
-        <div className="report-card-internal" style={{ padding: '0', overflow: 'hidden', borderRadius: '24px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.08)' }}>
+        <div className="report-card-internal" style={{ padding: '0', overflow: 'hidden', borderRadius: '16px', boxShadow: '0 12px 32px -8px rgba(0, 0, 0, 0.08)' }}>
           {/* Header */}
           <div style={{ background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)', padding: '2.5rem 2rem', color: 'white', position: 'relative' }}>
             <h2 style={{ fontSize: '1.8rem', fontWeight: 800, letterSpacing: '-0.03em', marginBottom: '0.2rem' }}>{courseName || 'Ders Anketi'}</h2>

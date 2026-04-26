@@ -58,7 +58,7 @@ const StudentDashboard = () => {
   return (
     <div style={{display:'flex', flexDirection:'column', gap:'2rem', animation: 'fadeIn 0.5s ease'}}>
       {groups.map((group, gIdx) => (
-        <div key={group.groupId} className="report-card-internal" style={{padding: '2rem', borderRadius: '20px'}}>
+        <div key={group.groupId} className="report-card-internal" style={{padding: '1.5rem', borderRadius: '16px'}}>
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem'}}>
             <div style={{display:'flex', gap:'1rem', alignItems:'center'}}>
               <div style={{

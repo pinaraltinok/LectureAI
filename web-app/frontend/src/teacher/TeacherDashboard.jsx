@@ -64,7 +64,7 @@ const TeacherDashboard = () => {
     <div className="teacher-dashboard" style={{animation: 'fadeIn 0.5s ease'}}>
       <div className="stats-grid" style={{gridTemplateColumns:'repeat(4, 1fr)', gap:'1.5rem', marginBottom:'2.5rem'}}>
         {teacherStats.map((stat, idx) => (
-          <div key={idx} className="stat-card" style={{ minHeight:'120px', padding:'1.5rem', alignItems:'flex-start', justifyContent:'space-between', borderRadius: '24px', position: 'relative', overflow: 'hidden' }}>
+          <div key={idx} className="stat-card" style={{ minHeight:'120px', padding:'1.5rem', alignItems:'flex-start', justifyContent:'space-between', borderRadius: '16px', position: 'relative', overflow: 'hidden' }}>
             <div style={{width:'42px', height:'42px', background:`${stat.color}11`, borderRadius:'12px', display:'grid', placeItems:'center', fontSize:'1.2rem'}}>{stat.icon}</div>
             <div>
               <span className="stat-label" style={{fontSize: '0.75rem', fontWeight: 800, textAlign: 'left', marginBottom: '4px', color: '#64748b'}}>{stat.label}</span>

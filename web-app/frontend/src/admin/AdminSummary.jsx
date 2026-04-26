@@ -23,7 +23,7 @@ const AdminSummary = () => {
     { month: 'Ara', skor: 68 },
     { month: 'Oca', skor: 85 },
     { month: 'Şub', skor: 92 },
-    { month: 'Mar', skor: stats?.institutionScore ? Math.round(stats.institutionScore * 20) : 94 },
+    { month: 'Mar', skor: stats?.institutionScore ? Math.min(Math.round(stats.institutionScore), 100) : 94 },
   ]
 
   if (loading) {
@@ -83,7 +83,7 @@ const AdminSummary = () => {
       <div style={{display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem'}}>
         
         {/* 2. Institutional Performance Graph (Recharts AreaChart) */}
-        <div className="report-card-internal" style={{padding: '2.5rem', background: '#fff', border: '1px solid #f1f5f9', minHeight: '400px'}}>
+        <div className="report-card-internal" style={{padding: '2rem', minHeight: '400px'}}>
            <div style={{display:'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem'}}>
               <div>
                 <h3 style={{margin: 0, fontSize: '1.25rem', fontWeight: 900, color: '#1e293b'}}>Eğitmen Performans Trendi</h3>
@@ -136,7 +136,7 @@ const AdminSummary = () => {
         </div>
 
         {/* 3. Quality Distribution Side Panel */}
-        <div className="report-card-internal" style={{padding: '2.5rem', background: '#fff', border: '1px solid #f1f5f9'}}>
+        <div className="report-card-internal" style={{padding: '2rem'}}>
             <h3 style={{fontSize: '1.1rem', fontWeight: 900, color: '#1e293b', marginBottom: '2rem'}}>Kalite Dağılımı</h3>
             <div style={{display:'flex', flexDirection: 'column', gap: '1.5rem'}}>
                {[
@@ -157,7 +157,7 @@ const AdminSummary = () => {
             </div>
 
             {(stats?.pendingAnalysis || 0) > 0 && (
-              <div style={{marginTop: '3rem', padding: '1.5rem', background: '#fef2f2', borderRadius: '20px', border: '1px solid #fee2e2'}}>
+              <div style={{marginTop: '2rem', padding: '1.25rem', background: '#fef2f2', borderRadius: '12px', border: '1px solid #fee2e2'}}>
                  <h4 style={{margin: '0 0 10px 0', fontSize: '12px', fontWeight: 900, color: '#b91c1c'}}>AKSİYON GEREKLİ</h4>
                  <p style={{margin: 0, fontSize: '0.85rem', color: '#991b1b', lineHeight: 1.5}}>
                    {stats.pendingAnalysis} analiz işlemi beklemede. Yönetim panelinden kontrol ediniz.

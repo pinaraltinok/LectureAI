@@ -49,8 +49,8 @@ const ProfilePage = () => {
     <div style={{ maxWidth: '700px', margin: '0 auto', animation: 'fadeIn 0.5s ease' }}>
       {/* Profile Header Card */}
       <div className="report-card-internal" style={{
-        padding: 0, overflow: 'hidden', borderRadius: '28px',
-        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.08)',
+        padding: 0, overflow: 'hidden', borderRadius: '16px',
+        boxShadow: '0 12px 32px -8px rgba(0,0,0,0.08)',
       }}>
         {/* Banner */}
         <div style={{
@@ -73,7 +73,7 @@ const ProfilePage = () => {
         {/* Avatar overlapping banner */}
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '-48px', position: 'relative', zIndex: 5 }}>
           <div style={{
-            width: '96px', height: '96px', borderRadius: '28px',
+            width: '96px', height: '96px', borderRadius: '20px',
             background: `linear-gradient(135deg, ${color}, ${color}cc)`,
             border: '4px solid #fff', display: 'grid', placeItems: 'center',
             color: '#fff', fontSize: '2rem', fontWeight: 900,

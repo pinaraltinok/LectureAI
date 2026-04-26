@@ -137,7 +137,7 @@ const TeacherPool = () => {
         <div style={{
           display: 'flex', alignItems: 'center', gap: '1.5rem',
           padding: '1.5rem 2rem', background: '#fff', border: '1px solid #e2e8f0',
-          borderRadius: '24px', marginBottom: '2.5rem',
+          borderRadius: '16px', marginBottom: '2rem',
           boxShadow: '0 10px 25px -5px rgba(0,0,0,0.04)'
         }}>
           <div style={{

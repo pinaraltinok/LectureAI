@@ -282,7 +282,7 @@ const AnalysisWorkflow = ({ onStepChange }) => {
               type="file" ref={fileInputRef} accept="video/mp4" style={{display: 'none'}} 
               onChange={(e) => { if (e.target.files[0]) setSelectedFile(e.target.files[0]) }}
             />
-            <div style={{width: '72px', height: '72px', background: '#fff', borderRadius: '24px', display: 'grid', placeItems: 'center', fontSize: '2rem', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.05)'}}>
+            <div style={{width: '72px', height: '72px', background: '#fff', borderRadius: '16px', display: 'grid', placeItems: 'center', fontSize: '2rem', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.05)'}}>
               {selectedFile ? '✓' : '☁'}
             </div>
             <div>
@@ -461,7 +461,7 @@ const AnalysisWorkflow = ({ onStepChange }) => {
 
   return (
     <div className="workflow-container" style={{animation: 'fadeIn 0.5s ease'}}>
-      <div className="alert-banner" style={{background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: '24px', padding: '1.5rem', marginBottom: '3rem', display: 'flex', gap: '1.25rem', alignItems: 'center'}}>
+      <div className="alert-banner" style={{background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: '16px', padding: '1.5rem', marginBottom: '2rem', display: 'flex', gap: '1.25rem', alignItems: 'center'}}>
         <div style={{width: '42px', height: '42px', background: draftData?.status === 'PROCESSING' ? '#f59e0b' : '#6366f1', color: '#fff', borderRadius: '50%', display: 'grid', placeItems: 'center', fontWeight: 900}}>
           {draftData?.status === 'PROCESSING' ? '⏳' : '!'}
         </div>

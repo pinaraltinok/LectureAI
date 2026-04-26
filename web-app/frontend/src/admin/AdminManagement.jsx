@@ -176,7 +176,7 @@ const AdminManagement = () => {
       {/* TAB 1: Add User */}
       {activeTab === 'add-user' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-          <div className="report-card-internal" style={{ padding: '2.5rem', borderRadius: '24px' }}>
+          <div className="report-card-internal" style={{ padding: '2rem', borderRadius: '16px' }}>
             <h3 style={{ margin: '0 0 2rem', fontSize: '1.1rem', fontWeight: 900, color: '#0f172a' }}>Yeni Kullanıcı Oluştur</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
               <InputField label="AD SOYAD" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="Adı Soyadı" />
