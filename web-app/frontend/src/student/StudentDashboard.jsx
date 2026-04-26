@@ -141,28 +141,22 @@ const StudentDashboard = () => {
                     {group.lessons.length}
                   </span>
                 </div>
-                <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(160px, 1fr))', gap:'10px'}}>
+                <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))', gap:'10px'}}>
                   {group.lessons.map(lesson => (
                     <div
                       key={lesson.lessonId}
-                      onClick={() => !lesson.hasSurvey && goToSurvey(lesson, group)}
                       style={{
                         padding:'1rem 1.1rem', borderRadius:'16px',
-                        cursor: lesson.hasSurvey ? 'default' : 'pointer',
                         background: lesson.hasSurvey ? '#f0fdf4' : '#f8fafc',
                         border: `2px solid ${lesson.hasSurvey ? '#bbf7d0' : '#f1f5f9'}`,
                         transition:'all 0.25s ease',
                         position:'relative', overflow:'hidden',
                       }}
                       onMouseEnter={e => {
-                        if (!lesson.hasSurvey) {
-                          e.currentTarget.style.borderColor = theme.bg
-                          e.currentTarget.style.transform = 'translateY(-2px)'
-                          e.currentTarget.style.boxShadow = `0 8px 20px ${theme.bg}20`
-                        }
+                        e.currentTarget.style.transform = 'translateY(-2px)'
+                        e.currentTarget.style.boxShadow = `0 8px 20px ${theme.bg}20`
                       }}
                       onMouseLeave={e => {
-                        e.currentTarget.style.borderColor = lesson.hasSurvey ? '#bbf7d0' : '#f1f5f9'
                         e.currentTarget.style.transform = 'translateY(0)'
                         e.currentTarget.style.boxShadow = 'none'
                       }}
@@ -176,9 +170,35 @@ const StudentDashboard = () => {
                           {lesson.hasSurvey ? '✓ TAMAM' : 'ANKET'}
                         </span>
                       </div>
-                      <span style={{fontSize:'0.72rem', color:'#94a3b8', fontWeight:600}}>
+                      <span style={{fontSize:'0.72rem', color:'#94a3b8', fontWeight:600, display:'block', marginBottom:'10px'}}>
                         {new Date(lesson.dateTime).toLocaleDateString('tr-TR', { day:'numeric', month:'short', year:'numeric' })}
                       </span>
+                      <div style={{display:'flex', gap:'6px'}}>
+                        <button
+                          onClick={() => navigate(`/student/ders-kaydi?id=${lesson.lessonId}`)}
+                          style={{
+                            flex:1, padding:'6px 0', borderRadius:'10px', border:'none',
+                            background:'linear-gradient(135deg, #8b5cf6, #6366f1)', color:'#fff',
+                            fontSize:'0.68rem', fontWeight:800, cursor:'pointer',
+                            transition:'all 0.2s',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+                          onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                        >🎬 Kayıt</button>
+                        {!lesson.hasSurvey && (
+                          <button
+                            onClick={() => goToSurvey(lesson, group)}
+                            style={{
+                              flex:1, padding:'6px 0', borderRadius:'10px', border:'none',
+                              background: theme.bg, color:'#fff',
+                              fontSize:'0.68rem', fontWeight:800, cursor:'pointer',
+                              transition:'all 0.2s',
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+                            onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                          >📋 Anket</button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

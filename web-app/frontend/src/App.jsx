@@ -20,6 +20,7 @@ import SharedReport from './components/SharedReport.jsx'
 import StudentDashboard from './student/StudentDashboard.jsx'
 import StudentSurvey from './student/StudentSurvey.jsx'
 import StudentNotes from './student/StudentNotes.jsx'
+import StudentLessonPlayer from './student/StudentLessonPlayer.jsx'
 import ProfilePage from './components/ProfilePage.jsx'
 
 function AppContent() {
@@ -187,6 +188,7 @@ function AppContent() {
             <Route path="/student/*" element={
               <Routes>
                 <Route path="derslerim" element={<div><h1>Derslerim</h1><p>Kayıtlı olduğunuz dersler</p></div>} />
+                <Route path="ders-kaydi" element={<div><h1>Ders Kaydı</h1><p>Ders kaydını izleyin ve not alın</p></div>} />
                 <Route path="anket" element={<div><h1>Ders Anketi</h1><p>Anonim ders değerlendirmesi</p></div>} />
                 <Route path="notlar" element={<div><h1>Hocamın Notları</h1><p>Eğitmenlerinizden gelen geri bildirimler</p></div>} />
               </Routes>
@@ -220,6 +222,7 @@ function AppContent() {
           <Route path="/teacher/anketler" element={<TeacherSurveys />} />
 
           <Route path="/student/derslerim" element={<StudentDashboard />} />
+          <Route path="/student/ders-kaydi" element={<StudentLessonPlayer />} />
           <Route path="/student/anket" element={<StudentSurvey />} />
           <Route path="/student/notlar" element={<StudentNotes />} />
 

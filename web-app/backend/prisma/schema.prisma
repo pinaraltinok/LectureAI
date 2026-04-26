@@ -69,6 +69,7 @@ model Student {
   evaluations    StudentEvaluation[] @relation("StudentEvals")
   surveys        Survey[]
   reportStudents ReportStudent[]
+  studentNotes   StudentNote[]
 
   @@map("students")
 }
@@ -162,6 +163,7 @@ model Lesson {
 
   reports Report[]
   surveys Survey[]
+  studentNotes StudentNote[]
 
   @@map("lessons")
 }
@@ -245,4 +247,21 @@ model Survey {
 
   @@unique([studentId, lessonId])
   @@map("surveys")
+}
+
+// ─── Student_Note (Timestamped notes on lesson videos) ──────
+
+model StudentNote {
+  id        String   @id @default(uuid())
+  studentId String
+  lessonId  String
+  timestamp Int      // Seconds into the video
+  note      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lesson  Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@map("student_notes")
 }
