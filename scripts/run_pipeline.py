@@ -222,9 +222,35 @@ async def main() -> None:
         assemblyai_api_key=os.environ["ASSEMBLYAI_API_KEY"],
         buckets=buckets,
     )
+    raw_order = (os.environ.get("ORCHESTRATOR_PROVIDER_ORDER") or "").strip()
+    if raw_order:
+        provider_order = tuple(
+            p.strip().lower() for p in raw_order.split(",") if p.strip()
+        )
+    elif (os.environ.get("GEMINI_API_KEY") or "").strip():
+        provider_order = ("aistudio", "groq")
+    else:
+        provider_order = ("gemini", "groq")
+    degraded = (os.environ.get("ORCHESTRATOR_DEGRADED_FALLBACK") or "").strip().lower()
+    spacing_raw = (os.environ.get("ORCHESTRATOR_LLM_SPACING_SEC") or "").strip()
+    try:
+        llm_spacing_sec = float(spacing_raw) if spacing_raw else 0.0
+    except ValueError:
+        llm_spacing_sec = 0.0
     orchestrator = ReportOrchestrator(
-        gemini_api_key=os.environ["GEMINI_API_KEY"],
+        gemini_api_key=os.environ.get("GEMINI_API_KEY"),
+        groq_api_key=os.environ.get("GROQ_API_KEY"),
+        groq_extra_api_key=os.environ.get("GROQ_EKSTRA"),
         buckets=buckets,
+        google_cloud_project=os.environ.get("GOOGLE_CLOUD_PROJECT"),
+        gemini_provider=os.environ.get("GEMINI_PROVIDER", "vertex"),
+        vertex_location=os.environ.get("VERTEX_LOCATION", "us-central1"),
+        gemini_model=os.environ.get("GEMINI_MODEL", "gemini-1.5-flash"),
+        groq_model=os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile"),
+        provider_order=provider_order if provider_order else ("gemini", "groq"),
+        chunk_minutes=int(os.environ.get("CHUNK_MINUTES", "60")),
+        degraded_fallback=degraded in {"1", "true", "yes", "on"},
+        llm_spacing_sec=llm_spacing_sec,
     )
     tasks = [
         _process_video(

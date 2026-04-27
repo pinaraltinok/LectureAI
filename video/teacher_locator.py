@@ -1,11 +1,70 @@
+import logging
+import time
+import urllib.error
+
 import cv2
 import easyocr
 import mediapipe as mp
 import numpy as np
 import unicodedata
+import torch
 from difflib import SequenceMatcher
 
 from video.frame_extractor import crop_roi
+
+logger = logging.getLogger(__name__)
+
+# Must match ``modal/cv_app.py`` image pre-download (``easyocr.Reader(['tr','en'], ...)``)
+# so runtime does not hit the network for a different language pack.
+_DEFAULT_OCR_LANGS = ("tr", "en")
+_EASYOCR_READER_MAX_ATTEMPTS = 6
+
+
+def _retryable_easyocr_init_error(exc: BaseException) -> bool:
+    if isinstance(exc, (urllib.error.URLError, ConnectionResetError, TimeoutError)):
+        return True
+    if isinstance(exc, urllib.error.HTTPError) and exc.code in (429, 500, 502, 503, 504):
+        return True
+    msg = str(exc).lower()
+    if "connection reset" in msg or "timed out" in msg or "temporarily unavailable" in msg:
+        return True
+    return False
+
+
+def _easyocr_reader_with_retry(languages: tuple[str, ...], *, gpu: bool) -> easyocr.Reader:
+    """Prefer local models (Modal image pre-download); download only if missing."""
+    try:
+        return easyocr.Reader(
+            list(languages),
+            gpu=gpu,
+            download_enabled=False,
+        )
+    except FileNotFoundError:
+        pass
+
+    last: BaseException | None = None
+    for attempt in range(1, _EASYOCR_READER_MAX_ATTEMPTS + 1):
+        try:
+            return easyocr.Reader(
+                list(languages),
+                gpu=gpu,
+                download_enabled=True,
+            )
+        except Exception as exc:
+            last = exc
+            if not _retryable_easyocr_init_error(exc) or attempt >= _EASYOCR_READER_MAX_ATTEMPTS:
+                raise
+            delay = min(45.0, 2.0**attempt)
+            logger.warning(
+                "EasyOCR Reader init failed (attempt %d/%d): %s; retry in %.1fs",
+                attempt,
+                _EASYOCR_READER_MAX_ATTEMPTS,
+                exc,
+                delay,
+            )
+            time.sleep(delay)
+    assert last is not None
+    raise last
 
 
 def normalize_text(text: str) -> str:
@@ -28,8 +87,6 @@ class TeacherLocator:
         min_component_area: int = 20000,
         min_detection_confidence: float = 0.5,
     ):
-        import torch
-
         self.teacher_name = normalize_text(teacher_name)
         self.teacher_tokens = set(self.teacher_name.split())
         self.match_threshold = match_threshold
@@ -37,9 +94,12 @@ class TeacherLocator:
         self.min_component_area = min_component_area
 
         if languages is None:
-            languages = ["en"]
+            languages = list(_DEFAULT_OCR_LANGS)
 
-        self.reader = easyocr.Reader(languages, gpu=torch.cuda.is_available())
+        self.reader = _easyocr_reader_with_retry(
+            tuple(languages),
+            gpu=torch.cuda.is_available(),
+        )
         self.face_detector = mp.solutions.face_detection.FaceDetection(
             model_selection=0,
             min_detection_confidence=min_detection_confidence

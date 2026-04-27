@@ -1,0 +1,11 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - docker/Dockerfile.orchestrator
+      - -t
+      - europe-west4-docker.pkg.dev/senior-design-488908/lectureai-repo/orchestrator-worker:latest
+      - .
+images:
+  - europe-west4-docker.pkg.dev/senior-design-488908/lectureai-repo/orchestrator-worker:latest

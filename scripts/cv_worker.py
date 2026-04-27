@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import base64
-import json
+import asyncio
 import logging
 import os
-import re
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
@@ -17,136 +15,207 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from src.common.config import CvWorkerSettings
+from src.common.pipeline_failure import classify_failure, failed_event_detail
+from src.common.pipeline_logging import (
+    configure_structured_pipeline_logging,
+    elapsed_ms_since,
+    log_pipeline_event,
+    monotonic_ms,
+)
+from src.common.worker_utils import (
+    decode_pubsub_payload,
+    get_storage_client,
+    notify_backend,
+)
+from src.cv_video_id import normalize_cv_video_id
 from src.env_bootstrap import load_dotenv_files
 
 load_dotenv_files(ROOT)
 # Cloud Run uses ADC via service account; ignore local key-file hints.
 os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+settings = CvWorkerSettings()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+configure_structured_pipeline_logging("cv-worker")
 logger = logging.getLogger("cv_worker")
 
-PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "senior-design-488908")
-REGION = os.environ.get("GCP_REGION", "europe-west4")
-ZONE = os.environ.get("GCP_ZONE", f"{REGION}-a")
-ARTIFACT_REGION = os.environ.get("ARTIFACT_REGION", "europe-west4")
-TEMPLATE_NAME = "cv-worker-template"
-IMAGE_BASE = f"{ARTIFACT_REGION}-docker.pkg.dev/{PROJECT_ID}/lectureai-repo"
-CV_IMAGE = f"{IMAGE_BASE}/cv-worker:latest"
 app = FastAPI(title="cv-worker")
 
 
-def _sanitize_video_id(video_id: str) -> str:
-    normalized = re.sub(r"[^a-z0-9-]+", "-", video_id.lower())
-    normalized = normalized.strip("-")
-    return normalized[:32] or "video"
+async def _forward_to_modal(video_id: str) -> None:
+    url = settings.modal_cv_webhook_url.strip()
+    if not url:
+        raise HTTPException(
+            status_code=503,
+            detail="MODAL_CV_WEBHOOK_URL is not configured",
+        )
+    teacher_name = settings.cv_teacher_name
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    bearer = settings.modal_cv_webhook_bearer.strip()
+    if bearer:
+        headers["Authorization"] = f"Bearer {bearer}"
+    payload: dict[str, Any] = {"video_id": video_id, "teacher_name": teacher_name}
+    timeout = httpx.Timeout(120.0, connect=30.0)
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        response = await client.post(url, json=payload, headers=headers)
+        if response.status_code >= 400:
+            body = response.text[:2000]
+            logger.error(
+                "modal webhook failed status=%s body=%s",
+                response.status_code,
+                body,
+            )
+            raise HTTPException(
+                status_code=502,
+                detail=f"modal webhook returned {response.status_code}",
+            )
 
 
-def _startup_script(video_id: str) -> str:
-    teacher_name = os.environ.get("CV_TEACHER_NAME", "Teacher")
-    return f"""#!/bin/bash
-set -euxo pipefail
-apt-get update
-apt-get install -y docker.io
-systemctl enable docker
-systemctl start docker
-gcloud auth configure-docker {ARTIFACT_REGION}-docker.pkg.dev --quiet
-docker pull {CV_IMAGE}
-docker run --rm \\
-  -e GOOGLE_CLOUD_PROJECT={PROJECT_ID} \\
-  -e CV_TEACHER_NAME="{teacher_name}" \\
-  {CV_IMAGE} python3.11 video/cv_engine.py --video-id "{video_id}" --teacher-name "{teacher_name}"
-MESSAGE=$(printf '{{"video_id":"%s","status":"completed","vm_name":"%s"}}' "{video_id}" "$(hostname)")
-gcloud pubsub topics publish lecture-cv-completed --message "$MESSAGE"
-shutdown -h now
-"""
-
-
-def _wait_for_operation(operation: Any, timeout: int = 1800) -> None:
-    result = operation.result(timeout=timeout)
-    del result
-    if operation.error_code:
-        raise RuntimeError(f"operation failed: code={operation.error_code} message={operation.error_message}")
-
-
-def _launch_cv_vm(video_id: str) -> str:
-    from google.cloud import compute_v1
-
-    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-    name = f"cv-{_sanitize_video_id(video_id)}-{timestamp}"[:63]
-    instance_client = compute_v1.InstancesClient()
-    source_template = f"projects/{PROJECT_ID}/regions/{REGION}/instanceTemplates/{TEMPLATE_NAME}"
-    startup = _startup_script(video_id)
-    req = compute_v1.InsertInstanceRequest(
-        project=PROJECT_ID,
-        zone=ZONE,
-        source_instance_template=source_template,
-        instance_resource=compute_v1.Instance(
-            name=name,
-            metadata=compute_v1.Metadata(items=[compute_v1.Items(key="startup-script", value=startup)]),
-            labels={"pipeline": "lectureai", "videoid": _sanitize_video_id(video_id)},
-        ),
-    )
-    op = instance_client.insert(request=req)
-    _wait_for_operation(op, timeout=900)
-    return name
-
-
-def _decode_payload(encoded_data: str) -> dict:
-    def _fallback_kv_payload(raw: str) -> dict:
-        stripped = raw.strip()
-        if not (stripped.startswith("{") and stripped.endswith("}")):
-            raise ValueError("payload is not object-like")
-        inner = stripped[1:-1].strip()
-        if not inner:
-            return {}
-        out: dict[str, str] = {}
-        for chunk in inner.split(","):
-            if ":" not in chunk:
-                raise ValueError("payload item missing ':' separator")
-            key, value = chunk.split(":", 1)
-            out[key.strip().strip("\"'")] = value.strip().strip("\"'")
-        return out
-
-    try:
-        decoded = base64.b64decode(encoded_data).decode("utf-8")
-        try:
-            return json.loads(decoded)
-        except json.JSONDecodeError:
-            # Accept legacy payloads like: {video_id:TUR40...}
-            return _fallback_kv_payload(decoded)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"invalid pubsub message payload: {exc}") from exc
+def _cv_artifact_exists(video_id: str) -> bool:
+    bucket_name = settings.gcs_bucket_name
+    storage_client = get_storage_client()
+    bucket = storage_client.bucket(bucket_name)
+    paths = [
+        f"results/{video_id}/lecture_report.json",
+        f"results/{video_id}.json",
+    ]
+    return any(bucket.blob(path).exists(storage_client) for path in paths)
 
 
 @app.post("/run")
 async def run(request: Request) -> dict:
-    body = await request.json()
+    try:
+        body = await request.json()
+    except Exception as exc:
+        raw = await request.body()
+        logger.error("JSON parse error: %s", exc)
+        logger.error("Raw body: %s", raw[:200])
+        return JSONResponse({"error": "invalid json"}, status_code=400)
     logger.info("RAW BODY: %s", body)
 
     try:
-        message = body.get("message", {}) if isinstance(body, dict) else {}
-        data_b64 = message.get("data", "")
-        logger.info("DATA B64: %s", data_b64)
-        payload = _decode_payload(data_b64)
-        logger.info("DECODED DATA: %s", payload)
-        video_id = payload.get("video_id")
-        logger.info("VIDEO ID: %s", video_id)
-        if not video_id:
+        raw_id = decode_pubsub_payload(body)
+        logger.info("VIDEO ID (raw): %s", raw_id)
+        if not raw_id:
             return JSONResponse({"error": "no video_id"}, status_code=400)
+        video_id = normalize_cv_video_id(str(raw_id))
+        if not video_id:
+            return JSONResponse({"error": "video_id empty after normalization"}, status_code=400)
+        logger.info("VIDEO ID (normalized): %s", video_id)
     except Exception as exc:
         logger.error("PARSE ERROR: %s", exc)
         return JSONResponse({"error": str(exc)}, status_code=400)
 
-    if os.environ.get("WORKER_DRY_RUN", "").lower() == "true":
+    if settings.worker_dry_run:
         logger.info("cv dry-run video_id=%s", video_id)
+        log_pipeline_event(
+            video_id=video_id,
+            stage="cv",
+            event="run_complete",
+            status="dry_run",
+        )
         return {"ok": True, "video_id": video_id, "dry_run": True}
 
+    t0 = monotonic_ms()
     try:
-        vm_name = _launch_cv_vm(video_id)
-        logger.info("cv vm launched video_id=%s vm=%s", video_id, vm_name)
-        return {"ok": True, "video_id": video_id, "vm_name": vm_name}
-    except HTTPException:
+        log_pipeline_event(
+            video_id=video_id,
+            stage="cv",
+            event="run_start",
+            status="started",
+        )
+        notify_backend("cv", "started", video_id, "cv worker accepted request")
+        exists = await asyncio.to_thread(_cv_artifact_exists, video_id)
+        if exists:
+            notify_backend("cv", "skipped_existing", video_id, "cv artifact already exists in GCS")
+            notify_backend("cv", "completed", video_id, "no reprocess needed")
+            log_pipeline_event(
+                video_id=video_id,
+                stage="cv",
+                event="run_complete",
+                status="skipped",
+                duration_ms=elapsed_ms_since(t0),
+                outcome="artifact_exists",
+            )
+            return {"ok": True, "video_id": video_id, "backend": "modal_http", "skipped": True}
+        notify_backend("cv", "triggering_modal", video_id, "sending request to Modal CV pipeline")
+        await _forward_to_modal(video_id)
+        logger.info("cv modal invoke ok video_id=%s", video_id)
+        notify_backend("cv", "triggered", video_id, "modal accepted request; waiting for lecture-cv-completed signal")
+        log_pipeline_event(
+            video_id=video_id,
+            stage="cv",
+            event="run_complete",
+            status="ok",
+            duration_ms=elapsed_ms_since(t0),
+            outcome="modal_triggered",
+        )
+        return {"ok": True, "video_id": video_id, "backend": "modal_http", "triggered": True}
+    except HTTPException as exc:
+        retryable, err_code, _msg = classify_failure(
+            exc, pipeline_stage="cv", _video_id=video_id
+        )
+        log_pipeline_event(
+            video_id=video_id,
+            stage="cv",
+            event="run_failed",
+            status="failed",
+            duration_ms=elapsed_ms_since(t0),
+            error_code=err_code,
+            retryable=retryable,
+            http_status=getattr(exc, "status_code", None),
+        )
         raise
+    except httpx.HTTPError as exc:
+        logger.exception("cv modal HTTP error video_id=%s: %s", video_id, exc)
+        retryable, err_code, _msg = classify_failure(
+            exc, pipeline_stage="cv", _video_id=video_id
+        )
+        log_pipeline_event(
+            video_id=video_id,
+            stage="cv",
+            event="run_failed",
+            status="failed",
+            duration_ms=elapsed_ms_since(t0),
+            error_code=err_code,
+            retryable=retryable,
+        )
+        notify_backend(
+            "cv",
+            "failed",
+            video_id,
+            failed_event_detail(video_id=video_id, pipeline_stage="cv", exc=exc),
+        )
+        raise HTTPException(status_code=502, detail="modal webhook unreachable") from exc
     except Exception as exc:
         logger.exception("cv worker failed for video_id=%s: %s", video_id, exc)
+        retryable, err_code, _msg = classify_failure(
+            exc, pipeline_stage="cv", _video_id=video_id
+        )
+        log_pipeline_event(
+            video_id=video_id,
+            stage="cv",
+            event="run_failed",
+            status="failed",
+            duration_ms=elapsed_ms_since(t0),
+            error_code=err_code,
+            retryable=retryable,
+        )
+        notify_backend(
+            "cv",
+            "failed",
+            video_id,
+            failed_event_detail(video_id=video_id, pipeline_stage="cv", exc=exc),
+        )
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+def main() -> None:
+    import uvicorn
+
+    port = settings.port
+    uvicorn.run(app, host="0.0.0.0", port=port)
+
+
+if __name__ == "__main__":
+    main()

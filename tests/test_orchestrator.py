@@ -11,11 +11,27 @@ External I/O (GCS + Gemini) is mocked. We verify:
 from __future__ import annotations
 
 import json
+import sys
+import types
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+# ``vertexai`` is optional in some dev venvs; stub before importing the orchestrator.
+if "vertexai" not in sys.modules:
+    _vertexai_mod = types.ModuleType("vertexai")
+    _vertexai_mod.init = MagicMock()
+    _gen_mod = types.ModuleType("vertexai.generative_models")
+
+    def _fake_generative_model(*_a: object, **_kw: object) -> MagicMock:
+        return MagicMock()
+
+    _gen_mod.GenerativeModel = _fake_generative_model
+    _vertexai_mod.generative_models = _gen_mod
+    sys.modules["vertexai"] = _vertexai_mod
+    sys.modules["vertexai.generative_models"] = _gen_mod
 
 with patch("google.cloud.storage.Client"), patch(
     "google.genai.Client"
@@ -232,8 +248,14 @@ def _make_orchestrator() -> ReportOrchestrator:
         mock_client_cls.return_value = MagicMock()
         orch = ReportOrchestrator(
             gemini_api_key="fake-gemini",
+            groq_api_key=None,
+            groq_extra_api_key=None,
             buckets=_bucket_config(),
-            chunk_minutes=30,
+            google_cloud_project=None,
+            gemini_provider="aistudio",
+            provider_order=("aistudio",),
+            # Two chunks from ~120s of audio so merge LLM runs (503 retry test).
+            chunk_minutes=1,
         )
     return orch
 
@@ -275,8 +297,9 @@ async def test_generate_report_uses_processed_bucket_paths():
     blobs[cv_blob_key].download_as_text = MagicMock(return_value=_cv_json())
 
     # Gemini responses: 1 chunk then merge
-    orch._genai_client = MagicMock()
-    orch._genai_client.models.generate_content.side_effect = [
+    orch._aistudio_client = MagicMock()
+    orch._aistudio_client.models.generate_content.side_effect = [
+        SimpleNamespace(text=_chunk_response_json()),
         SimpleNamespace(text=_chunk_response_json()),
         SimpleNamespace(text=_merge_response_json()),
     ]
@@ -314,8 +337,8 @@ async def test_generate_report_uses_processed_bucket_paths():
     # Only the processed bucket was touched (no videos/transcripts/audio)
     assert set(buckets.keys()) == {"lectureai_processed"}
 
-    # Exactly 1 chunk + 1 merge call
-    assert orch._genai_client.models.generate_content.call_count == 2
+    # Two chunk windows + merge
+    assert orch._aistudio_client.models.generate_content.call_count == 3
 
 
 @pytest.mark.asyncio
@@ -335,8 +358,9 @@ async def test_generate_report_falls_back_to_nested_lecture_report_path():
     blobs[nested_cv_blob].exists.return_value = True
     blobs[nested_cv_blob].download_as_text = MagicMock(return_value=_cv_json())
 
-    orch._genai_client = MagicMock()
-    orch._genai_client.models.generate_content.side_effect = [
+    orch._aistudio_client = MagicMock()
+    orch._aistudio_client.models.generate_content.side_effect = [
+        SimpleNamespace(text=_chunk_response_json()),
         SimpleNamespace(text=_chunk_response_json()),
         SimpleNamespace(text=_merge_response_json()),
     ]
@@ -360,8 +384,9 @@ async def test_merge_retries_on_503_then_succeeds():
     blobs[cv_blob_key] = MagicMock()
     blobs[cv_blob_key].download_as_text = MagicMock(return_value=_cv_json())
 
-    orch._genai_client = MagicMock()
-    orch._genai_client.models.generate_content.side_effect = [
+    orch._aistudio_client = MagicMock()
+    orch._aistudio_client.models.generate_content.side_effect = [
+        SimpleNamespace(text=_chunk_response_json()),
         SimpleNamespace(text=_chunk_response_json()),
         ServerError(
             503,
@@ -383,7 +408,7 @@ async def test_merge_retries_on_503_then_succeeds():
         report = await orch.generate_report("vid-1", _audio_result())
 
     assert report.video_id == "vid-1"
-    assert orch._genai_client.models.generate_content.call_count == 3
+    assert orch._aistudio_client.models.generate_content.call_count == 4
     mock_sleep.assert_awaited_once_with(10.0)
 
 

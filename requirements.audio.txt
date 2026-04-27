@@ -1,0 +1,14 @@
+assemblyai
+ffmpeg-python
+pydantic-settings
+aiofiles
+assemblyai
+ffmpeg-python
+google-cloud-storage
+google-cloud-pubsub
+pydantic>=2.0
+pydantic-settings
+aiofiles
+python-dotenv
+fastapi
+uvicorn

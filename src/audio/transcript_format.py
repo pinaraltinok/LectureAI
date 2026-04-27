@@ -12,11 +12,12 @@ from .schemas import TranscriptSegment
 def speaker_display(speaker: str) -> str:
     label = (speaker or "?").strip()
     if len(label) == 1 and label.isalnum():
-        return f"Speaker {label.upper()}"
+        return f"Konuşmacı {label.upper()}"
     low = label.lower()
     if low.startswith("speaker"):
-        return label
-    return f"Speaker {label}"
+        suffix = label.split(maxsplit=1)[-1] if " " in label else label
+        return f"Konuşmacı {suffix}"
+    return f"Konuşmacı {label}"
 
 
 def format_transcript_txt_line(seg: TranscriptSegment) -> str:
