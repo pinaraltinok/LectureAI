@@ -138,12 +138,24 @@ class AudioAnalysisClient:
         self._storage_client: storage.Client = storage.Client()
 
     @staticmethod
-    def _build_transcription_config() -> aai.TranscriptionConfig:
-        """Build an AssemblyAI config compatible with old/new SDKs."""
+    def _build_transcription_config(
+        *,
+        sentiment_analysis: bool = True,
+        auto_highlights: bool = True,
+    ) -> aai.TranscriptionConfig:
+        """Build an AssemblyAI config compatible with old/new SDKs.
+
+        ``speaker_labels`` enables diarization: each utterance gets a label
+        (typically **A**, **B**, …). That is *who spoke when*, not a personal
+        name. To show "Eğitmen" / a real name, map labels in the UI or from
+        your own roster; the API does not resolve identities.
+        """
         base_kwargs = {
             "speaker_labels": True,
-            "sentiment_analysis": True,
-            "auto_highlights": True,
+            "sentiment_analysis": sentiment_analysis,
+            "auto_highlights": auto_highlights,
+            # Force Turkish transcription to avoid mixed/English output.
+            "language_code": "tr",
         }
         try:
             return aai.TranscriptionConfig(
@@ -151,6 +163,13 @@ class AudioAnalysisClient:
                 speech_models=["universal-2"],
             )
         except TypeError:
+            # Older SDKs may use enum values and reject plain strings.
+            try:
+                language_code = getattr(getattr(aai, "LanguageCode", None), "tr")
+                if language_code is not None:
+                    base_kwargs["language_code"] = language_code
+            except Exception:
+                pass
             speech_model = getattr(getattr(aai, "SpeechModel", None), "best", None)
             if speech_model is not None:
                 return aai.TranscriptionConfig(
@@ -249,8 +268,57 @@ class AudioAnalysisClient:
             os.close(fd)
             try:
                 bucket = self._storage_client.bucket(self.buckets.videos)
-                blob = bucket.blob(self.buckets.video_path(video_id))
-                await asyncio.to_thread(blob.download_to_filename, mp4_path)
+                from src.cv_video_id import normalize_cv_video_id
+
+                normalized_id = normalize_cv_video_id(video_id)
+                candidate_ids = [video_id]
+                if normalized_id and normalized_id not in candidate_ids:
+                    candidate_ids.insert(0, normalized_id)
+
+                template = self.buckets.video_key
+                if "{video_id}" in template:
+                    prefix, suffix = template.split("{video_id}", 1)
+                else:
+                    # Defensive fallback; should never happen with current config.
+                    prefix, suffix = "Lesson_Records/", ".mp4"
+
+                suffixes = [suffix]
+                # Match CV downloader behavior: try no extension and both mp4 cases.
+                for sfx in ("", ".mp4", ".MP4"):
+                    if sfx not in suffixes:
+                        suffixes.append(sfx)
+
+                tried: list[str] = []
+                resolved_blob = None
+                for candidate_id in candidate_ids:
+                    # Avoid doubling extension when candidate_id already contains one.
+                    base_id = candidate_id
+                    for ext in (".mp4", ".MP4"):
+                        if base_id.endswith(ext):
+                            base_id = base_id[: -len(ext)]
+                            break
+                    for sfx in suffixes:
+                        blob_name = f"{prefix}{base_id}{sfx}"
+                        tried.append(f"gs://{self.buckets.videos}/{blob_name}")
+                        blob = bucket.blob(blob_name)
+                        exists = await asyncio.to_thread(blob.exists)
+                        if exists:
+                            resolved_blob = blob
+                            logger.info(
+                                "[%s] resolved source blob for audio: %s",
+                                video_id,
+                                blob_name,
+                            )
+                            break
+                    if resolved_blob is not None:
+                        break
+
+                if resolved_blob is None:
+                    raise FileNotFoundError(
+                        "Source video not found (tried): " + ", ".join(tried[:12])
+                    )
+
+                await asyncio.to_thread(resolved_blob.download_to_filename, mp4_path)
             except Exception as exc:
                 try:
                     os.unlink(mp4_path)
@@ -329,9 +397,31 @@ class AudioAnalysisClient:
             try:
                 config = self._build_transcription_config()
                 transcriber = aai.Transcriber(config=config)
-                transcript = await asyncio.to_thread(
-                    transcriber.submit, mp3_path
-                )
+                try:
+                    transcript = await asyncio.to_thread(
+                        transcriber.submit, mp3_path
+                    )
+                except Exception as exc:
+                    # AssemblyAI currently rejects some addons for Turkish.
+                    msg = str(exc).lower()
+                    unsupported = (
+                        "not available in this language" in msg
+                        and ("sentiment_analysis" in msg or "auto_highlights" in msg)
+                    )
+                    if not unsupported:
+                        raise
+                    logger.warning(
+                        "[%s] Turkish model rejected sentiment/highlights; retrying without them",
+                        video_id,
+                    )
+                    fallback_config = self._build_transcription_config(
+                        sentiment_analysis=False,
+                        auto_highlights=False,
+                    )
+                    fallback_transcriber = aai.Transcriber(config=fallback_config)
+                    transcript = await asyncio.to_thread(
+                        fallback_transcriber.submit, mp3_path
+                    )
                 if transcript.id is None:
                     raise RuntimeError(
                         "AssemblyAI did not return a transcript id"

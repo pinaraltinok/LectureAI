@@ -19,10 +19,10 @@ from pydantic import BaseModel, Field
 #  Enums & leaf models
 # --------------------------------------------------------------------------- #
 class Rating(str, Enum):
-    good = "Good"
-    acceptable = "Acceptable"
-    poor = "Poor"
-    na = "N/A"
+    good = "İyi"
+    acceptable = "Geliştirilmeli"
+    poor = "Yetersiz"
+    na = "Değerlendirilemedi"
 
 
 class MetricResult(BaseModel):
@@ -39,8 +39,8 @@ class MetricResult(BaseModel):
     improvement_tip: str = Field(
         ...,
         description=(
-            "Empty string if rating is Good. "
-            "Otherwise a specific, actionable suggestion."
+            'Rating "İyi" ise boş string. '
+            "Diğer durumlarda spesifik ve uygulanabilir gelişim önerisi."
         ),
     )
 
@@ -62,6 +62,8 @@ class QAReport(BaseModel):
 
     # ----- Meta -----------------------------------------------------------
     instructor_name: str = ""
+    course: str = ""
+    group: str = ""
     lesson_date: str = ""
     module: int = 0
     lesson_number: int = 0

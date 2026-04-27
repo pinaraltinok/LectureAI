@@ -3,10 +3,12 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import logging
 import sys
 from pathlib import Path
 from typing import Dict, Iterable, Optional, Tuple
 
+import reportlab
 from google.api_core import exceptions as gcp_exceptions
 from google.cloud import storage
 from reportlab.lib import colors
@@ -42,6 +44,7 @@ BAD_RED = colors.HexColor("#EF4444")
 SOFT_GRAY = colors.HexColor("#F3F4F6")
 TEXT_GRAY = colors.HexColor("#374151")
 TIP_ORANGE = colors.HexColor("#CC6600")
+logger = logging.getLogger(__name__)
 
 REPORTS_PREFIX = "reports/"
 PDFS_PREFIX = "pdfs/"
@@ -72,6 +75,7 @@ ORGANIZASYON_LABELS = {
 
 def _register_fonts() -> Tuple[str, str]:
     """Register DejaVu (bundled under assets/fonts/ or system) for Turkish Unicode text."""
+    reportlab_fonts = Path(reportlab.__file__).resolve().parent / "fonts"
     candidates: list[tuple[Path, Path]] = [
         (
             ROOT / "assets" / "fonts" / "DejaVuSans.ttf",
@@ -81,12 +85,23 @@ def _register_fonts() -> Tuple[str, str]:
             Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
             Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
         ),
+        (
+            Path("C:/Windows/Fonts/arial.ttf"),
+            Path("C:/Windows/Fonts/arialbd.ttf"),
+        ),
+        (
+            reportlab_fonts / "Vera.ttf",
+            reportlab_fonts / "VeraBd.ttf",
+        ),
     ]
     for regular_path, bold_path in candidates:
         if regular_path.is_file() and bold_path.is_file():
             pdfmetrics.registerFont(TTFont("DejaVu", str(regular_path)))
             pdfmetrics.registerFont(TTFont("DejaVu-Bold", str(bold_path)))
             return "DejaVu", "DejaVu-Bold"
+    logger.warning(
+        "DejaVu fonts not found; falling back to Helvetica. Turkish characters may render incorrectly."
+    )
     return "Helvetica", "Helvetica-Bold"
 
 
@@ -103,13 +118,25 @@ def _rating_color(value: str) -> colors.Color:
     return colors.HexColor("#9CA3AF")
 
 
+def _rating_label(value: object) -> str:
+    raw = str(getattr(value, "value", value) or "").strip().lower()
+    mapping = {
+        "good": "İyi",
+        "acceptable": "Geliştirilmeli",
+        "poor": "Yetersiz",
+        "n/a": "Değerlendirilemedi",
+        "na": "Değerlendirilemedi",
+        "iyi": "İyi",
+        "geliştirilmeli": "Geliştirilmeli",
+        "yetersiz": "Yetersiz",
+        "değerlendirilemedi": "Değerlendirilemedi",
+    }
+    return mapping.get(raw, str(getattr(value, "value", value) or "-"))
+
+
 def _safe_text(value: object) -> str:
     text = str(value or "-")
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
-
-def _extract_group(video_id: str) -> str:
-    return video_id.split("_", 1)[0] if "_" in video_id else video_id
 
 
 def _speaking_time_label(value: str) -> str:
@@ -186,36 +213,28 @@ def _styles() -> Dict[str, ParagraphStyle]:
 
 
 def _meta_rows(report: QAReport) -> list[list[str]]:
-    group = _extract_group(report.video_id)
-    course = group[:3] if len(group) >= 3 else group
     return [
-        [
-            "Eğitmen ID",
-            report.video_id,
-            "Kurs",
-            course or "-",
-        ],
         [
             "Eğitmenin adı",
             report.instructor_name or "-",
-            "Modül",
-            str(report.module or "-"),
+            "Kurs",
+            getattr(report, "course", "") or "-",
         ],
         [
-            "Ders tarihi",
-            report.lesson_date or "-",
+            "Modül",
+            str(report.module or "-"),
             "Ders",
             str(report.lesson_number or "-"),
         ],
         [
+            "Ders tarihi",
+            report.lesson_date or "-",
             "Grup",
-            group or "-",
-            "Kayıt",
-            report.video_id,
+            getattr(report, "group", "") or "-",
         ],
         [
-            "BO link",
-            "-",
+            "Video ID",
+            report.video_id,
             "Materyaller",
             "-",
         ],
@@ -231,18 +250,18 @@ def _summary_rows(report: QAReport) -> list[list[str]]:
     return [
         [
             "Değerlendirme tarihi",
-            "Genel sonuc",
+            "Genel sonuç",
             "Yapı",
             "Değerlendiren",
             "Yeterlilikler",
-            "Stop faktor",
+            "Stop faktör",
         ],
         [
             date_value,
             report.genel_sonuc or "-",
             _summary_structure(report),
             "AI QA Pipeline",
-            report.yeterlilikler.value,
+            _rating_label(report.yeterlilikler),
             str(report.stop_faktor),
         ],
     ]
@@ -280,7 +299,7 @@ def _metric_group_table(
     for key, label in label_map.items():
         metric = values.get(key)
         rating = getattr(metric, "rating", Rating.na)
-        rating_text = rating.value if hasattr(rating, "value") else str(rating)
+        rating_text = _rating_label(rating)
         rows.append(
             [
                 Paragraph(_safe_text(label), styles["small"]),
@@ -378,9 +397,6 @@ def _header(canvas, doc) -> None:
     canvas.setFillColor(colors.white)
     canvas.setFont(FONT_BOLD, 18)
     canvas.drawString(15 * mm, height - 18 * mm, "QA Raporu")
-    canvas.setFont(FONT_BOLD, 16)
-    logo_text = "kodland"
-    canvas.drawRightString(width - 15 * mm, height - 18 * mm, logo_text)
     canvas.restoreState()
 
 

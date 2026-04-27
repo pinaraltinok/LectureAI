@@ -1,0 +1,5 @@
+# Cloud Run cv-worker: Pub/Sub push → HTTP forward to Modal (no GCE, no CV stack here)
+fastapi
+uvicorn[standard]
+httpx
+python-dotenv

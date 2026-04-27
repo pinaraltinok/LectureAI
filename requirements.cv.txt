@@ -2,9 +2,13 @@ opencv-python-headless
 easyocr
 torch
 mediapipe==0.10.14
+pandas
+opencv-python-headless
+easyocr
+torch
+mediapipe==0.10.14
 google-cloud-storage
 google-cloud-pubsub
-google-cloud-compute
 pydantic>=2.0
 pandas
 python-dotenv

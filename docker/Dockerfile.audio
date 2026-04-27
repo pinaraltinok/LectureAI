@@ -1,0 +1,24 @@
+FROM python:3.11-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PIP_NO_CACHE_DIR=1
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.common.txt /app/requirements.common.txt
+COPY requirements.audio.txt /app/requirements.audio.txt
+RUN pip install --no-cache-dir --timeout=120 --retries=5 \
+    -r /app/requirements.common.txt \
+    -r /app/requirements.audio.txt
+
+COPY src /app/src
+COPY scripts /app/scripts
+COPY video /app/video
+
+CMD ["uvicorn", "scripts.audio_worker:app", "--host", "0.0.0.0", "--port", "8080"]

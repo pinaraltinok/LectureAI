@@ -1,0 +1,9 @@
+[project]
+name = "bitirmecv-stt"
+version = "0.0.0"
+description = "Audio + orchestrator pipeline (AssemblyAI, Gemini, GCS)"
+requires-python = ">=3.11,<3.14"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"

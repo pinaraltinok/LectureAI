@@ -1,4 +1,7 @@
-"""Deploy LectureAI workers to Cloud Run (reads scripts/.env; does not print secrets)."""
+"""Deploy LectureAI workers to Cloud Run (reads scripts/.env; does not print secrets).
+
+Deploy sonrası push subscription endpoint'lerini otomatik ayarlar.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +9,6 @@ import os
 import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 def _gcloud_exe() -> str:
@@ -37,11 +39,47 @@ def _parse_env(path: Path) -> dict[str, str]:
     return out
 
 
-def _write_env_file(lines: list[str]) -> str:
-    fd, path = tempfile.mkstemp(suffix=".env", text=True)
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines) + "\n")
-    return path
+def _build_env_vars_string(env_dict: dict[str, str]) -> str:
+    """Comma-separated KEY=VALUE string for --set-env-vars."""
+    return ",".join(f"{k}={v}" for k, v in env_dict.items())
+
+
+# ── Push subscription config ─────────────────────────────────────────────
+# (subscription_id, cloud_run_service_name, endpoint_path)
+PUSH_SUBSCRIPTIONS = [
+    ("audio-worker-push-sub", "audio-worker", "/run"),
+    ("orchestrator-cv-sub", "orchestrator-worker", "/run"),
+    ("orchestrator-audio-sub", "orchestrator-worker", "/run"),
+]
+
+
+def _configure_push_endpoints(gcloud: str, service_urls: dict[str, str]) -> None:
+    """Deploy sonrası push subscription endpoint'lerini ayarla."""
+    print("\nConfiguring push subscription endpoints ...", flush=True)
+
+    for sub_id, service_name, path in PUSH_SUBSCRIPTIONS:
+        base_url = service_urls.get(service_name)
+        if not base_url:
+            print(f"  [SKIP] {sub_id}: {service_name} URL'si bulunamadi", flush=True)
+            continue
+
+        push_endpoint = base_url.rstrip("/") + path
+
+        try:
+            subprocess.run(
+                [
+                    gcloud,
+                    "pubsub", "subscriptions", "modify-push-config",
+                    sub_id,
+                    f"--push-endpoint={push_endpoint}",
+                    f"--push-auth-service-account={RUNTIME_SA}",
+                    "--quiet",
+                ],
+                check=True,
+            )
+            print(f"  [OK] {sub_id} -> {push_endpoint}", flush=True)
+        except subprocess.CalledProcessError as exc:
+            print(f"  [ERR] {sub_id}: push config ayarlanamadi: {exc}", flush=True)
 
 
 def main() -> None:
@@ -58,104 +96,106 @@ def main() -> None:
     raw = _parse_env(ENV_PATH)
     videos = raw.get("GCS_BUCKET_VIDEOS", "lectureai_full_videos")
     processed = raw.get("GCS_BUCKET_PROCESSED", "lectureai_processed")
-    cv_region = raw.get("GCP_REGION", "europe-west4")
-    cv_zone = raw.get("GCP_ZONE", f"{cv_region}-a")
-    artifact_region = raw.get("ARTIFACT_REGION", "europe-west4")
-
-    required = ["ASSEMBLYAI_API_KEY", "GEMINI_API_KEY"]
+    if not (raw.get("MODAL_CV_WEBHOOK_URL") or "").strip():
+        print(
+            "Warning: MODAL_CV_WEBHOOK_URL is not set in scripts/.env — cv-worker will return 503 at runtime.",
+            file=sys.stderr,
+        )
+    required = ["ASSEMBLYAI_API_KEY"]
     for k in required:
-        if k not in raw:
+        if not raw.get(k):
             print(f"Missing {k} in scripts/.env", file=sys.stderr)
             sys.exit(1)
 
-    audio_env = _write_env_file(
-        [
-            f"GOOGLE_CLOUD_PROJECT={PROJECT}",
-            f"ASSEMBLYAI_API_KEY={raw['ASSEMBLYAI_API_KEY']}",
-            f"GCS_FULL_VIDEOS_BUCKET={videos}",
-            f"GCS_BUCKET_NAME={processed}",
-        ]
-    )
-    orch_env = _write_env_file(
-        [
-            f"GOOGLE_CLOUD_PROJECT={PROJECT}",
-            f"GEMINI_API_KEY={raw['GEMINI_API_KEY']}",
-            f"GCS_BUCKET_NAME={processed}",
-            f"GCS_FULL_VIDEOS_BUCKET={videos}",
-        ]
-    )
-    cv_env = _write_env_file(
-        [
-            f"GOOGLE_CLOUD_PROJECT={PROJECT}",
-            f"GCP_REGION={cv_region}",
-            f"GCP_ZONE={cv_zone}",
-            f"ARTIFACT_REGION={artifact_region}",
-        ]
-    )
+    # Build env var dicts for each service
+    audio_env = {
+        "GOOGLE_CLOUD_PROJECT": PROJECT,
+        "ASSEMBLYAI_API_KEY": raw["ASSEMBLYAI_API_KEY"],
+        "GCS_FULL_VIDEOS_BUCKET": videos,
+        "GCS_BUCKET_NAME": processed,
+    }
 
-    tmp_files = [audio_env, orch_env, cv_env]
+    orch_env = {
+        "GOOGLE_CLOUD_PROJECT": PROJECT,
+        "GCS_BUCKET_NAME": processed,
+        "GCS_FULL_VIDEOS_BUCKET": videos,
+        "GEMINI_PROVIDER": raw.get("GEMINI_PROVIDER", "vertex"),
+        "VERTEX_LOCATION": raw.get("VERTEX_LOCATION", "us-central1"),
+    }
+    for key in (
+        "GEMINI_API_KEY",
+        "GROQ_API_KEY",
+        "GROQ_EKSTRA",
+        "GEMINI_MODEL",
+        "GROQ_MODEL",
+        "ORCHESTRATOR_PROVIDER_ORDER",
+        "ORCHESTRATOR_DEGRADED_FALLBACK",
+        "ORCHESTRATOR_LLM_SPACING_SEC",
+        "CHUNK_MINUTES",
+    ):
+        if raw.get(key):
+            orch_env[key] = raw[key]
 
-    services: list[tuple[str, str, str, str]] = [
+    cv_env: dict[str, str] = {
+        "GOOGLE_CLOUD_PROJECT": PROJECT,
+    }
+    for key in ("MODAL_CV_WEBHOOK_URL", "MODAL_CV_WEBHOOK_BEARER", "CV_TEACHER_NAME"):
+        if raw.get(key):
+            cv_env[key] = raw[key]
+
+    backend_status_webhook = (raw.get("BACKEND_STATUS_WEBHOOK") or "").strip()
+    backend_status_bearer = (raw.get("BACKEND_STATUS_WEBHOOK_BEARER") or "").strip()
+    if backend_status_webhook:
+        audio_env["BACKEND_STATUS_WEBHOOK"] = backend_status_webhook
+        orch_env["BACKEND_STATUS_WEBHOOK"] = backend_status_webhook
+        cv_env["BACKEND_STATUS_WEBHOOK"] = backend_status_webhook
+    if backend_status_bearer:
+        audio_env["BACKEND_STATUS_WEBHOOK_BEARER"] = backend_status_bearer
+        orch_env["BACKEND_STATUS_WEBHOOK_BEARER"] = backend_status_bearer
+        cv_env["BACKEND_STATUS_WEBHOOK_BEARER"] = backend_status_bearer
+
+    services: list[tuple[str, str, dict[str, str], str]] = [
         ("audio-worker", f"{IMAGE_BASE}/audio-worker:latest", audio_env, "3600"),
         ("orchestrator-worker", f"{IMAGE_BASE}/orchestrator-worker:latest", orch_env, "3600"),
         ("cv-worker", f"{IMAGE_BASE}/cv-worker:latest", cv_env, "900"),
     ]
 
-    try:
-        for name, image, envfile, timeout in services:
-            print(f"Deploying {name} ...", flush=True)
-            subprocess.run(
-                [
-                    gcloud,
-                    "run",
-                    "deploy",
-                    name,
-                    "--image",
-                    image,
-                    "--region",
-                    REGION,
-                    "--platform",
-                    "managed",
-                    "--service-account",
-                    RUNTIME_SA,
-                    "--no-allow-unauthenticated",
-                    "--timeout",
-                    timeout,
-                    "--memory",
-                    "2Gi",
-                    "--cpu",
-                    "2",
-                    "--max-instances",
-                    "5",
-                    "--env-vars-file",
-                    envfile,
-                    "--quiet",
-                ],
-                check=True,
-            )
-            subprocess.run(
-                [
-                    gcloud,
-                    "run",
-                    "services",
-                    "update",
-                    name,
-                    "--region",
-                    REGION,
-                    "--remove-env-vars",
-                    "GOOGLE_APPLICATION_CREDENTIALS",
-                    "--quiet",
-                ],
-                check=True,
-            )
-    finally:
-        for p in tmp_files:
-            try:
-                os.unlink(p)
-            except OSError:
-                pass
+    for name, image, env_dict, timeout in services:
+        print(f"Deploying {name} ...", flush=True)
+        env_str = _build_env_vars_string(env_dict)
+        subprocess.run(
+            [
+                gcloud,
+                "run",
+                "deploy",
+                name,
+                "--image",
+                image,
+                "--region",
+                REGION,
+                "--platform",
+                "managed",
+                "--service-account",
+                RUNTIME_SA,
+                "--no-allow-unauthenticated",
+                "--timeout",
+                timeout,
+                "--memory",
+                "2Gi",
+                "--cpu",
+                "2",
+                "--max-instances",
+                "5",
+                "--set-env-vars",
+                env_str,
+                "--quiet",
+            ],
+            check=True,
+        )
 
-    print("Fetching service URLs ...", flush=True)
+    # Fetch service URLs
+    print("\nFetching service URLs ...", flush=True)
+    service_urls: dict[str, str] = {}
     for name, _, _, _ in services:
         r = subprocess.run(
             [
@@ -174,7 +214,13 @@ def main() -> None:
             check=True,
         )
         url = (r.stdout or "").strip()
-        print(f"{name}: {url}", flush=True)
+        service_urls[name] = url
+        print(f"  {name}: {url}", flush=True)
+
+    # Configure push subscription endpoints
+    _configure_push_endpoints(gcloud, service_urls)
+
+    print("\n[DONE] Deploy ve push config tamamlandi!", flush=True)
 
 
 if __name__ == "__main__":

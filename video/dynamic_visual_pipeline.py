@@ -24,7 +24,9 @@ def run_dynamic_visual_poc(
     only_camera_open_frames: bool = True,
     debug_dir: str = None,
 ):
+    print("[cv_engine] OCR_START", flush=True)
     locator = TeacherLocator(teacher_name=teacher_name)
+    print("[cv_engine] OCR_END", flush=True)
     face = FaceMetrics()
     gesture = GestureMetrics()
     movement = MovementAnalyzer()
