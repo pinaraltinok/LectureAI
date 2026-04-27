@@ -43,6 +43,7 @@ const StudentLessonPlayer = () => {
 
   useEffect(() => {
     if (!lessonId) { setError('Ders bilgisi bulunamadı.'); setLoading(false); return }
+
     Promise.all([
       apiGet(`/student/lesson/${lessonId}`),
       apiGet(`/student/lesson/${lessonId}/notes`),

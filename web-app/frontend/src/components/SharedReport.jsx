@@ -82,9 +82,11 @@ function formatTime(seconds) {
 
 const SharedReport = ({ report }) => {
   const videoRef = useRef(null)
+  const videoRetryRef = useRef(0)
   const [currentTime, setCurrentTime] = useState(0)
   const [videoDuration, setVideoDuration] = useState(0)
   const [isVideoVisible, setIsVideoVisible] = useState(true)
+  const [videoError, setVideoError] = useState(null)
 
   const rawVideoUrl = report?.videoUrl || null
   const rawPdfUrl = report?.pdfUrl || report?.draftReport?.pdfUrl || report?.finalReport?.pdfUrl || (() => {
@@ -96,9 +98,9 @@ const SharedReport = ({ report }) => {
     return null
   })()
 
-  // Convert GCS URLs to signed URLs
-  const { signedUrl: videoUrl, loading: videoLoading } = useGcsUrl(rawVideoUrl)
-  const { signedUrl: pdfUrl, loading: pdfLoading } = useGcsUrl(rawPdfUrl)
+  // Convert GCS URLs to signed URLs (with auto-refresh)
+  const { signedUrl: videoUrl, loading: videoLoading, refresh: refreshVideo } = useGcsUrl(rawVideoUrl)
+  const { signedUrl: pdfUrl, loading: pdfLoading, refresh: refreshPdf } = useGcsUrl(rawPdfUrl)
 
   const [isPdfVisible, setIsPdfVisible] = useState(false)
 
@@ -232,9 +234,25 @@ const SharedReport = ({ report }) => {
                      controls
                      preload="metadata"
                      onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
-                     onLoadedMetadata={(e) => setVideoDuration(e.target.duration)}
+                     onLoadedMetadata={(e) => { setVideoDuration(e.target.duration); setVideoError(null); videoRetryRef.current = 0 }}
+                     onError={() => {
+                       if (videoRetryRef.current < 2) {
+                         videoRetryRef.current += 1
+                         console.warn('[SharedReport] Video load error, retry', videoRetryRef.current)
+                         setVideoError('Video yenileniyor...')
+                         refreshVideo()
+                         setTimeout(() => setVideoError(null), 3000)
+                       } else {
+                         setVideoError('Video şu anda yüklenemiyor. Lütfen sayfayı yenileyin.')
+                       }
+                     }}
                      style={{width:'100%', maxHeight:'450px', borderRadius:'16px', background:'#000', boxShadow:'0 20px 40px rgba(0,0,0,0.5)'}}
                    />
+                   {videoError && (
+                     <div style={{display:'flex', alignItems:'center', gap:'8px', padding:'8px 16px', background:'rgba(245,158,11,0.1)', border:'1px solid rgba(245,158,11,0.3)', borderRadius:'8px', marginTop:'8px', color:'#f59e0b', fontSize:'12px', fontWeight:600}}>
+                       {videoError}
+                     </div>
+                   )}
                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:'0.75rem', padding:'0 0.5rem'}}>
                      <span style={{fontSize:'12px', fontWeight:700, color:'#64748b', fontFamily:'monospace'}}>
                        ⏱ {formatTime(currentTime)} / {formatTime(videoDuration)}

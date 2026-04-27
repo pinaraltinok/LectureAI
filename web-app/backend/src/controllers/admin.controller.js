@@ -900,4 +900,5 @@ module.exports = {
   setTeacherCourses, getTeacherCourses, createGroup, createCourse,
   updateGroup, deleteGroup, updateUser, deleteUser, updateCourse, deleteCourse,
   getTeacherProgress,
+  analysisProgress, // shared with pipeline controller
 };

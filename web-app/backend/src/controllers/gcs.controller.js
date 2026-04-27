@@ -6,8 +6,8 @@ const projectRoot = path.resolve(__dirname, '..', '..', '..', '..');
 const credentialPath = path.join(projectRoot, 'senior-design-488908-1d5d3e1681ee.json');
 const storage = new Storage({ keyFilename: credentialPath });
 
-// Signed URL expires in 15 minutes
-const SIGNED_URL_EXPIRY_MINUTES = 15;
+// Signed URL expires in 60 minutes (1 hour) – videos are typically longer than 15 min
+const SIGNED_URL_EXPIRY_MINUTES = 60;
 
 /**
  * GET /api/gcs/signed-url?bucket=BUCKET&object=OBJECT_PATH
@@ -102,4 +102,79 @@ async function getBatchSignedUrls(req, res) {
   }
 }
 
-module.exports = { getSignedUrl, getBatchSignedUrls };
+/**
+ * GET /api/gcs/stream?bucket=BUCKET&object=OBJECT_PATH
+ * Streams a GCS object directly through the backend (proxy).
+ * Supports HTTP Range headers for video seeking.
+ * This URL never expires — the backend authenticates with GCS on each request.
+ */
+async function streamFile(req, res) {
+  try {
+    const { bucket, object } = req.query;
+
+    if (!bucket || !object) {
+      return res.status(400).json({ error: 'bucket ve object parametreleri gereklidir.' });
+    }
+
+    const ALLOWED_BUCKETS = ['lectureai_full_videos', 'lectureai_processed'];
+    if (!ALLOWED_BUCKETS.includes(bucket)) {
+      return res.status(403).json({ error: "Bu bucket'a erişim izni yok." });
+    }
+
+    const file = storage.bucket(bucket).file(object);
+
+    // Check if file exists and get metadata
+    const [metadata] = await file.getMetadata();
+    const fileSize = parseInt(metadata.size, 10);
+    const contentType = metadata.contentType || 'application/octet-stream';
+
+    const range = req.headers.range;
+
+    if (range) {
+      // Parse Range header: "bytes=start-end"
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : Math.min(start + 5 * 1024 * 1024 - 1, fileSize - 1);
+      const chunkSize = end - start + 1;
+
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunkSize,
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=3600',
+      });
+
+      const stream = file.createReadStream({ start, end });
+      stream.on('error', (err) => {
+        console.error('GCS stream error:', err.message);
+        if (!res.headersSent) res.status(500).end();
+        else res.end();
+      });
+      stream.pipe(res);
+    } else {
+      // No range — send entire file
+      res.writeHead(200, {
+        'Content-Length': fileSize,
+        'Content-Type': contentType,
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'public, max-age=3600',
+      });
+
+      const stream = file.createReadStream();
+      stream.on('error', (err) => {
+        console.error('GCS stream error:', err.message);
+        if (!res.headersSent) res.status(500).end();
+        else res.end();
+      });
+      stream.pipe(res);
+    }
+  } catch (err) {
+    console.error('StreamFile error:', err.message);
+    if (!res.headersSent) {
+      return res.status(500).json({ error: 'Dosya stream edilemedi: ' + err.message });
+    }
+  }
+}
+
+module.exports = { getSignedUrl, getBatchSignedUrls, streamFile };
