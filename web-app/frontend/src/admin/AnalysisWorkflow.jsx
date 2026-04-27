@@ -26,7 +26,7 @@ const AnalysisWorkflow = ({ onStepChange }) => {
   // Helper: generate module/lesson codes from a course object
   const generateLessonCodes = (c) => {
     if (!c) return []
-    const codes = []
+    const codes = [{ code: 'M0L0', module: 0, lesson: 0 }] // Tanışma dersi
     for (let m = 1; m <= (c.moduleNum || 1); m++) {
       for (let l = 1; l <= (c.moduleSize || 1); l++) {
         codes.push({ code: `M${m}L${l}`, module: m, lesson: l })
@@ -46,16 +46,32 @@ const AnalysisWorkflow = ({ onStepChange }) => {
   useEffect(() => {
     Promise.all([
       apiGet('/admin/teachers'),
-      apiGet('/admin/courses'),
       apiGet('/admin/groups'),
-    ]).then(([t, c, g]) => {
+    ]).then(([t, g]) => {
       setTeachers(t)
       if (t.length > 0) setSelectedTeacherId(t[0].id)
-      setCourses(c)
-      if (c.length > 0) setSelectedCourseId(c[0].id)
       setGroups(g)
     }).catch(err => setError(err.message))
   }, [])
+
+  // Fetch courses assigned to the selected teacher
+  useEffect(() => {
+    if (!selectedTeacherId) {
+      setCourses([])
+      setSelectedCourseId('')
+      return
+    }
+    apiGet(`/admin/teacher/${selectedTeacherId}/courses`)
+      .then(tc => {
+        setCourses(tc)
+        if (tc.length > 0) setSelectedCourseId(tc[0].id)
+        else setSelectedCourseId('')
+      })
+      .catch(() => {
+        setCourses([])
+        setSelectedCourseId('')
+      })
+  }, [selectedTeacherId])
 
   // Reset lesson code + group when curriculum or teacher changes
   useEffect(() => {
@@ -341,13 +357,18 @@ const AnalysisWorkflow = ({ onStepChange }) => {
                 onChange={(e) => setSelectedCourseId(e.target.value)}
                 style={{width:'100%', padding:'1rem', borderRadius:'14px', border:'1px solid #e2e8f0', fontWeight:700, outline: 'none', background:'#fff', fontSize: '0.9rem'}}
               >
-                {courses.length === 0 && <option value="">Yükleniyor...</option>}
+                {courses.length === 0 && <option value="">— Bu eğitmene atanmış kurs yok —</option>}
                 {courses.map(c => (
                   <option key={c.id} value={c.id}>
                     {c.course} [{c.age}]
                   </option>
                 ))}
               </select>
+              {courses.length === 0 && selectedTeacherId && (
+                <p style={{fontSize: '0.78rem', color: '#f59e0b', fontWeight: 600, marginTop: '6px', margin: '6px 0 0'}}>
+                  ⚠ Bu eğitmene henüz kurs atanmamış. Kullanıcı &amp; Grup Yönetimi sayfasından kurs atayabilirsiniz.
+                </p>
+              )}
               {/* Course info badge */}
               {selectedCourse && (
                 <div style={{display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap'}}>
@@ -376,10 +397,11 @@ const AnalysisWorkflow = ({ onStepChange }) => {
                   value={selectedLessonCode.match(/M(\d+)/)?.[1] || '1'}
                   onChange={(e) => {
                     const mod = e.target.value
-                    setSelectedLessonCode(`M${mod}L1`)
+                    setSelectedLessonCode(mod === '0' ? 'M0L0' : `M${mod}L1`)
                   }}
-                  style={{padding:'1rem', borderRadius:'14px', border:'1px solid #e2e8f0', fontWeight:700, outline: 'none', background:'#fff'}}
+                  style={{padding:'0.9rem 1.1rem'}}
                 >
+                  <option value="0">Modül 0 — Tanışma</option>
                   {Array.from({ length: selectedCourse?.moduleNum || 1 }, (_, i) => i + 1).map(m => (
                     <option key={m} value={m}>Modül {m}</option>
                   ))}
@@ -391,11 +413,16 @@ const AnalysisWorkflow = ({ onStepChange }) => {
                     const mod = selectedLessonCode.match(/M(\d+)/)?.[1] || '1'
                     setSelectedLessonCode(`M${mod}L${e.target.value}`)
                   }}
-                  style={{padding:'1rem', borderRadius:'14px', border:'1px solid #e2e8f0', fontWeight:700, outline: 'none', background:'#fff'}}
+                  style={{padding:'0.9rem 1.1rem'}}
+                  disabled={selectedLessonCode === 'M0L0'}
                 >
-                  {Array.from({ length: selectedCourse?.moduleSize || 1 }, (_, i) => i + 1).map(l => (
-                    <option key={l} value={l}>Ders {l}</option>
-                  ))}
+                  {selectedLessonCode === 'M0L0' ? (
+                    <option value="0">Ders 0 — Tanışma Dersi</option>
+                  ) : (
+                    Array.from({ length: selectedCourse?.moduleSize || 1 }, (_, i) => i + 1).map(l => (
+                      <option key={l} value={l}>Ders {l}</option>
+                    ))
+                  )}
                 </select>
               </div>
               {/* Selected code badge */}
@@ -403,15 +430,22 @@ const AnalysisWorkflow = ({ onStepChange }) => {
                 <div style={{
                   display: 'inline-flex', alignItems: 'center', gap: '8px',
                   padding: '10px 20px', borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+                  background: selectedLessonCode === 'M0L0'
+                    ? 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)'
+                    : 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
                   color: '#fff', fontWeight: 900, fontSize: '1.1rem', fontFamily: 'monospace',
-                  boxShadow: '0 8px 20px -4px rgba(99, 102, 241, 0.4)',
+                  boxShadow: selectedLessonCode === 'M0L0'
+                    ? '0 8px 20px -4px rgba(245, 158, 11, 0.4)'
+                    : '0 8px 20px -4px rgba(99, 102, 241, 0.4)',
                   letterSpacing: '0.05em'
                 }}>
-                  📖 {selectedLessonCode}
+                  {selectedLessonCode === 'M0L0' ? '🤝' : '📖'} {selectedLessonCode}
                 </div>
                 <span style={{fontSize: '0.8rem', color: '#94a3b8', fontWeight: 600}}>
-                  {selectedCourse?.course} — Modül {selectedLessonCode.match(/M(\d+)/)?.[1]}, Ders {selectedLessonCode.match(/L(\d+)/)?.[1]}
+                  {selectedLessonCode === 'M0L0'
+                    ? `${selectedCourse?.course} — Tanışma Dersi (Öğrenci & Veli Tanışması)`
+                    : `${selectedCourse?.course} — Modül ${selectedLessonCode.match(/M(\d+)/)?.[1]}, Ders ${selectedLessonCode.match(/L(\d+)/)?.[1]}`
+                  }
                 </span>
               </div>
             </div>

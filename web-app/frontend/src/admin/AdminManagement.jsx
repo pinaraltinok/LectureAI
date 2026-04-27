@@ -26,6 +26,7 @@ const AdminManagement = () => {
   const [selectedTeacherId, setSelectedTeacherId] = useState('')
   const [selectedCourseIds, setSelectedCourseIds] = useState([])
   const [groupForm, setGroupForm] = useState({ name: '', courseId: '', teacherId: '', schedule: '' })
+  const [groupTeacherCourses, setGroupTeacherCourses] = useState([])
   const [courseForm, setCourseForm] = useState({ course: '', age: '', lessonSize: '60', moduleNum: '1', moduleSize: '4' })
   const [editingGroup, setEditingGroup] = useState(null)
   const [editingCourse, setEditingCourse] = useState(null)
@@ -51,13 +52,29 @@ const AdminManagement = () => {
 
   useEffect(() => { setSuccess(''); setError('') }, [activeTab])
 
-  // Load teacher's current courses when selectedTeacherId changes
+  // Load teacher's current courses when selectedTeacherId changes (Teacher Courses tab)
   useEffect(() => {
     if (!selectedTeacherId || activeTab !== 'teacher-courses') return
     apiGet(`/admin/teacher/${selectedTeacherId}/courses`)
       .then(data => setSelectedCourseIds(data.map(c => c.id)))
       .catch(() => setSelectedCourseIds([]))
   }, [selectedTeacherId, activeTab])
+
+  // Load teacher's courses for group creation form — filter course dropdown by selected teacher
+  useEffect(() => {
+    if (!groupForm.teacherId) { setGroupTeacherCourses([]); return }
+    apiGet(`/admin/teacher/${groupForm.teacherId}/courses`)
+      .then(data => {
+        setGroupTeacherCourses(data)
+        // If current courseId is not in the filtered list, reset it
+        if (data.length > 0 && !data.some(c => c.id === groupForm.courseId)) {
+          setGroupForm(f => ({ ...f, courseId: data[0].id }))
+        } else if (data.length === 0) {
+          setGroupForm(f => ({ ...f, courseId: '' }))
+        }
+      })
+      .catch(() => setGroupTeacherCourses([]))
+  }, [groupForm.teacherId])
 
   const showMsg = (msg, isError = false) => {
     if (isError) { setError(msg); setSuccess('') } else { setSuccess(msg); setError('') }
@@ -338,10 +355,26 @@ const AdminManagement = () => {
             <h3 style={{ margin: '0 0 2rem', fontSize: '1.1rem', fontWeight: 900, color: '#0f172a' }}>Yeni Grup Oluştur</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               <div>
-                <label style={labelStyle}>KURS</label>
-                <select value={groupForm.courseId} onChange={e => setGroupForm(f => ({ ...f, courseId: e.target.value }))} style={selectStyle}>
-                  {courses.map(c => <option key={c.id} value={c.id}>{c.course} (Yaş: {c.age})</option>)}
+                <label style={labelStyle}>EĞİTMEN (Gruba Atanacak)</label>
+                <select value={groupForm.teacherId} onChange={e => setGroupForm(f => ({ ...f, teacherId: e.target.value }))} style={selectStyle}>
+                  {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
+              </div>
+              <div>
+                <label style={labelStyle}>KURS</label>
+                <select value={groupForm.courseId} onChange={e => setGroupForm(f => ({ ...f, courseId: e.target.value }))} style={selectStyle}
+                  disabled={groupTeacherCourses.length === 0}>
+                  {groupTeacherCourses.length === 0 ? (
+                    <option value="">— Bu eğitmene atanmış kurs yok —</option>
+                  ) : (
+                    groupTeacherCourses.map(c => <option key={c.id} value={c.id}>{c.course} (Yaş: {c.age})</option>)
+                  )}
+                </select>
+                {groupForm.teacherId && groupTeacherCourses.length === 0 && (
+                  <div style={{ marginTop: '6px', padding: '6px 12px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 700, color: '#b45309' }}>
+                    ⚠ Seçilen eğitmene henüz kurs atanmamış. "Eğitmen Kursları" sekmesinden kurs atayın.
+                  </div>
+                )}
               </div>
               <div>
                 <label style={labelStyle}>GRUP İSMİ</label>
@@ -352,12 +385,6 @@ const AdminManagement = () => {
                   placeholder="ör: TUR40W292_THU-20_10-12"
                   style={{ width: '100%', padding: '12px', borderRadius: '14px', border: '1px solid #e2e8f0', fontSize: '0.9rem', fontWeight: 600, outline: 'none', background: '#f8fafc', boxSizing: 'border-box' }}
                 />
-              </div>
-              <div>
-                <label style={labelStyle}>EĞİTMEN (Gruba Atanacak)</label>
-                <select value={groupForm.teacherId} onChange={e => setGroupForm(f => ({ ...f, teacherId: e.target.value }))} style={selectStyle}>
-                  {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
               </div>
               <div>
                 <label style={labelStyle}>PROGRAM</label>
@@ -545,7 +572,7 @@ const AdminManagement = () => {
 
 // Shared styles
 const labelStyle = { fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }
-const selectStyle = { width: '100%', padding: '12px', borderRadius: '14px', border: '1px solid #e2e8f0', fontSize: '0.9rem', fontWeight: 600, background: '#f8fafc', outline: 'none' }
+const selectStyle = { width: '100%', padding: '0.9rem 1.1rem' }
 
 const InputField = ({ label, value, onChange, placeholder, type = 'text' }) => (
   <div>

@@ -214,7 +214,8 @@ async function assignAnalysis(req, res) {
       // Look up moduleSize from the group's course to compute flat sequential lessonNo
       const group = await prisma.group.findUnique({ where: { id: groupId }, include: { course: true } });
       const moduleSize = group?.course?.moduleSize || 4;
-      const lessonNo = (moduleNo - 1) * moduleSize + lessonInModule;
+      // M0L0 = Tanışma dersi (orientation), stored as lessonNo 0
+      const lessonNo = (moduleNo === 0 && lessonInModule === 0) ? 0 : (moduleNo - 1) * moduleSize + lessonInModule;
       const reportData = (typeof report.draftReport === 'object' && report.draftReport) ? report.draftReport : {};
       const videoUrl = reportData._videoUrl || null;
       const videoFilename = reportData._videoFilename || null;
@@ -436,6 +437,7 @@ async function getTeacherReports(req, res) {
         return {
           jobId: j.id, videoUrl: j.lesson?.videoUrl || null, videoFilename: j.lesson?.videoFilename || null, status: j.status, createdAt: j.createdAt,
           courseName: j.lesson?.group?.course?.course || null, moduleSize: j.lesson?.group?.course?.moduleSize || 4, lessonNo: j.lesson?.lessonNo || null,
+          groupName: j.lesson?.group?.name || null, schedule: j.lesson?.group?.schedule || null, age: j.lesson?.group?.course?.age || null,
           assignedTeacher: teacher.user.name, isUnassigned: false, score: rt.score,
           genel_sonuc: rpt.genel_sonuc || null, yeterlilikler: rpt.yeterlilikler || null,
           speaking_time_rating: rpt.speaking_time_rating || null, feedback_metni: rpt.feedback_metni || null,

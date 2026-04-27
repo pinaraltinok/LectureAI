@@ -5,6 +5,7 @@
  * @returns {string} e.g. "Modül 3 Ders 2"
  */
 export function formatLessonLabel(lessonNo, moduleSize = 4) {
+  if (lessonNo === 0) return 'Tanışma Dersi'
   if (!lessonNo) return 'Ders —'
   const ms = moduleSize || 4
   const moduleNo = Math.ceil(lessonNo / ms)

@@ -3,14 +3,35 @@ import { useNavigate } from 'react-router-dom'
 import { apiGet } from '../api'
 import { formatLessonLabel } from '../utils/lessonLabel'
 
-const COURSE_THEMES = [
-  { bg: '#6366f1', gradient: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', light: '#ede9fe', icon: '🐍' },
-  { bg: '#f43f5e', gradient: 'linear-gradient(135deg, #f43f5e 0%, #ec4899 100%)', light: '#ffe4e6', icon: '🎮' },
-  { bg: '#10b981', gradient: 'linear-gradient(135deg, #10b981 0%, #34d399 100%)', light: '#d1fae5', icon: '🤖' },
-  { bg: '#f59e0b', gradient: 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)', light: '#fef3c7', icon: '🎨' },
-  { bg: '#06b6d4', gradient: 'linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%)', light: '#cffafe', icon: '💻' },
-  { bg: '#8b5cf6', gradient: 'linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%)', light: '#ede9fe', icon: '🧩' },
+// Keyword-based course icon & color matching
+const COURSE_ICON_MAP = [
+  { keywords: ['roblox'], icon: '🎮', bg: '#f43f5e', gradient: 'linear-gradient(135deg, #f43f5e 0%, #ec4899 100%)', light: '#ffe4e6' },
+  { keywords: ['python'], icon: '🐍', bg: '#6366f1', gradient: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', light: '#ede9fe' },
+  { keywords: ['java'], icon: '☕', bg: '#f59e0b', gradient: 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)', light: '#fef3c7' },
+  { keywords: ['web', 'html', 'css'], icon: '🌐', bg: '#06b6d4', gradient: 'linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%)', light: '#cffafe' },
+  { keywords: ['robot', 'arduino'], icon: '🤖', bg: '#10b981', gradient: 'linear-gradient(135deg, #10b981 0%, #34d399 100%)', light: '#d1fae5' },
+  { keywords: ['game', 'oyun'], icon: '🕹️', bg: '#8b5cf6', gradient: 'linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%)', light: '#ede9fe' },
+  { keywords: ['design', 'tasarım'], icon: '🎨', bg: '#ec4899', gradient: 'linear-gradient(135deg, #ec4899 0%, #f472b6 100%)', light: '#fce7f3' },
+  { keywords: ['ai', 'yapay'], icon: '🧠', bg: '#7c3aed', gradient: 'linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%)', light: '#ede9fe' },
+  { keywords: ['scratch'], icon: '🐱', bg: '#f97316', gradient: 'linear-gradient(135deg, #f97316 0%, #fb923c 100%)', light: '#fff7ed' },
+  { keywords: ['unity', '3d'], icon: '🎯', bg: '#0ea5e9', gradient: 'linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%)', light: '#e0f2fe' },
+  { keywords: ['data', 'veri'], icon: '📊', bg: '#14b8a6', gradient: 'linear-gradient(135deg, #14b8a6 0%, #2dd4bf 100%)', light: '#ccfbf1' },
+  { keywords: ['mobile', 'uygulama'], icon: '📱', bg: '#a855f7', gradient: 'linear-gradient(135deg, #a855f7 0%, #c084fc 100%)', light: '#f3e8ff' },
 ]
+
+const FALLBACK_THEMES = [
+  { icon: '💻', bg: '#6366f1', gradient: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', light: '#ede9fe' },
+  { icon: '📚', bg: '#10b981', gradient: 'linear-gradient(135deg, #10b981 0%, #34d399 100%)', light: '#d1fae5' },
+  { icon: '🧩', bg: '#f59e0b', gradient: 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)', light: '#fef3c7' },
+  { icon: '⚡', bg: '#06b6d4', gradient: 'linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%)', light: '#cffafe' },
+]
+
+function getCourseTheme(courseName, index) {
+  const lower = (courseName || '').toLowerCase()
+  const match = COURSE_ICON_MAP.find(entry => entry.keywords.some(kw => lower.includes(kw)))
+  if (match) return match
+  return FALLBACK_THEMES[index % FALLBACK_THEMES.length]
+}
 
 const StudentDashboard = () => {
   const navigate = useNavigate()
@@ -31,10 +52,10 @@ const StudentDashboard = () => {
 
   if (loading) {
     return (
-      <div style={{display:'grid', placeItems:'center', minHeight:'400px'}}>
-        <div style={{textAlign:'center', color:'#64748b'}}>
-          <div style={{fontSize:'3rem', marginBottom:'1rem', animation: 'bounce 1s infinite'}}>🚀</div>
-          <p style={{fontWeight:700, fontSize:'1.1rem'}}>Dersler yükleniyor...</p>
+      <div style={{ display: 'grid', placeItems: 'center', minHeight: '400px' }}>
+        <div style={{ textAlign: 'center', color: '#64748b' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem', animation: 'bounce 1s infinite' }}>🚀</div>
+          <p style={{ fontWeight: 700, fontSize: '1.1rem' }}>Dersler yükleniyor...</p>
         </div>
       </div>
     )
@@ -42,10 +63,10 @@ const StudentDashboard = () => {
 
   if (error) {
     return (
-      <div style={{display:'grid', placeItems:'center', minHeight:'400px'}}>
-        <div style={{textAlign:'center', color:'#f43f5e'}}>
-          <div style={{fontSize:'3rem', marginBottom:'1rem'}}>😵</div>
-          <p style={{fontWeight:800, fontSize:'1.1rem'}}>{error}</p>
+      <div style={{ display: 'grid', placeItems: 'center', minHeight: '400px' }}>
+        <div style={{ textAlign: 'center', color: '#f43f5e' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>😵</div>
+          <p style={{ fontWeight: 800, fontSize: '1.1rem' }}>{error}</p>
         </div>
       </div>
     )
@@ -53,18 +74,18 @@ const StudentDashboard = () => {
 
   if (groups.length === 0) {
     return (
-      <div style={{display:'grid', placeItems:'center', minHeight:'400px'}}>
-        <div style={{textAlign:'center', padding:'3rem'}}>
-          <div style={{fontSize:'4rem', marginBottom:'1.5rem'}}>📚</div>
-          <h3 style={{fontWeight:900, color:'#1e293b', fontSize:'1.5rem', marginBottom:'0.5rem'}}>Henüz kayıtlı ders yok</h3>
-          <p style={{color:'#94a3b8', fontSize:'1rem'}}>Bir gruba kaydolduğunda burada görünecek!</p>
+      <div style={{ display: 'grid', placeItems: 'center', minHeight: '400px' }}>
+        <div style={{ textAlign: 'center', padding: '3rem' }}>
+          <div style={{ fontSize: '4rem', marginBottom: '1.5rem' }}>📚</div>
+          <h3 style={{ fontWeight: 900, color: '#1e293b', fontSize: '1.5rem', marginBottom: '0.5rem' }}>Henüz kayıtlı ders yok</h3>
+          <p style={{ color: '#94a3b8', fontSize: '1rem' }}>Bir gruba kaydolduğunda burada görünecek!</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div style={{animation: 'fadeIn 0.5s ease'}}>
+    <div style={{ animation: 'fadeIn 0.5s ease' }}>
       {/* Welcome Banner */}
       <div style={{
         background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%)',
@@ -72,18 +93,18 @@ const StudentDashboard = () => {
         position: 'relative', overflow: 'hidden', color: 'white',
       }}>
         <div style={{ position: 'absolute', top: '-40px', right: '-20px', fontSize: '8rem', opacity: 0.08, transform: 'rotate(15deg)' }}>🎓</div>
-        <h2 style={{fontSize:'1.8rem', fontWeight:900, letterSpacing:'-0.03em', margin:'0 0 0.5rem'}}>
-          Hoş geldin! 👋
+        <h2 style={{ fontSize: '1.8rem', fontWeight: 900, letterSpacing: '-0.03em', margin: '0 0 0.5rem' }}>
+          Hoş geldin!
         </h2>
-        <p style={{fontSize:'1rem', opacity:0.8, fontWeight:500, margin:0}}>
+        <p style={{ fontSize: '1rem', opacity: 0.8, fontWeight: 500, margin: 0 }}>
           {groups.length} aktif kursun var. Derslerini takip et, anketlerini doldur!
         </p>
       </div>
 
       {/* Course Cards Grid */}
-      <div style={{display:'grid', gridTemplateColumns: groups.length === 1 ? '1fr' : 'repeat(auto-fill, minmax(420px, 1fr))', gap:'1.5rem'}}>
+      <div style={{ display: 'grid', gridTemplateColumns: groups.length === 1 ? '1fr' : 'repeat(auto-fill, minmax(420px, 1fr))', gap: '1.5rem' }}>
         {groups.map((group, gIdx) => {
-          const theme = COURSE_THEMES[gIdx % COURSE_THEMES.length]
+          const theme = getCourseTheme(group.courseName, gIdx)
           return (
             <div key={group.groupId} style={{
               background: '#fff', borderRadius: '28px', overflow: 'hidden',
@@ -91,8 +112,8 @@ const StudentDashboard = () => {
               boxShadow: '0 4px 20px rgba(0,0,0,0.04)',
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
             }}
-            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 20px 40px rgba(0,0,0,0.08)'; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.04)'; }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 20px 40px rgba(0,0,0,0.08)'; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.04)'; }}
             >
               {/* Course Header */}
               <div style={{
@@ -100,29 +121,29 @@ const StudentDashboard = () => {
                 position: 'relative', overflow: 'hidden',
               }}>
                 <div style={{ position: 'absolute', top: '-15px', right: '15px', fontSize: '4rem', opacity: 0.15 }}>{theme.icon}</div>
-                <div style={{display:'flex', alignItems:'center', gap:'1rem', position:'relative'}}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', position: 'relative' }}>
                   <div style={{
-                    width:'52px', height:'52px', background:'rgba(255,255,255,0.2)',
-                    borderRadius:'16px', display:'grid', placeItems:'center',
-                    fontSize:'1.6rem', backdropFilter: 'blur(8px)',
+                    width: '52px', height: '52px', background: 'rgba(255,255,255,0.2)',
+                    borderRadius: '16px', display: 'grid', placeItems: 'center',
+                    fontSize: '1.6rem', backdropFilter: 'blur(8px)',
                   }}>
                     {theme.icon}
                   </div>
                   <div>
-                    <h3 style={{margin:0, fontSize:'1.3rem', fontWeight:900, color:'#fff', letterSpacing:'-0.02em'}}>
+                    <h3 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 900, color: '#fff', letterSpacing: '-0.02em' }}>
                       {group.courseName}
                     </h3>
-                    <p style={{margin:'4px 0 0', fontSize:'0.85rem', color:'rgba(255,255,255,0.8)', fontWeight:600}}>
+                    <p style={{ margin: '4px 0 0', fontSize: '0.85rem', color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>
                       {group.teacherName} • {group.age} yaş
                     </p>
                   </div>
                 </div>
                 {group.schedule && (
                   <div style={{
-                    display:'inline-flex', alignItems:'center', gap:'6px',
-                    marginTop:'12px', padding:'6px 14px', borderRadius:'100px',
-                    background:'rgba(255,255,255,0.15)', backdropFilter:'blur(4px)',
-                    fontSize:'0.78rem', fontWeight:700, color:'#fff',
+                    display: 'inline-flex', alignItems: 'center', gap: '6px',
+                    marginTop: '12px', padding: '6px 14px', borderRadius: '100px',
+                    background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(4px)',
+                    fontSize: '0.78rem', fontWeight: 700, color: '#fff',
                   }}>
                     📅 {group.schedule}
                   </div>
@@ -130,28 +151,28 @@ const StudentDashboard = () => {
               </div>
 
               {/* Lessons */}
-              <div style={{padding: '1.5rem'}}>
-                <div style={{display:'flex', gap:'6px', marginBottom:'12px', alignItems:'center'}}>
-                  <span style={{fontSize:'0.7rem', fontWeight:800, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.08em'}}>
+              <div style={{ padding: '1.5rem' }}>
+                <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.7rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                     DERSLER
                   </span>
                   <span style={{
-                    fontSize:'10px', fontWeight:800, padding:'2px 8px',
-                    borderRadius:'100px', background:theme.light, color:theme.bg,
+                    fontSize: '10px', fontWeight: 800, padding: '2px 8px',
+                    borderRadius: '100px', background: theme.light, color: theme.bg,
                   }}>
                     {group.lessons.length}
                   </span>
                 </div>
-                <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))', gap:'10px'}}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '10px' }}>
                   {group.lessons.map(lesson => (
                     <div
                       key={lesson.lessonId}
                       style={{
-                        padding:'1rem 1.1rem', borderRadius:'16px',
+                        padding: '1rem 1.1rem', borderRadius: '16px',
                         background: lesson.hasSurvey ? '#f0fdf4' : '#f8fafc',
                         border: `2px solid ${lesson.hasSurvey ? '#bbf7d0' : '#f1f5f9'}`,
-                        transition:'all 0.25s ease',
-                        position:'relative', overflow:'hidden',
+                        transition: 'all 0.25s ease',
+                        position: 'relative', overflow: 'hidden',
                       }}
                       onMouseEnter={e => {
                         e.currentTarget.style.transform = 'translateY(-2px)'
@@ -162,26 +183,26 @@ const StudentDashboard = () => {
                         e.currentTarget.style.boxShadow = 'none'
                       }}
                     >
-                      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'6px'}}>
-                        <span style={{fontSize:'0.95rem', fontWeight:900, color:'#1e293b'}}>{formatLessonLabel(lesson.lessonNo, group.moduleSize)}</span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <span style={{ fontSize: '0.95rem', fontWeight: 900, color: '#1e293b' }}>{formatLessonLabel(lesson.lessonNo, group.moduleSize)}</span>
                         <span style={{
-                          fontSize:'8px', fontWeight:800, padding:'3px 8px', borderRadius:'100px',
-                          background: lesson.hasSurvey ? '#10b981' : theme.bg, color:'#fff',
+                          fontSize: '8px', fontWeight: 800, padding: '3px 8px', borderRadius: '100px',
+                          background: lesson.hasSurvey ? '#10b981' : theme.bg, color: '#fff',
                         }}>
                           {lesson.hasSurvey ? '✓ TAMAM' : 'ANKET'}
                         </span>
                       </div>
-                      <span style={{fontSize:'0.72rem', color:'#94a3b8', fontWeight:600, display:'block', marginBottom:'10px'}}>
-                        {new Date(lesson.dateTime).toLocaleDateString('tr-TR', { day:'numeric', month:'short', year:'numeric' })}
+                      <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 600, display: 'block', marginBottom: '10px' }}>
+                        {new Date(lesson.dateTime).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </span>
-                      <div style={{display:'flex', gap:'6px'}}>
+                      <div style={{ display: 'flex', gap: '6px' }}>
                         <button
                           onClick={() => navigate(`/student/ders-kaydi?id=${lesson.lessonId}`)}
                           style={{
-                            flex:1, padding:'6px 0', borderRadius:'10px', border:'none',
-                            background:'linear-gradient(135deg, #8b5cf6, #6366f1)', color:'#fff',
-                            fontSize:'0.68rem', fontWeight:800, cursor:'pointer',
-                            transition:'all 0.2s',
+                            flex: 1, padding: '6px 0', borderRadius: '10px', border: 'none',
+                            background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', color: '#fff',
+                            fontSize: '0.68rem', fontWeight: 800, cursor: 'pointer',
+                            transition: 'all 0.2s',
                           }}
                           onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
                           onMouseLeave={e => e.currentTarget.style.opacity = '1'}
@@ -190,10 +211,10 @@ const StudentDashboard = () => {
                           <button
                             onClick={() => goToSurvey(lesson, group)}
                             style={{
-                              flex:1, padding:'6px 0', borderRadius:'10px', border:'none',
-                              background: theme.bg, color:'#fff',
-                              fontSize:'0.68rem', fontWeight:800, cursor:'pointer',
-                              transition:'all 0.2s',
+                              flex: 1, padding: '6px 0', borderRadius: '10px', border: 'none',
+                              background: theme.bg, color: '#fff',
+                              fontSize: '0.68rem', fontWeight: 800, cursor: 'pointer',
+                              transition: 'all 0.2s',
                             }}
                             onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
                             onMouseLeave={e => e.currentTarget.style.opacity = '1'}

@@ -498,6 +498,103 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   PREMIUM SELECT / DROPDOWN STYLES (Global)
+   ═══════════════════════════════════════════════════════════════ */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: var(--bg-card);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px;
+  padding-right: 42px !important;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-sm);
+  line-height: 1.5;
+}
+
+select:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow), 0 2px 8px rgba(99, 102, 241, 0.08);
+}
+
+select:focus-visible {
+  outline: none;
+}
+
+/* Disabled state */
+select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background-color: var(--bg-subtle);
+}
+
+/* Option styling (limited browser support but improves Chrome/Edge) */
+select option {
+  padding: 10px 14px;
+  font-weight: 500;
+  color: var(--text-main);
+  background: var(--bg-card);
+}
+
+select option:checked {
+  font-weight: 700;
+}
+
+/* Also style input[type="date"] consistently */
+input[type="date"] {
+  appearance: none;
+  -webkit-appearance: none;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 600;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-sm);
+}
+
+input[type="date"]:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+input[type="date"]:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow), 0 2px 8px rgba(99, 102, 241, 0.08);
+}
+
+/* Textarea consistency */
+textarea {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-sm);
+}
+
+textarea:hover {
+  border-color: #cbd5e1 !important;
+}
+
+textarea:focus {
+  box-shadow: 0 0 0 3px var(--primary-glow), 0 2px 8px rgba(99, 102, 241, 0.08) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
    ALERT BANNERS
    ═══════════════════════════════════════════════════════════════ */
 .alert-banner {
