@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiGet } from '../api'
+import { formatLessonLabel } from '../utils/lessonLabel'
 
 const COURSE_THEMES = [
   { bg: '#6366f1', gradient: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', light: '#ede9fe', icon: '🐍' },
@@ -25,7 +26,7 @@ const StudentDashboard = () => {
   }, [])
 
   const goToSurvey = (lesson, group) => {
-    navigate('/student/anket', { state: { lessonId: lesson.lessonId, courseName: group.courseName, instructor: group.teacherName, lessonNo: lesson.lessonNo } })
+    navigate('/student/anket', { state: { lessonId: lesson.lessonId, courseName: group.courseName, instructor: group.teacherName, lessonNo: lesson.lessonNo, moduleSize: group.moduleSize } })
   }
 
   if (loading) {
@@ -162,7 +163,7 @@ const StudentDashboard = () => {
                       }}
                     >
                       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'6px'}}>
-                        <span style={{fontSize:'0.95rem', fontWeight:900, color:'#1e293b'}}>Ders {lesson.lessonNo}</span>
+                        <span style={{fontSize:'0.95rem', fontWeight:900, color:'#1e293b'}}>{formatLessonLabel(lesson.lessonNo, group.moduleSize)}</span>
                         <span style={{
                           fontSize:'8px', fontWeight:800, padding:'3px 8px', borderRadius:'100px',
                           background: lesson.hasSurvey ? '#10b981' : theme.bg, color:'#fff',

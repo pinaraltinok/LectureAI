@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { apiPost } from '../api'
+import { formatLessonLabel } from '../utils/lessonLabel'
 
 const EMOJIS = ['😢', '😕', '😐', '😊', '🤩']
 const EMOJI_LABELS = ['Kötü', 'Geliştirilebilir', 'Fena Değil', 'İyi', 'Mükemmel']
@@ -8,7 +9,7 @@ const EMOJI_LABELS = ['Kötü', 'Geliştirilebilir', 'Fena Değil', 'İyi', 'Mü
 const StudentSurvey = () => {
   const location = useLocation()
   const navigate = useNavigate()
-  const { lessonId, courseName, instructor, lessonNo } = location.state || {}
+  const { lessonId, courseName, instructor, lessonNo, moduleSize } = location.state || {}
 
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -123,7 +124,7 @@ const StudentSurvey = () => {
             {courseName || 'Ders Değerlendirmesi'}
           </h2>
           <p style={{opacity:0.75, fontSize:'0.9rem', fontWeight:600, margin:0}}>
-            {instructor ? `${instructor} • Ders ${lessonNo || ''}` : ''}
+            {instructor ? `${instructor} • ${formatLessonLabel(lessonNo, moduleSize)}` : ''}
           </p>
         </div>
 

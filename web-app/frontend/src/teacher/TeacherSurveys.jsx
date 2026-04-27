@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { apiGet } from '../api'
+import { formatLessonLabel } from '../utils/lessonLabel'
 
 const TeacherSurveys = () => {
   const [groups, setGroups] = useState([])
@@ -37,7 +38,7 @@ const TeacherSurveys = () => {
         <select value={selectedLesson || ''} onChange={e => setSelectedLesson(e.target.value)}
           style={{width:'100%', maxWidth:'500px', padding:'12px', borderRadius:'12px', border:'1px solid #e2e8f0', fontSize:'0.9rem', fontWeight:600, background:'#f8fafc', outline:'none'}}>
           {groups.map(g => g.lessons.map(l => (
-            <option key={l.id} value={l.id}>{g.courseName} — Ders {l.lessonNo} ({new Date(l.dateTime).toLocaleDateString('tr-TR')})</option>
+            <option key={l.id} value={l.id}>{g.groupName || g.courseName} — {formatLessonLabel(l.lessonNo, g.moduleSize)} ({new Date(l.dateTime).toLocaleDateString('tr-TR')})</option>
           )))}
         </select>
       </div>

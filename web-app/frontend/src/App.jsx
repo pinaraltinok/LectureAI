@@ -226,7 +226,7 @@ function AppContent() {
           <Route path="/student/anket" element={<StudentSurvey />} />
           <Route path="/student/notlar" element={<StudentNotes />} />
 
-          <Route path="/profil" element={<ProfilePage />} />
+          <Route path="/profil" element={<ProfilePage onNameChange={setUserName} />} />
 
           <Route path="/" element={<Navigate to={role==='admin'?'/admin/kurum-ozeti':role==='teacher'?'/teacher/ders-ozeti':'/student/derslerim'} />} />
         </Routes>

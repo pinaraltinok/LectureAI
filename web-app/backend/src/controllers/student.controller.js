@@ -28,8 +28,10 @@ async function getCourses(req, res) {
 
     const courses = studentGroups.map(sg => ({
       groupId: sg.group.id,
+      groupName: sg.group.name,
       courseName: sg.group.course.course,
       age: sg.group.course.age,
+      moduleSize: sg.group.course.moduleSize,
       teacherName: sg.group.teacher.user.name,
       schedule: sg.group.schedule,
       lessons: sg.group.lessons.map(l => ({
@@ -156,6 +158,7 @@ async function getLessonDetail(req, res) {
       videoUrl: lesson.videoUrl,
       videoFilename: lesson.videoFilename,
       courseName: lesson.group.course.course,
+      moduleSize: lesson.group.course.moduleSize,
       courseAge: lesson.group.course.age,
       teacherName: lesson.group.teacher.user.name,
       schedule: lesson.group.schedule,

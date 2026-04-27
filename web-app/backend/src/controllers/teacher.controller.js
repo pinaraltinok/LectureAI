@@ -18,8 +18,10 @@ async function getTeacherLessons(req, res) {
 
     const result = groups.map(g => ({
       groupId: g.id,
+      groupName: g.name,
       courseName: g.course.course,
       age: g.course.age,
+      moduleSize: g.course.moduleSize,
       schedule: g.schedule,
       studentCount: g.studentGroups.length,
       lessons: g.lessons.map(l => ({ id: l.id, lessonNo: l.lessonNo, dateTime: l.dateTime })),
@@ -137,6 +139,7 @@ async function getReports(req, res) {
         return {
           jobId: j.id,
           courseName: j.lesson?.group?.course?.course || null,
+          moduleSize: j.lesson?.group?.course?.moduleSize || 4,
           lessonNo: j.lesson?.lessonNo || null,
           videoUrl: j.lesson?.videoUrl || null,
           videoFilename: j.lesson?.videoFilename || null,

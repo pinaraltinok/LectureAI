@@ -91,7 +91,7 @@ const ProgressChart = ({ data = [], title = 'Performans İlerlemesi', height = 2
             📈 {title}
           </h4>
           <p style={{margin: '2px 0 0', fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600}}>
-            Lesson tarihlerine göre analiz skorları
+            Ders tarihlerine göre analiz skorları
           </p>
         </div>
         <div style={{display: 'flex', gap: '10px'}}>

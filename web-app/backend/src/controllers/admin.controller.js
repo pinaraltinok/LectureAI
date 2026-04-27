@@ -209,7 +209,12 @@ async function assignAnalysis(req, res) {
 
     // If groupId is provided, create a Lesson record so students in that group can see the video
     if (groupId && lessonCode) {
-      const lessonNo = parseInt(lessonCode.match(/L(\d+)/)?.[1] || '1');
+      const moduleNo = parseInt(lessonCode.match(/M(\d+)/)?.[1] || '1');
+      const lessonInModule = parseInt(lessonCode.match(/L(\d+)/)?.[1] || '1');
+      // Look up moduleSize from the group's course to compute flat sequential lessonNo
+      const group = await prisma.group.findUnique({ where: { id: groupId }, include: { course: true } });
+      const moduleSize = group?.course?.moduleSize || 4;
+      const lessonNo = (moduleNo - 1) * moduleSize + lessonInModule;
       const reportData = (typeof report.draftReport === 'object' && report.draftReport) ? report.draftReport : {};
       const videoUrl = reportData._videoUrl || null;
       const videoFilename = reportData._videoFilename || null;
@@ -329,7 +334,7 @@ async function getGroups(req, res) {
       },
     });
     const result = groups.map(g => ({
-      id: g.id, courseId: g.courseId, courseName: g.course.course, teacherId: g.teacherId,
+      id: g.id, name: g.name, courseId: g.courseId, courseName: g.course.course, teacherId: g.teacherId,
       teacherName: g.teacher.user.name, schedule: g.schedule, studentCount: g.studentGroups.length,
     }));
     return res.json(result);
@@ -377,6 +382,7 @@ async function getAnalysisJobs(req, res) {
       teacherName: j.reportTeachers[0]?.teacher?.user?.name || null,
       lessonId: j.lesson?.id || null,
       lessonNo: j.lesson?.lessonNo || null,
+      moduleSize: j.lesson?.group?.course?.moduleSize || 4,
       courseName: j.lesson?.group?.course?.course || null,
       createdAt: j.createdAt, updatedAt: j.updatedAt,
     }));
@@ -429,7 +435,7 @@ async function getTeacherReports(req, res) {
         const rpt = j.finalReport || j.draftReport || {};
         return {
           jobId: j.id, videoUrl: j.lesson?.videoUrl || null, videoFilename: j.lesson?.videoFilename || null, status: j.status, createdAt: j.createdAt,
-          courseName: j.lesson?.group?.course?.course || null, lessonNo: j.lesson?.lessonNo || null,
+          courseName: j.lesson?.group?.course?.course || null, moduleSize: j.lesson?.group?.course?.moduleSize || 4, lessonNo: j.lesson?.lessonNo || null,
           assignedTeacher: teacher.user.name, isUnassigned: false, score: rt.score,
           genel_sonuc: rpt.genel_sonuc || null, yeterlilikler: rpt.yeterlilikler || null,
           speaking_time_rating: rpt.speaking_time_rating || null, feedback_metni: rpt.feedback_metni || null,
@@ -646,7 +652,7 @@ async function getTeacherCourses(req, res) {
 // ─── Create Group (assign teacher to group) ─────────────────
 async function createGroup(req, res) {
   try {
-    const { courseId, teacherId, schedule } = req.body;
+    const { courseId, teacherId, schedule, name } = req.body;
     if (!courseId || !teacherId) return res.status(400).json({ error: 'courseId ve teacherId gereklidir.' });
 
     const course = await prisma.course.findUnique({ where: { id: courseId } });
@@ -654,8 +660,8 @@ async function createGroup(req, res) {
     const teacher = await prisma.teacher.findUnique({ where: { id: teacherId } });
     if (!teacher) return res.status(404).json({ error: 'Eğitmen bulunamadı.' });
 
-    const group = await prisma.group.create({ data: { courseId, teacherId, schedule: schedule || null } });
-    return res.status(201).json({ id: group.id, courseId, teacherId, schedule: group.schedule, message: 'Grup başarıyla oluşturuldu.' });
+    const group = await prisma.group.create({ data: { courseId, teacherId, schedule: schedule || null, name: name || null } });
+    return res.status(201).json({ id: group.id, name: group.name, courseId, teacherId, schedule: group.schedule, message: 'Grup başarıyla oluşturuldu.' });
   } catch (err) {
     console.error('CreateGroup error:', err);
     return res.status(500).json({ error: 'Sunucu hatası.' });
@@ -691,10 +697,11 @@ async function createCourse(req, res) {
 async function updateGroup(req, res) {
   try {
     const { id } = req.params;
-    const { teacherId, schedule } = req.body;
+    const { teacherId, schedule, name } = req.body;
     const data = {};
     if (teacherId !== undefined) data.teacherId = teacherId;
     if (schedule !== undefined) data.schedule = schedule;
+    if (name !== undefined) data.name = name;
     if (Object.keys(data).length === 0) return res.status(400).json({ error: 'Güncellenecek alan belirtilmedi.' });
 
     const group = await prisma.group.update({ where: { id }, data });

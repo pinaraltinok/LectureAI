@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { apiGet, apiPut } from '../api'
 
-const ProfilePage = () => {
+const ProfilePage = ({ onNameChange }) => {
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
@@ -30,6 +30,7 @@ const ProfilePage = () => {
       setForm(updated)
       setEditing(false)
       setSaved(true)
+      if (onNameChange && updated.name) onNameChange(updated.name)
       setTimeout(() => setSaved(false), 2500)
     } catch (err) {
       alert(err.message)

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { apiGet } from '../api'
+import { formatLessonLabel } from '../utils/lessonLabel'
 import SharedReport from '../components/SharedReport.jsx'
 import ProgressChart from '../components/ProgressChart.jsx'
 
@@ -43,7 +44,7 @@ const TeacherDashboard = () => {
       name: r.courseName || '',
       module: r.courseName || '',
       date: r.createdAt ? new Date(r.createdAt).toLocaleDateString('tr-TR') : '',
-      group: r.lessonNo ? `Ders ${r.lessonNo}` : '',
+      group: r.lessonNo ? formatLessonLabel(r.lessonNo, r.moduleSize) : '',
       evaluator: r.status === 'FINALIZED' ? 'Admin Onaylı' : 'AI Taslak',
       status: r.status || 'DRAFT',
       quality: fr.yeterlilikler || fr.quality || '—',
@@ -110,7 +111,7 @@ const TeacherDashboard = () => {
                 boxShadow: selectedReport === report.jobId ? '0 10px 15px -3px rgba(99, 102, 241, 0.1)' : 'none'
               }}>
                 <div style={{display:'flex', justifyContent:'space-between', marginBottom:'6px'}}>
-                  <span style={{fontSize:'10px', fontWeight:800, color: selectedReport === report.jobId ? 'var(--primary)' : '#94a3b8'}}>Ders {report.lessonNo || '—'}</span>
+                  <span style={{fontSize:'10px', fontWeight:800, color: selectedReport === report.jobId ? 'var(--primary)' : '#94a3b8'}}>{formatLessonLabel(report.lessonNo, report.moduleSize)}</span>
                   <span style={{fontSize:'10px', color:'#94a3b8'}}>{report.createdAt ? new Date(report.createdAt).toLocaleDateString('tr-TR') : ''}</span>
                 </div>
                 <div style={{display:'flex', alignItems:'center', gap:'8px'}}>

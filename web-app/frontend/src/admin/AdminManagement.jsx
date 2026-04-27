@@ -25,7 +25,7 @@ const AdminManagement = () => {
   const [selectedGroupId, setSelectedGroupId] = useState('')
   const [selectedTeacherId, setSelectedTeacherId] = useState('')
   const [selectedCourseIds, setSelectedCourseIds] = useState([])
-  const [groupForm, setGroupForm] = useState({ courseId: '', teacherId: '', schedule: '' })
+  const [groupForm, setGroupForm] = useState({ name: '', courseId: '', teacherId: '', schedule: '' })
   const [courseForm, setCourseForm] = useState({ course: '', age: '', lessonSize: '60', moduleNum: '1', moduleSize: '4' })
   const [editingGroup, setEditingGroup] = useState(null)
   const [editingCourse, setEditingCourse] = useState(null)
@@ -108,7 +108,7 @@ const AdminManagement = () => {
     try {
       const res = await apiPost('/admin/groups', groupForm)
       showMsg(res.message || 'Grup oluşturuldu!')
-      setGroupForm(f => ({ ...f, schedule: '' }))
+      setGroupForm(f => ({ ...f, name: '', schedule: '' }))
       await loadData()
     } catch (err) { showMsg(err.message, true) }
   }
@@ -243,7 +243,7 @@ const AdminManagement = () => {
                 <select value={selectedGroupId} onChange={e => setSelectedGroupId(e.target.value)} style={selectStyle}>
                   {groups.map(g => {
                     const teacher = teachers.find(t => t.id === g.teacherId)
-                    return <option key={g.id} value={g.id}>{g.courseName || '—'} — {teacher?.name || '?'} {g.schedule ? `(${g.schedule})` : ''}</option>
+                    return <option key={g.id} value={g.id}>{g.name ? `${g.name} — ` : ''}{g.courseName || '—'} — {teacher?.name || '?'} {g.schedule ? `(${g.schedule})` : ''}</option>
                   })}
                 </select>
               </div>
@@ -344,6 +344,16 @@ const AdminManagement = () => {
                 </select>
               </div>
               <div>
+                <label style={labelStyle}>GRUP İSMİ</label>
+                <input
+                  type="text"
+                  value={groupForm.name}
+                  onChange={e => setGroupForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="ör: TUR40W292_THU-20_10-12"
+                  style={{ width: '100%', padding: '12px', borderRadius: '14px', border: '1px solid #e2e8f0', fontSize: '0.9rem', fontWeight: 600, outline: 'none', background: '#f8fafc', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
                 <label style={labelStyle}>EĞİTMEN (Gruba Atanacak)</label>
                 <select value={groupForm.teacherId} onChange={e => setGroupForm(f => ({ ...f, teacherId: e.target.value }))} style={selectStyle}>
                   {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -408,15 +418,19 @@ const AdminManagement = () => {
                   const isEditing = editingGroup?.id === g.id
                   return (
                     <div key={g.id} style={{ padding: '14px 18px', borderRadius: '14px', background: '#f8fafc', border: '1px solid #f1f5f9', borderLeft: `4px solid ${c}` }}>
-                      <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#1e293b' }}>{g.courseName || '—'}</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#1e293b' }}>{g.name || g.courseName || '—'}</div>
+                        {g.name && <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#94a3b8' }}>{g.courseName}</span>}
+                      </div>
                       {isEditing ? (
                         <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <input value={editingGroup.name || ''} onChange={e => setEditingGroup(p => ({...p, name: e.target.value}))} placeholder="Grup İsmi" style={{padding:'8px', borderRadius:'10px', border:'1px solid #e2e8f0', fontSize:'0.8rem', fontWeight:700}} />
                           <select value={editingGroup.teacherId} onChange={e => setEditingGroup(p => ({...p, teacherId: e.target.value}))} style={{...selectStyle, padding:'8px', fontSize:'0.8rem'}}>
                             {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                           </select>
                           <input value={editingGroup.schedule || ''} onChange={e => setEditingGroup(p => ({...p, schedule: e.target.value}))} placeholder="Program" style={{padding:'8px', borderRadius:'10px', border:'1px solid #e2e8f0', fontSize:'0.8rem'}} />
                           <div style={{display:'flex', gap:'6px'}}>
-                            <button onClick={() => handleUpdateGroup(g.id, {teacherId: editingGroup.teacherId, schedule: editingGroup.schedule})} style={{flex:1, padding:'6px', background:'#6366f1', color:'#fff', border:'none', borderRadius:'8px', fontWeight:700, fontSize:'0.75rem', cursor:'pointer'}}>Kaydet</button>
+                            <button onClick={() => handleUpdateGroup(g.id, {name: editingGroup.name, teacherId: editingGroup.teacherId, schedule: editingGroup.schedule})} style={{flex:1, padding:'6px', background:'#6366f1', color:'#fff', border:'none', borderRadius:'8px', fontWeight:700, fontSize:'0.75rem', cursor:'pointer'}}>Kaydet</button>
                             <button onClick={() => setEditingGroup(null)} style={{padding:'6px 12px', background:'#f1f5f9', border:'none', borderRadius:'8px', fontWeight:700, fontSize:'0.75rem', cursor:'pointer'}}>İptal</button>
                           </div>
                         </div>
@@ -428,7 +442,7 @@ const AdminManagement = () => {
                             <span>👥 {g.studentCount ?? '—'} öğrenci</span>
                           </div>
                           <div style={{display:'flex', gap:'4px'}}>
-                            <button onClick={() => setEditingGroup({id: g.id, teacherId: g.teacherId, schedule: g.schedule || ''})} style={{border:'none', background:'#dbeafe', color:'#2563eb', padding:'3px 10px', borderRadius:'6px', fontSize:'0.7rem', fontWeight:800, cursor:'pointer'}}>✎</button>
+                            <button onClick={() => setEditingGroup({id: g.id, name: g.name || '', teacherId: g.teacherId, schedule: g.schedule || ''})} style={{border:'none', background:'#dbeafe', color:'#2563eb', padding:'3px 10px', borderRadius:'6px', fontSize:'0.7rem', fontWeight:800, cursor:'pointer'}}>✎</button>
                             <button onClick={() => handleDeleteGroup(g.id)} style={{border:'none', background:'#fee2e2', color:'#dc2626', padding:'3px 10px', borderRadius:'6px', fontSize:'0.7rem', fontWeight:800, cursor:'pointer'}}>✕</button>
                           </div>
                         </div>

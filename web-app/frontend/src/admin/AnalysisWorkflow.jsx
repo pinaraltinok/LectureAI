@@ -184,7 +184,7 @@ const AnalysisWorkflow = ({ onStepChange }) => {
     { key: 'downloading', label: 'Video İndiriliyor', icon: '⬇️' },
     { key: 'processing', label: 'Video İşleniyor', icon: '🎬' },
     { key: 'reporting', label: 'Rapor Oluşturuluyor', icon: '📊' },
-    { key: 'uploading', label: "Bucket'a Yükleniyor", icon: '☁️' },
+    { key: 'uploading', label: "Sisteme Yükleniyor", icon: '☁️' },
     { key: 'completed', label: 'Tamamlandı!', icon: '✅' },
   ]
 
@@ -427,7 +427,7 @@ const AnalysisWorkflow = ({ onStepChange }) => {
                 <option value="">— Grup seçilmedi —</option>
                 {filteredGroups.map(g => (
                   <option key={g.id} value={g.id}>
-                    {g.courseName} • {g.teacherName} {g.schedule ? `(${g.schedule})` : ''} — {g.studentCount} öğrenci
+                    {g.name ? `${g.name} • ` : ''}{g.courseName} • {g.teacherName} {g.schedule ? `(${g.schedule})` : ''} — {g.studentCount} öğrenci
                   </option>
                 ))}
               </select>

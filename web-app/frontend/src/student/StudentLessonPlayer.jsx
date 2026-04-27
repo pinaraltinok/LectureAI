@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { apiGet, apiPost, apiPut, apiDelete } from '../api'
+import { formatLessonLabel } from '../utils/lessonLabel'
+import { resolveVideoUrl } from '../utils/resolveVideoUrl'
 import lectureAiVideo from '../assets/Marka_İsmi_Güncelleme_LectureAI.mp4'
 
 const fmt = (s) => {
@@ -19,6 +21,7 @@ const StudentLessonPlayer = () => {
   const [notes, setNotes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [resolvedVideoSrc, setResolvedVideoSrc] = useState(null)
 
   // Note creation
   const [newNote, setNewNote] = useState('')
@@ -44,7 +47,13 @@ const StudentLessonPlayer = () => {
       apiGet(`/student/lesson/${lessonId}`),
       apiGet(`/student/lesson/${lessonId}/notes`),
     ])
-      .then(([l, n]) => { setLesson(l); setNotes(n) })
+      .then(async ([l, n]) => {
+        setLesson(l)
+        setNotes(n)
+        // Resolve GCS URL to a playable signed URL
+        const playableUrl = await resolveVideoUrl(l.videoUrl)
+        setResolvedVideoSrc(playableUrl)
+      })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
   }, [lessonId])
@@ -131,8 +140,8 @@ const StudentLessonPlayer = () => {
     )
   }
 
-  // Use the branding video as fallback if no lesson video
-  const videoSrc = lesson?.videoUrl || lectureAiVideo
+  // Use resolved signed URL, then original videoUrl, then branding video as fallback
+  const videoSrc = resolvedVideoSrc || lesson?.videoUrl || lectureAiVideo
 
   return (
     <div style={{animation:'fadeIn 0.5s ease'}}>
@@ -163,7 +172,7 @@ const StudentLessonPlayer = () => {
         </button>
         <div>
           <h2 style={{margin:0, fontSize:'1.4rem', fontWeight:900, color:'#1e293b', letterSpacing:'-0.03em'}}>
-            {lesson?.courseName} — Ders {lesson?.lessonNo}
+            {lesson?.courseName} — {formatLessonLabel(lesson?.lessonNo, lesson?.moduleSize)}
           </h2>
           <p style={{margin:'2px 0 0', fontSize:'0.82rem', color:'#94a3b8', fontWeight:600}}>
             {lesson?.teacherName} • {new Date(lesson?.dateTime).toLocaleDateString('tr-TR', {day:'numeric', month:'long', year:'numeric'})}

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { apiGet, apiPost } from '../api'
+import { formatLessonLabel } from '../utils/lessonLabel'
 import SharedReport from '../components/SharedReport.jsx'
 import ProgressChart from '../components/ProgressChart.jsx'
 
@@ -81,7 +82,7 @@ const TeacherPool = () => {
         name: selectedTeacher?.name || '',
         module: draft.lesson?.course || report.courseName || selectedTeacher?.name + ' Analizi',
         date: report.createdAt ? new Date(report.createdAt).toLocaleDateString('tr-TR') : '',
-        group: report.lessonNo ? `Ders ${report.lessonNo}` : '',
+        group: report.lessonNo ? formatLessonLabel(report.lessonNo, report.moduleSize) : '',
         evaluator: fr.approvedBy ? 'Admin Onaylı' : 'Sistem (AI)',
         quality: fr.yeterlilikler || '—',
         ttt: fr.speaking_time_rating || '—',

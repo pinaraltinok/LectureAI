@@ -94,7 +94,7 @@ const TeacherAttendance = () => {
           <label style={{fontSize:'11px', fontWeight:800, color:'#64748b', display:'block', marginBottom:'8px', textTransform:'uppercase', letterSpacing:'0.05em'}}>GRUP</label>
           <select value={selectedGroup || ''} onChange={e => setSelectedGroup(e.target.value)}
             style={{width:'100%', padding:'12px', borderRadius:'12px', border:'1px solid #e2e8f0', fontSize:'0.9rem', fontWeight:600, background:'#f8fafc', outline:'none'}}>
-            {groups.map(g => <option key={g.groupId} value={g.groupId}>{g.courseName} ({g.age} yaş) — {g.schedule}</option>)}
+            {groups.map(g => <option key={g.groupId} value={g.groupId}>{g.groupName || g.courseName} ({g.age} yaş) — {g.schedule}</option>)}
           </select>
         </div>
 
