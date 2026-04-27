@@ -10,6 +10,7 @@ const {
   createUser, getStudents, assignStudentToGroup, removeStudentFromGroup,
   setTeacherCourses, getTeacherCourses, createGroup, createCourse,
   updateGroup, deleteGroup, updateUser, deleteUser, updateCourse, deleteCourse,
+  getTeacherProgress,
 } = require('../controllers/admin.controller');
 
 // Multer configuration
@@ -31,6 +32,7 @@ router.get('/analysis/jobs', auth, roleGuard('ADMIN'), getAnalysisJobs);
 router.get('/analysis/progress/:jobId', auth, roleGuard('ADMIN'), getAnalysisProgress);
 router.get('/analysis/draft/:jobId', auth, roleGuard('ADMIN'), getDraft);
 router.get('/teacher/:teacherId/reports', auth, roleGuard('ADMIN'), getTeacherReports);
+router.get('/teacher/:teacherId/progress', auth, roleGuard('ADMIN'), getTeacherProgress);
 
 router.post('/analysis/upload', auth, roleGuard('ADMIN'), upload.single('video'), uploadAnalysis);
 router.post('/analysis/assign', auth, roleGuard('ADMIN'), assignAnalysis);

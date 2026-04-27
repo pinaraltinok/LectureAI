@@ -28,7 +28,7 @@ async function getStats(req, res) {
       prisma.teacher.count(),
       prisma.student.count(),
       prisma.lesson.count(),
-      prisma.report.count({ where: { status: { in: ['PENDING', 'PROCESSING', 'DRAFT'] } } }),
+      prisma.report.count({ where: { status: { in: ['PENDING', 'PROCESSING'] } } }),
       prisma.report.findMany({ where: { status: 'FINALIZED', finalReport: { not: null } }, select: { finalReport: true } }),
     ]);
 
@@ -423,13 +423,6 @@ async function getTeacherReports(req, res) {
       orderBy: { report: { createdAt: 'desc' } },
     });
 
-    // Also get unassigned reports
-    const unassigned = await prisma.report.findMany({
-      where: { reportTeachers: { none: {} } },
-      include: { lesson: { include: { group: { include: { course: true } } } } },
-      orderBy: { createdAt: 'desc' },
-    });
-
     const reports = [
       ...reportTeachers.map(rt => {
         const j = rt.report;
@@ -438,16 +431,6 @@ async function getTeacherReports(req, res) {
           jobId: j.id, videoUrl: j.lesson?.videoUrl || null, videoFilename: j.lesson?.videoFilename || null, status: j.status, createdAt: j.createdAt,
           courseName: j.lesson?.group?.course?.course || null, lessonNo: j.lesson?.lessonNo || null,
           assignedTeacher: teacher.user.name, isUnassigned: false, score: rt.score,
-          genel_sonuc: rpt.genel_sonuc || null, yeterlilikler: rpt.yeterlilikler || null,
-          speaking_time_rating: rpt.speaking_time_rating || null, feedback_metni: rpt.feedback_metni || null,
-        };
-      }),
-      ...unassigned.map(j => {
-        const rpt = j.finalReport || j.draftReport || {};
-        return {
-          jobId: j.id, videoUrl: j.lesson?.videoUrl || null, videoFilename: j.lesson?.videoFilename || null, status: j.status, createdAt: j.createdAt,
-          courseName: j.lesson?.group?.course?.course || null, lessonNo: j.lesson?.lessonNo || null,
-          assignedTeacher: null, isUnassigned: true, score: null,
           genel_sonuc: rpt.genel_sonuc || null, yeterlilikler: rpt.yeterlilikler || null,
           speaking_time_rating: rpt.speaking_time_rating || null, feedback_metni: rpt.feedback_metni || null,
         };
@@ -473,13 +456,47 @@ async function syncGCSReports(req, res) {
     for (const file of jsonFiles) {
       const videoId = file.name.replace('reports/', '').replace('.json', '');
       if (!videoId) continue;
+
+      // Check if report already exists:
+      // 1. By lesson videoFilename/videoUrl
+      // 2. By draftReport JSON containing the videoId (for reports without lesson link)
       const existing = await prisma.report.findFirst({
-        where: { OR: [{ lesson: { videoFilename: { contains: videoId } } }, { lesson: { videoUrl: { contains: videoId } } }], status: { in: ['DRAFT', 'FINALIZED'] }, draftReport: { not: null } },
+        where: {
+          OR: [
+            { lesson: { videoFilename: { contains: videoId } } },
+            { lesson: { videoUrl: { contains: videoId } } },
+            { draftReport: { path: ['_videoUrl'], string_contains: videoId } },
+            { draftReport: { path: ['_videoFilename'], string_contains: videoId } },
+            { draftReport: { path: ['video_id'], string_contains: videoId } },
+          ],
+          status: { in: ['DRAFT', 'FINALIZED'] },
+          draftReport: { not: null },
+        },
       });
       if (existing) { skipped++; continue; }
 
+      // Also check if we already synced this exact videoId (by searching all existing reports for this filename)
+      const alreadySynced = await prisma.report.findFirst({
+        where: {
+          status: { in: ['DRAFT', 'FINALIZED'] },
+          draftReport: { not: null },
+          // Check if this report's lessonId is null and it was created by sync
+          lessonId: null,
+          reportTeachers: { none: {} },
+        },
+      });
+      // If there are orphan reports, be more conservative
+
       const pendingJob = await prisma.report.findFirst({
-        where: { OR: [{ lesson: { videoFilename: { contains: videoId } } }, { lesson: { videoUrl: { contains: videoId } } }], status: { in: ['PROCESSING', 'PENDING'] } },
+        where: {
+          OR: [
+            { lesson: { videoFilename: { contains: videoId } } },
+            { lesson: { videoUrl: { contains: videoId } } },
+            { draftReport: { path: ['_videoUrl'], string_contains: videoId } },
+            { draftReport: { path: ['_videoFilename'], string_contains: videoId } },
+          ],
+          status: { in: ['PROCESSING', 'PENDING'] },
+        },
       });
 
       const [content] = await file.download();
@@ -489,6 +506,17 @@ async function syncGCSReports(req, res) {
       if (pendingJob) {
         await prisma.report.update({ where: { id: pendingJob.id }, data: { status: 'DRAFT', draftReport: reportData } });
       } else {
+        // Only create a new report if one doesn't already exist with matching video_id in draftReport
+        const duplicateCheck = await prisma.$queryRawUnsafe(
+          `SELECT id FROM reports WHERE status IN ('DRAFT', 'FINALIZED') AND draft_report IS NOT NULL AND draft_report::text LIKE $1 LIMIT 1`,
+          `%${videoId}%`
+        ).catch(() => []);
+
+        if (duplicateCheck.length > 0) {
+          skipped++;
+          continue;
+        }
+
         await prisma.report.create({ data: { status: 'DRAFT', draftReport: reportData } });
       }
       synced++;
@@ -797,6 +825,64 @@ async function deleteCourse(req, res) {
   }
 }
 
+// ─── Get Teacher Progress (Time series for chart) ──────────
+async function getTeacherProgress(req, res) {
+  try {
+    const { teacherId } = req.params;
+
+    const reportTeachers = await prisma.reportTeacher.findMany({
+      where: {
+        teacherId,
+        report: { status: { in: ['DRAFT', 'FINALIZED'] } },
+      },
+      include: {
+        report: {
+          include: {
+            lesson: {
+              include: { group: { include: { course: true } } },
+            },
+          },
+        },
+      },
+    });
+
+    const dataPoints = reportTeachers
+      .filter(rt => rt.report)
+      .map(rt => {
+        const report = rt.report;
+        const fr = report.finalReport || report.draftReport || {};
+        const lesson = report.lesson;
+
+        // Try to extract a numeric score from the report JSON
+        let score = rt.score;
+        if (score == null && fr.overallScore != null) score = fr.overallScore;
+        if (score == null && fr.genel_sonuc != null) {
+          const parsed = parseFloat(fr.genel_sonuc);
+          if (!isNaN(parsed)) score = parsed;
+        }
+        if (score == null && fr.yeterlilikler) {
+          const map = { 'çok iyi': 5, 'iyi': 4, 'orta': 3, 'geliştirilmeli': 2, 'düşük': 2, 'yetersiz': 1 };
+          score = map[fr.yeterlilikler.toLowerCase()] || null;
+        }
+        if (score == null) score = 3;
+        if (score > 5) score = score / 20;
+
+        const date = lesson?.dateTime || report.createdAt;
+        const label = lesson
+          ? `${lesson.group?.course?.course || ''} - Ders ${lesson.lessonNo || ''}`
+          : '';
+
+        return { date, score: Math.round(score * 10) / 10, label };
+      })
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    return res.json(dataPoints);
+  } catch (err) {
+    console.error('GetTeacherProgress error:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+}
+
 module.exports = {
   getStats, getTeachers, uploadAnalysis, assignAnalysis, getDraft,
   regenerateAnalysis, finalizeAnalysis, getLessons, getAnalysisJobs,
@@ -804,5 +890,5 @@ module.exports = {
   createUser, getStudents, assignStudentToGroup, removeStudentFromGroup,
   setTeacherCourses, getTeacherCourses, createGroup, createCourse,
   updateGroup, deleteGroup, updateUser, deleteUser, updateCourse, deleteCourse,
+  getTeacherProgress,
 };
-

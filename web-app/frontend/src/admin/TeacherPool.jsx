@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { apiGet, apiPost } from '../api'
 import SharedReport from '../components/SharedReport.jsx'
+import ProgressChart from '../components/ProgressChart.jsx'
 
 const TeacherPool = () => {
   // Navigation: 'list' → 'reports' → 'detail'
@@ -21,23 +22,23 @@ const TeacherPool = () => {
   // Sync state
   const [syncing, setSyncing] = useState(false)
 
-  // Load teachers + auto-sync GCS reports
+  // Progress chart data
+  const [progressData, setProgressData] = useState([])
+
+  // Admin action states
+  const [adminNote, setAdminNote] = useState('')
+  const [finalizing, setFinalizing] = useState(false)
+
+  // Load teachers
   useEffect(() => {
     const init = async () => {
       try {
-        // Sync GCS reports first
-        setSyncing(true)
-        await apiPost('/admin/sync-reports', {}).catch(() => {})
-        setSyncing(false)
-
-        // Then load teachers
         const data = await apiGet('/admin/teachers')
         setTeachers(data)
       } catch (err) {
         setError(err.message)
       } finally {
         setLoading(false)
-        setSyncing(false)
       }
     }
     init()
@@ -53,11 +54,16 @@ const TeacherPool = () => {
     setView('reports')
 
     try {
-      const data = await apiGet(`/admin/teacher/${teacher.id}/reports`)
-      setTeacherReports(data.reports || [])
+      const [reportsData, progressPoints] = await Promise.all([
+        apiGet(`/admin/teacher/${teacher.id}/reports`),
+        apiGet(`/admin/teacher/${teacher.id}/progress`).catch(() => []),
+      ])
+      setTeacherReports(reportsData.reports || [])
+      setProgressData(progressPoints)
     } catch (err) {
       setError(err.message)
       setTeacherReports([])
+      setProgressData([])
     } finally {
       setLoadingReports(false)
     }
@@ -69,6 +75,8 @@ const TeacherPool = () => {
       const draft = await apiGet(`/admin/analysis/draft/${report.jobId}`)
       const fr = draft.finalReport || draft.draftReport || {}
       setSelectedReport({
+        jobId: report.jobId,
+        status: draft.status || report.status,
         id: report.jobId?.slice(0, 8),
         name: selectedTeacher?.name || '',
         module: draft.lesson?.course || report.courseName || selectedTeacher?.name + ' Analizi',
@@ -85,6 +93,7 @@ const TeacherPool = () => {
         finalReport: fr,
         draftReport: fr,
       })
+      setAdminNote('')
       setView('detail')
     } catch (e) {
       console.error('Report fetch error:', e)
@@ -106,6 +115,42 @@ const TeacherPool = () => {
 
   // ─── VIEW 3: Report Detail ──────────────────────────────
   if (view === 'detail' && selectedReport) {
+    const isDraft = selectedReport.status === 'DRAFT'
+    const isFinalized = selectedReport.status === 'FINALIZED'
+
+    const handleFinalize = async () => {
+      if (!selectedReport.jobId) return
+      setFinalizing(true)
+      try {
+        await apiPost('/admin/analysis/finalize', { jobId: selectedReport.jobId })
+        setSelectedReport(prev => ({ ...prev, status: 'FINALIZED', evaluator: 'Admin Onaylı' }))
+        // Refresh reports list
+        const data = await apiGet(`/admin/teacher/${selectedTeacher.id}/reports`)
+        setTeacherReports(data.reports || [])
+      } catch (err) {
+        setError('Onaylama hatası: ' + err.message)
+      } finally {
+        setFinalizing(false)
+      }
+    }
+
+    const handleRegenerate = async () => {
+      if (!selectedReport.jobId || !adminNote.trim()) return
+      try {
+        await apiPost('/admin/analysis/regenerate', {
+          jobId: selectedReport.jobId,
+          feedback: adminNote,
+        })
+        setAdminNote('')
+        setSelectedReport(prev => ({ ...prev, status: 'PROCESSING' }))
+        // Refresh reports
+        const data = await apiGet(`/admin/teacher/${selectedTeacher.id}/reports`)
+        setTeacherReports(data.reports || [])
+      } catch (err) {
+        setError('Yeniden oluşturma hatası: ' + err.message)
+      }
+    }
+
     return (
       <div style={{animation: 'fadeIn 0.3s ease', padding: '1rem'}}>
         <button
@@ -114,7 +159,104 @@ const TeacherPool = () => {
         >
           ‹ RAPORLARA GERİ DÖN
         </button>
+
+        {/* Status badge */}
+        <div style={{display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem'}}>
+          <span style={{
+            padding: '6px 16px', borderRadius: '10px', fontSize: '11px', fontWeight: 800,
+            background: isFinalized ? '#f0fdf4' : isDraft ? '#fefce8' : '#eff6ff',
+            color: isFinalized ? '#15803d' : isDraft ? '#a16207' : '#2563eb',
+            border: `1px solid ${isFinalized ? '#bbf7d0' : isDraft ? '#fde68a' : '#bfdbfe'}`,
+          }}>
+            {isFinalized ? '✓ ONAYLANDI' : isDraft ? '◎ TASLAK' : '⏳ İŞLENİYOR'}
+          </span>
+          <span style={{fontSize: '0.82rem', color: '#94a3b8', fontWeight: 600}}>
+            Rapor #{selectedReport.id}
+          </span>
+        </div>
+
         <SharedReport report={selectedReport} />
+
+        {/* Admin Action Panel */}
+        {!isFinalized && (
+          <div style={{
+            marginTop: '2rem', padding: '2rem', borderRadius: '20px',
+            background: '#f8fafc', border: '1.5px solid #e2e8f0',
+          }}>
+            <h5 style={{margin: '0 0 1rem', fontSize: '11px', fontWeight: 900, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.05em'}}>
+              Admin İşlemleri
+            </h5>
+
+            <textarea
+              placeholder="Rapor hakkında geri bildirim veya düzeltme notu yazın... (opsiyonel)"
+              value={adminNote}
+              onChange={(e) => setAdminNote(e.target.value)}
+              style={{
+                width: '100%', minHeight: '100px', padding: '1.25rem', borderRadius: '16px',
+                border: '1.5px solid #e2e8f0', fontSize: '0.9rem', outline: 'none',
+                background: '#fff', fontFamily: 'inherit', resize: 'vertical',
+              }}
+              onFocus={e => e.currentTarget.style.borderColor = '#6366f1'}
+              onBlur={e => e.currentTarget.style.borderColor = '#e2e8f0'}
+            />
+
+            <div style={{display: 'flex', gap: '1rem', marginTop: '1.25rem'}}>
+              <button
+                onClick={handleRegenerate}
+                disabled={!adminNote.trim()}
+                style={{
+                  flex: 1, padding: '14px', borderRadius: '14px', border: '1.5px solid #e2e8f0',
+                  background: adminNote.trim() ? '#fff' : '#f8fafc',
+                  color: adminNote.trim() ? '#6366f1' : '#94a3b8',
+                  fontSize: '0.85rem', fontWeight: 800, cursor: adminNote.trim() ? 'pointer' : 'not-allowed',
+                  transition: 'all 0.2s',
+                }}
+              >
+                ↺ Feedback ile Yeniden Oluştur
+              </button>
+              <button
+                onClick={handleFinalize}
+                disabled={finalizing}
+                style={{
+                  flex: 2, padding: '14px', borderRadius: '14px', border: 'none',
+                  background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                  color: '#fff', fontSize: '0.85rem', fontWeight: 800,
+                  cursor: finalizing ? 'wait' : 'pointer',
+                  boxShadow: '0 10px 25px -5px rgba(99, 102, 241, 0.4)',
+                  transition: 'all 0.2s',
+                  opacity: finalizing ? 0.7 : 1,
+                }}
+              >
+                {finalizing ? '⏳ Onaylanıyor...' : '✓ Raporu Onayla ve Yayınla'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Already finalized info */}
+        {isFinalized && (
+          <div style={{
+            marginTop: '2rem', padding: '1.5rem 2rem', borderRadius: '16px',
+            background: '#f0fdf4', border: '1px solid #bbf7d0',
+            display: 'flex', alignItems: 'center', gap: '12px',
+          }}>
+            <div style={{
+              width: '36px', height: '36px', borderRadius: '50%',
+              background: '#10b981', color: '#fff',
+              display: 'grid', placeItems: 'center', fontWeight: 900, fontSize: '1rem',
+            }}>✓</div>
+            <div>
+              <p style={{margin: 0, fontWeight: 800, color: '#15803d', fontSize: '0.9rem'}}>Bu rapor onaylanmış</p>
+              <p style={{margin: '2px 0 0', fontSize: '0.78rem', color: '#4ade80', fontWeight: 600}}>Eğitmen panelinde görüntüleniyor.</p>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div style={{color: '#f43f5e', background: '#ffe4e6', padding: '0.75rem 1.5rem', borderRadius: '12px', fontSize: '0.9rem', marginTop: '1rem', fontWeight: 600}}>
+            {error}
+          </div>
+        )}
       </div>
     )
   }
@@ -180,7 +322,13 @@ const TeacherPool = () => {
             </div>
           </div>
         ) : (
-          <div style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
+          <div style={{display: 'flex', flexDirection: 'column', gap: '1.5rem'}}>
+            {/* Progress Chart */}
+            <ProgressChart
+              data={progressData}
+              title={`${selectedTeacher.name} — Performans İlerlemesi`}
+              accentColor={selectedTeacher.color || '#6366f1'}
+            />
             {teacherReports.map((report, idx) => {
               let statusConfig;
               if (report.isUnassigned) {

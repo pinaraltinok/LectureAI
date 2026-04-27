@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { apiGet } from '../api'
 import SharedReport from '../components/SharedReport.jsx'
+import ProgressChart from '../components/ProgressChart.jsx'
 
 const TeacherDashboard = () => {
   const [selectedReport, setSelectedReport] = useState(null)
   const [teacherComment, setTeacherComment] = useState("")
   const [stats, setStats] = useState(null)
   const [reports, setReports] = useState([])
+  const [progressData, setProgressData] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -14,9 +16,11 @@ const TeacherDashboard = () => {
     Promise.all([
       apiGet('/teacher/stats'),
       apiGet('/teacher/reports'),
-    ]).then(([s, r]) => {
+      apiGet('/teacher/progress').catch(() => []),
+    ]).then(([s, r, p]) => {
       setStats(s)
       setReports(r)
+      setProgressData(p)
       if (r.length > 0) setSelectedReport(r[0].jobId)
     }).catch(err => setError(err.message))
       .finally(() => setLoading(false))
@@ -73,6 +77,15 @@ const TeacherDashboard = () => {
             <div style={{position:'absolute', right:'-5%', bottom:'-5%', width:'70px', height:'70px', background:stat.color, opacity:0.05, borderRadius:'50%', filter:'blur(20px)'}}></div>
           </div>
         ))}
+      </div>
+
+      {/* Progress Chart */}
+      <div style={{marginBottom: '2.5rem'}}>
+        <ProgressChart
+          data={progressData}
+          title="Performans İlerlemem"
+          accentColor="#6366f1"
+        />
       </div>
 
       {reports.length === 0 ? (

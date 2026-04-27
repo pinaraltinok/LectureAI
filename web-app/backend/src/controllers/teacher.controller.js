@@ -269,8 +269,69 @@ async function deleteStudentEvaluation(req, res) {
   }
 }
 
+/**
+ * GET /api/teacher/progress
+ * Returns time-series progress data for the authenticated teacher's chart.
+ */
+async function getMyProgress(req, res) {
+  try {
+    const teacherId = req.user.userId;
+
+    const reportTeachers = await prisma.reportTeacher.findMany({
+      where: {
+        teacherId,
+        report: { status: { in: ['DRAFT', 'FINALIZED'] } },
+      },
+      include: {
+        report: {
+          include: {
+            lesson: {
+              include: { group: { include: { course: true } } },
+            },
+          },
+        },
+      },
+    });
+
+    const dataPoints = reportTeachers
+      .filter(rt => rt.report)
+      .map(rt => {
+        const report = rt.report;
+        const fr = report.finalReport || report.draftReport || {};
+        const lesson = report.lesson;
+
+        let score = rt.score;
+        if (score == null && fr.overallScore != null) score = fr.overallScore;
+        if (score == null && fr.genel_sonuc != null) {
+          const parsed = parseFloat(fr.genel_sonuc);
+          if (!isNaN(parsed)) score = parsed;
+        }
+        if (score == null && fr.yeterlilikler) {
+          const map = { 'çok iyi': 5, 'iyi': 4, 'orta': 3, 'geliştirilmeli': 2, 'düşük': 2, 'yetersiz': 1 };
+          score = map[fr.yeterlilikler.toLowerCase()] || null;
+        }
+        if (score == null) score = 3;
+        if (score > 5) score = score / 20;
+
+        const date = lesson?.dateTime || report.createdAt;
+        const label = lesson
+          ? `${lesson.group?.course?.course || ''} - Ders ${lesson.lessonNo || ''}`
+          : '';
+
+        return { date, score: Math.round(score * 10) / 10, label };
+      })
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    return res.json(dataPoints);
+  } catch (err) {
+    console.error('GetMyProgress error:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+}
+
 module.exports = {
   getTeacherLessons, getGroupStudents, createStudentEvaluation,
   updateStudentEvaluation, deleteStudentEvaluation,
   getMyEvaluations, getReports, getSurveys, getTeacherStats,
+  getMyProgress,
 };
