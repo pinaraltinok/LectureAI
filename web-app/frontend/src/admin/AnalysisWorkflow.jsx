@@ -12,10 +12,13 @@ const AnalysisWorkflow = ({ onStepChange }) => {
   const [selectedTeacherId, setSelectedTeacherId] = useState('')
   const [selectedCourseId, setSelectedCourseId] = useState('')
   const [selectedLessonCode, setSelectedLessonCode] = useState('M1L1')
+  const [selectedGroupId, setSelectedGroupId] = useState('')
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10))
   const [currentJobId, setCurrentJobId] = useState(null)
   const [draftData, setDraftData] = useState(null)
   const [teachers, setTeachers] = useState([])
   const [courses, setCourses] = useState([])
+  const [groups, setGroups] = useState([])
   const [error, setError] = useState('')
   const fileInputRef = useRef(null)
   const navigate = useNavigate()
@@ -35,22 +38,30 @@ const AnalysisWorkflow = ({ onStepChange }) => {
   const selectedCourse = courses.find(c => c.id === selectedCourseId) || courses[0] || null
   const lessonCodes = generateLessonCodes(selectedCourse)
 
+  // Filter groups by selected teacher + course
+  const filteredGroups = groups.filter(g =>
+    g.teacherId === selectedTeacherId && g.courseId === selectedCourseId
+  )
+
   useEffect(() => {
     Promise.all([
       apiGet('/admin/teachers'),
       apiGet('/admin/courses'),
-    ]).then(([t, c]) => {
+      apiGet('/admin/groups'),
+    ]).then(([t, c, g]) => {
       setTeachers(t)
       if (t.length > 0) setSelectedTeacherId(t[0].id)
       setCourses(c)
       if (c.length > 0) setSelectedCourseId(c[0].id)
+      setGroups(g)
     }).catch(err => setError(err.message))
   }, [])
 
-  // Reset lesson code when curriculum changes
+  // Reset lesson code + group when curriculum or teacher changes
   useEffect(() => {
     setSelectedLessonCode('M1L1')
-  }, [selectedCourseId])
+    setSelectedGroupId('')
+  }, [selectedCourseId, selectedTeacherId])
 
   const handleUploadAndAnalyze = async () => {
     if (!selectedTeacherId) {
@@ -73,11 +84,14 @@ const AnalysisWorkflow = ({ onStepChange }) => {
       const jobId = uploadRes.jobId
       setCurrentJobId(jobId)  // Set early so progress polling starts
 
-      // Step 2: Assign with curriculum + lesson code metadata
+      // Step 2: Assign with curriculum + lesson code + group + date metadata
       await apiPost('/admin/analysis/assign', {
         jobId,
         teacherId: selectedTeacherId,
         lessonId: null,
+        groupId: selectedGroupId || null,
+        lessonCode: selectedLessonCode,
+        lessonDate: selectedDate || null,
       })
 
       setCurrentJobId(jobId)
@@ -398,6 +412,51 @@ const AnalysisWorkflow = ({ onStepChange }) => {
                 </div>
                 <span style={{fontSize: '0.8rem', color: '#94a3b8', fontWeight: 600}}>
                   {selectedCourse?.course} — Modül {selectedLessonCode.match(/M(\d+)/)?.[1]}, Ders {selectedLessonCode.match(/L(\d+)/)?.[1]}
+                </span>
+              </div>
+            </div>
+
+            {/* 4. Grup Seçimi */}
+            <div>
+              <label style={{fontSize: '11px', fontWeight: 800, color: '#64748b', marginBottom: '8px', display: 'block', letterSpacing: '0.05em'}}>GRUP SEÇİMİ (OPSİYONEL)</label>
+              <select
+                value={selectedGroupId}
+                onChange={(e) => setSelectedGroupId(e.target.value)}
+                style={{width:'100%', padding:'1rem', borderRadius:'14px', border:'1px solid #e2e8f0', fontWeight:700, outline: 'none', background:'#fff', fontSize: '0.95rem'}}
+              >
+                <option value="">— Grup seçilmedi —</option>
+                {filteredGroups.map(g => (
+                  <option key={g.id} value={g.id}>
+                    {g.courseName} • {g.teacherName} {g.schedule ? `(${g.schedule})` : ''} — {g.studentCount} öğrenci
+                  </option>
+                ))}
+              </select>
+              {filteredGroups.length === 0 && selectedTeacherId && selectedCourseId && (
+                <p style={{fontSize: '0.78rem', color: '#f59e0b', fontWeight: 600, marginTop: '6px', margin: '6px 0 0'}}>
+                  ⚠ Seçilen eğitmen ve kurs için henüz grup oluşturulmamış.
+                </p>
+              )}
+              {selectedGroupId && (
+                <div style={{display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap'}}>
+                  <span style={{fontSize: '10px', fontWeight: 800, color: '#10b981', background: '#f0fdf4', padding: '4px 10px', borderRadius: '6px'}}>
+                    👥 {filteredGroups.find(g => g.id === selectedGroupId)?.studentCount || 0} öğrenci görecek
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* 5. Tarih Seçimi */}
+            <div>
+              <label style={{fontSize: '11px', fontWeight: 800, color: '#64748b', marginBottom: '8px', display: 'block', letterSpacing: '0.05em'}}>DERS TARİHİ</label>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                style={{width:'100%', padding:'1rem', borderRadius:'14px', border:'1px solid #e2e8f0', fontWeight:700, outline: 'none', background:'#fff', fontSize: '0.95rem', fontFamily:'inherit', color:'#1e293b'}}
+              />
+              <div style={{display: 'flex', gap: '8px', marginTop: '10px'}}>
+                <span style={{fontSize: '10px', fontWeight: 800, color: '#6366f1', background: '#f5f3ff', padding: '4px 10px', borderRadius: '6px'}}>
+                  📅 {new Date(selectedDate + 'T00:00:00').toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' })}
                 </span>
               </div>
             </div>

@@ -192,7 +192,7 @@ function pollGCSForReport(jobId, videoId) {
 // ─── Assign Analysis ────────────────────────────────────────
 async function assignAnalysis(req, res) {
   try {
-    const { jobId, teacherId, lessonId } = req.body;
+    const { jobId, teacherId, lessonId, groupId, lessonCode, lessonDate } = req.body;
     if (!jobId || !teacherId) return res.status(400).json({ error: 'jobId ve teacherId gereklidir.' });
 
     const report = await prisma.report.findUnique({ where: { id: jobId } });
@@ -205,12 +205,36 @@ async function assignAnalysis(req, res) {
       create: { reportId: jobId, teacherId },
     });
 
+    let resolvedLessonId = lessonId || null;
+
+    // If groupId is provided, create a Lesson record so students in that group can see the video
+    if (groupId && lessonCode) {
+      const lessonNo = parseInt(lessonCode.match(/L(\d+)/)?.[1] || '1');
+      const reportData = (typeof report.draftReport === 'object' && report.draftReport) ? report.draftReport : {};
+      const videoUrl = reportData._videoUrl || null;
+      const videoFilename = reportData._videoFilename || null;
+      const dateTime = lessonDate ? new Date(lessonDate) : new Date();
+
+      const lesson = await prisma.lesson.create({
+        data: {
+          groupId,
+          teacherId,
+          lessonNo,
+          videoUrl,
+          videoFilename,
+          dateTime,
+        },
+      });
+      resolvedLessonId = lesson.id;
+      console.log(`[Assign] Lesson ${lesson.id} created for group ${groupId}, lessonNo=${lessonNo}`);
+    }
+
     const updated = await prisma.report.update({
       where: { id: jobId },
-      data: { lessonId: lessonId || null, status: 'PROCESSING' },
+      data: { lessonId: resolvedLessonId, status: 'PROCESSING' },
     });
 
-    return res.json({ jobId: updated.id, status: updated.status, message: 'Analiz başarıyla atandı.' });
+    return res.json({ jobId: updated.id, status: updated.status, lessonId: resolvedLessonId, message: 'Analiz başarıyla atandı.' });
   } catch (err) {
     console.error('AssignAnalysis error:', err);
     return res.status(500).json({ error: 'Sunucu hatası.' });
