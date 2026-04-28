@@ -2,7 +2,8 @@
 
 Pipeline:
 
-    1. Load CV JSON  (``gs://{bucket}/data/visual/{video_id}.json``)
+    1. Load CV JSON from the processed bucket (prefer
+       ``results/{video_id}/lecture_report.json``, then ``GCS_KEY_CV`` template)
     2. Chunk audio + CV data into ``chunk_minutes`` windows
     3. Analyse every chunk with the configured LLM provider chain in parallel
     4. Merge chunk analyses into a single QAReport (same provider chain)
@@ -41,6 +42,7 @@ from vertexai.generative_models import GenerativeModel
 from src.audio.schemas import AudioAnalysisResult, TranscriptSegment
 from src.audio.transcript_format import speaker_display
 from src.config import BucketConfig
+from src.cv_video_id import normalize_cv_video_id
 from src.time_utils import ms_to_hms
 
 from .exceptions import (
@@ -59,7 +61,7 @@ from .report_schema import (
 logger = logging.getLogger(__name__)
 
 # Transient capacity / rate limits: initial try + up to three retries.
-_GEMINI_RETRY_BACKOFF_SEC = (10.0, 30.0, 60.0)
+_GEMINI_RETRY_BACKOFF_SEC = (12.0, 30.0, 75.0)
 _GROQ_RETRY_BACKOFF_SEC = (10.0, 30.0, 60.0)
 
 # ── Prompt budget constants ───────────────────────────────────────────────
@@ -67,20 +69,21 @@ _GROQ_RETRY_BACKOFF_SEC = (10.0, 30.0, 60.0)
 # Gemini 2.0 Flash: 1M token context.  Groq llama-3.3: 128k context.
 # We keep budgets LOW to avoid 429 rate-limit errors on free tiers.
 _MAX_CV_JSON_CHARS = 6_000        # ~1.5k tokens for CV data per chunk
-_MAX_TRANSCRIPT_CHARS = 10_000    # ~2.5k tokens for transcript per chunk
+_MAX_TRANSCRIPT_CHARS = 6_500     # ~1.6k tokens for transcript per chunk
 _MAX_MERGE_CHUNKS_CHARS = 30_000  # ~7.5k tokens for merge payload
 # One chunk at a time: parallel chunk LLMs still multiply RPM; keep this at 1
 # unless you raise provider quotas. See also ``ORCHESTRATOR_LLM_SPACING_SEC``.
 _CHUNK_CONCURRENCY = 1
 
 # Audio context: structured summary + representative transcript lines (not full text).
-_MAX_AUDIO_SUMMARY_JSON_CHARS = 2_800
-_MAX_TRANSCRIPT_SEGMENT_LINES = 28
-_MAX_SEGMENT_TEXT_CHARS = 140
+_MAX_AUDIO_SUMMARY_JSON_CHARS = 1_800
+_MAX_TRANSCRIPT_SEGMENT_LINES = 16
+_MAX_SEGMENT_TEXT_CHARS = 96
 _MAX_HIGHLIGHTS_IN_CHUNK = 5
 
 # CV fields to include in chunk prompts (whitelist).
 # Everything else is dropped to save tokens.
+# Includes legacy motion_* keys plus ratios emitted by ``video.dynamic_visual_pipeline``.
 _CV_WHITELIST_KEYS = {
     "motion_frames",
     "board_usage_ratio",
@@ -91,7 +94,60 @@ _CV_WHITELIST_KEYS = {
     "movement_summary",
     "face_visible_ratio",
     "posture_summary",
+    "analysis_interval_sec",
+    "frames_total_sampled",
+    "teacher_located_frames",
+    "camera_open_frames",
+    "teacher_locate_ratio",
+    "camera_open_ratio_total",
+    "camera_open_ratio_among_located",
+    "smile_frame_ratio",
+    "hand_visible_ratio",
+    "movement_energy_avg",
 }
+
+
+def _cv_dict_is_substantive(data: Dict[str, Any]) -> bool:
+    """True when CV JSON has usable metrics (not an empty stub ``{}``).
+
+    Modal/CV writes ``results/{{video_id}}/lecture_report.json`` while older paths
+    may leave a placeholder ``results/{{video_id}}.json``. If the first file exists
+    but is empty, we must keep trying other candidates.
+    """
+    if not isinstance(data, dict) or not data:
+        return False
+    frames = data.get("motion_frames")
+    if isinstance(frames, list) and len(frames) > 0:
+        return True
+    tfa = data.get("total_frames_analyzed")
+    if isinstance(tfa, int) and tfa > 0:
+        return True
+    fts = data.get("frames_total_sampled")
+    if isinstance(fts, int) and fts > 0:
+        return True
+    for key in (
+        "board_usage_ratio",
+        "teacher_visible_ratio",
+        "face_visible_ratio",
+        "slide_count",
+        "teacher_locate_ratio",
+        "camera_open_ratio_total",
+        "camera_open_ratio_among_located",
+        "movement_energy_avg",
+        "smile_frame_ratio",
+        "hand_visible_ratio",
+    ):
+        if key not in data:
+            continue
+        val = data[key]
+        if isinstance(val, (int, float)):
+            return True
+        if isinstance(val, str) and val.strip():
+            return True
+        if isinstance(val, (list, dict)) and len(val) > 0:
+            return True
+    return False
+
 
 _ENGLISH_MARKERS = {
     "good",
@@ -229,10 +285,10 @@ def _build_chunk_audio_summary(
                 "speaker": m.get("speaker"),
                 "sentiment": m.get("sentiment"),
                 "confidence": m.get("confidence"),
-                "text": _truncate_one_line(str(m.get("text", "")), 160),
+                "text": _truncate_one_line(str(m.get("text", "")), 110),
             }
         )
-        if len(neg_out) >= 3:
+        if len(neg_out) >= 2:
             break
 
     pos_out: List[Dict[str, Any]] = []
@@ -246,10 +302,10 @@ def _build_chunk_audio_summary(
                 "speaker": m.get("speaker"),
                 "sentiment": m.get("sentiment"),
                 "confidence": m.get("confidence"),
-                "text": _truncate_one_line(str(m.get("text", "")), 160),
+                "text": _truncate_one_line(str(m.get("text", "")), 110),
             }
         )
-        if len(pos_out) >= 3:
+        if len(pos_out) >= 2:
             break
 
     seg_in_window = sum(
@@ -258,7 +314,7 @@ def _build_chunk_audio_summary(
         if not (seg.end_ms <= start_ms or seg.start_ms >= end_ms)
     )
     highlights = [
-        _truncate_one_line(str(h), 200)
+        _truncate_one_line(str(h), 140)
         for h in (audio_result.highlights or [])[:_MAX_HIGHLIGHTS_IN_CHUNK]
     ]
     return {
@@ -504,6 +560,10 @@ class ReportOrchestrator:
                 ):
                     raise
                 delay = _GEMINI_RETRY_BACKOFF_SEC[attempt]
+                hinted_delay = _extract_retry_after_seconds(exc)
+                if hinted_delay is not None:
+                    # Respect provider hint but avoid unbounded worker stalls.
+                    delay = min(300.0, max(delay, hinted_delay))
                 logger.warning(
                     "[%s] AI Studio %s failed (attempt %d/%d): %s; "
                     "sleeping %.0fs before retry",
@@ -569,6 +629,10 @@ class ReportOrchestrator:
                 ):
                     raise
                 delay = _GEMINI_RETRY_BACKOFF_SEC[attempt]
+                hinted_delay = _extract_retry_after_seconds(exc)
+                if hinted_delay is not None:
+                    # Respect provider hint but avoid unbounded worker stalls.
+                    delay = min(300.0, max(delay, hinted_delay))
                 logger.warning(
                     "[%s] Vertex %s failed (attempt %d/%d): %s; "
                     "sleeping %.0fs before retry",
@@ -657,9 +721,13 @@ class ReportOrchestrator:
 
     async def _spacing_after_successful_llm(self) -> None:
         """Optional pause between successful LLM calls to stay under RPM limits."""
-        if self._llm_spacing_sec <= 0:
+        spacing = self._llm_spacing_sec
+        # Gemini free / low tiers can return 429 on bursty sequential calls.
+        if spacing <= 0 and any(p in {"aistudio", "vertex"} for p in self._provider_order):
+            spacing = 1.0
+        if spacing <= 0:
             return
-        await asyncio.sleep(self._llm_spacing_sec)
+        await asyncio.sleep(spacing)
 
     async def _generate_text_with_fallback(
         self,
@@ -1088,6 +1156,7 @@ class ReportOrchestrator:
         with self._stage(video_id, "load_cv"):
             bucket = self._storage_client.bucket(self.buckets.processed)
             attempted_paths: List[str] = []
+            saw_any_blob = False
             for cv_path in self._candidate_cv_paths(video_id):
                 attempted_paths.append(cv_path)
                 try:
@@ -1095,11 +1164,27 @@ class ReportOrchestrator:
                     exists = await asyncio.to_thread(blob.exists)
                     if not exists:
                         continue
+                    saw_any_blob = True
                     payload = await asyncio.to_thread(blob.download_as_text)
                     data = json.loads(payload)
                     if not isinstance(data, dict):
                         raise ValueError("CV JSON top-level must be an object")
-                    return data
+                    if _cv_dict_is_substantive(data):
+                        logger.info(
+                            "[%s] loaded substantive CV JSON from gs://%s/%s keys=%s",
+                            video_id,
+                            self.buckets.processed,
+                            cv_path,
+                            sorted(data.keys())[:24],
+                        )
+                        return data
+                    logger.warning(
+                        "[%s] CV JSON at gs://%s/%s is empty or stub; "
+                        "trying next candidate path",
+                        video_id,
+                        self.buckets.processed,
+                        cv_path,
+                    )
                 except OrchestratorError:
                     raise
                 except Exception as exc:
@@ -1108,6 +1193,14 @@ class ReportOrchestrator:
                         f"{self.buckets.processed}/{cv_path}: {exc}",
                         video_id=video_id,
                     ) from exc
+
+            if saw_any_blob:
+                logger.warning(
+                    "[%s] all CV JSON objects were missing metrics (stub/empty); "
+                    "continuing with empty CV",
+                    video_id,
+                )
+                return {}
 
             tried = ", ".join(
                 f"gs://{self.buckets.processed}/{path}" for path in attempted_paths
@@ -1118,12 +1211,26 @@ class ReportOrchestrator:
             )
 
     def _candidate_cv_paths(self, video_id: str) -> List[str]:
-        """Ordered CV JSON lookup paths for backward compatibility."""
-        configured = self.buckets.cv_path(video_id)
-        candidates = [configured]
-        nested_report = f"results/{video_id}/lecture_report.json"
-        if nested_report not in candidates:
-            candidates.append(nested_report)
+        """Ordered CV JSON lookup paths for backward compatibility.
+
+        Prefer ``results/{{id}}/lecture_report.json`` (Modal/cv_engine) over the
+        legacy flat ``results/{{id}}.json``. Try ``normalize_cv_video_id`` first
+        so GCS keys match the CV worker, then the raw id.
+        """
+        raw = (video_id or "").strip()
+        variants = _dedupe_preserve_order(
+            [normalize_cv_video_id(raw), raw]
+        )
+        candidates: List[str] = []
+        for vid in variants:
+            if not vid:
+                continue
+            nested_report = f"results/{vid}/lecture_report.json"
+            if nested_report not in candidates:
+                candidates.append(nested_report)
+            configured = self.buckets.cv_path(vid)
+            if configured not in candidates:
+                candidates.append(configured)
         return candidates
 
     # ------------------------------------------------------------------ #
