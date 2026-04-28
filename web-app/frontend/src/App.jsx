@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, useNavigate, Navigate } from 'react-router-dom'
+import { LayoutDashboard, Users, Upload, Settings, BookOpen, MessageSquare, BarChart3, GraduationCap, ClipboardEdit, StickyNote, LogOut, BookOpenCheck } from 'lucide-react'
 import Login from './Login.jsx'
 
 // ADMIN sayfaları
@@ -105,7 +106,7 @@ function AppContent() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand" style={{marginBottom: '3.5rem', padding: '0 1.2rem'}}>
+        <div className="brand" style={{marginBottom: '2.5rem', padding: '0 1.2rem'}}>
           <div style={{display:'flex', alignItems:'center', gap:'1rem'}}>
             <div className="brand-icon-premium" style={{
               background: 'linear-gradient(135deg, #6366f1 0%, #06b6d4 100%)',
@@ -113,52 +114,100 @@ function AppContent() {
               width: '42px', height: '42px', borderRadius: '12px',
               display: 'flex', alignItems: 'center', justifyContent: 'center'
             }}>
-              <span style={{color: 'white', fontSize: '1.4rem'}}>▤</span>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+              </svg>
             </div>
             <div style={{display:'flex', flexDirection:'column', lineHeight: 1.2}}>
               <span style={{fontSize: '1.25rem', fontWeight: 950, letterSpacing: '-0.02em', color: '#fff'}}>
                 Lecture<span style={{color: '#06b6d4'}}>AI</span>
               </span>
               <span style={{
-                fontSize: '0.6rem', fontWeight: 800, color: '#94a3b8', 
+                fontSize: '0.6rem', fontWeight: 800, color: '#475569', 
                 letterSpacing: '0.15em', textTransform: 'uppercase'
-              }}>Automated Reports</span>
+              }}>Smart Analytics</span>
             </div>
           </div>
         </div>
+
+        <div className="sidebar-section-label">
+          {role === 'admin' ? '◇ Yönetim Paneli' : role === 'teacher' ? '◇ Eğitmen Paneli' : '◇ Öğrenci Paneli'}
+        </div>
+
         <nav className="menu">
           {role === 'admin' && (
             <>
-              <NavLink to="/admin/kurum-ozeti" className={({isActive})=>isActive?"menu-link active":"menu-link"}>▦ Kurum Özeti</NavLink>
-              <NavLink to="/admin/egitmen-havuzu" className={({isActive})=>isActive?"menu-link active":"menu-link"}>👥 Eğitmenler & Raporlar</NavLink>
-              <NavLink to="/admin/analiz-atama" className={({isActive})=>isActive?"menu-link active":"menu-link"}>☁ Ders Analizi Atama</NavLink>
-              <NavLink to="/admin/yonetim" className={({isActive})=>isActive?"menu-link active":"menu-link"}>⚙ Kullanıcı & Grup Yönetimi</NavLink>
+              <NavLink to="/admin/kurum-ozeti" className={({isActive})=>isActive?"menu-link active":"menu-link"}>
+                <LayoutDashboard size={18} style={{marginRight:'12px', opacity: 0.8, flexShrink: 0}} />
+                Kurum Özeti
+              </NavLink>
+              <NavLink to="/admin/egitmen-havuzu" className={({isActive})=>isActive?"menu-link active":"menu-link"}>
+                <Users size={18} style={{marginRight:'12px', opacity: 0.8, flexShrink: 0}} />
+                Eğitmenler & Raporlar
+              </NavLink>
+              <NavLink to="/admin/analiz-atama" className={({isActive})=>isActive?"menu-link active":"menu-link"}>
+                <Upload size={18} style={{marginRight:'12px', opacity: 0.8, flexShrink: 0}} />
+                Ders Analizi Atama
+              </NavLink>
+              <NavLink to="/admin/yonetim" className={({isActive})=>isActive?"menu-link active":"menu-link"}>
+                <Settings size={18} style={{marginRight:'12px', opacity: 0.8, flexShrink: 0}} />
+                Kullanıcı & Grup Yönetimi
+              </NavLink>
             </>
           )}
 
           {role === 'teacher' && (
             <>
-              <NavLink to="/teacher/ders-ozeti" className={({isActive})=>isActive?"menu-link active":"menu-link"}>▦ Derslerim</NavLink>
-              <NavLink to="/teacher/feedback" className={({isActive})=>isActive?"menu-link active":"menu-link"}>💬 Öğrenci Geri Bildirimi</NavLink>
-              <NavLink to="/teacher/anketler" className={({isActive})=>isActive?"menu-link active":"menu-link"}>📊 Anket Sonuçları</NavLink>
+              <NavLink to="/teacher/ders-ozeti" className={({isActive})=>isActive?"menu-link active":"menu-link"}>
+                <BookOpenCheck size={18} style={{marginRight:'12px', opacity: 0.8, flexShrink: 0}} />
+                Derslerim
+              </NavLink>
+              <NavLink to="/teacher/feedback" className={({isActive})=>isActive?"menu-link active":"menu-link"}>
+                <MessageSquare size={18} style={{marginRight:'12px', opacity: 0.8, flexShrink: 0}} />
+                Öğrenci Geri Bildirimi
+              </NavLink>
+              <NavLink to="/teacher/anketler" className={({isActive})=>isActive?"menu-link active":"menu-link"}>
+                <BarChart3 size={18} style={{marginRight:'12px', opacity: 0.8, flexShrink: 0}} />
+                Anket Sonuçları
+              </NavLink>
             </>
           )}
 
           {role === 'student' && (
             <>
               <NavLink to="/student/derslerim" className={({isActive})=>isActive?"menu-link active":"menu-link"}>
-                <span style={{marginRight: '12px', fontSize: '1.2rem'}}>📚</span> Derslerim
+                <GraduationCap size={18} style={{marginRight:'12px', opacity: 0.8, flexShrink: 0}} />
+                Derslerim
               </NavLink>
               <NavLink to="/student/anket" className={({isActive})=>isActive?"menu-link active":"menu-link"}>
-                <span style={{marginRight: '12px', fontSize: '1.2rem'}}>✎</span> Ders Anketi
+                <ClipboardEdit size={18} style={{marginRight:'12px', opacity: 0.8, flexShrink: 0}} />
+                Ders Anketi
               </NavLink>
               <NavLink to="/student/notlar" className={({isActive})=>isActive?"menu-link active":"menu-link"}>
-                <span style={{marginRight: '12px', fontSize: '1.2rem'}}>🗨</span> Hocamın Notları
+                <StickyNote size={18} style={{marginRight:'12px', opacity: 0.8, flexShrink: 0}} />
+                Hocamın Notları
               </NavLink>
             </>
           )}
         </nav>
-        <button className="logout" onClick={handleLogout}>Çıkış Yap</button>
+
+        <div className="sidebar-divider"></div>
+
+        <div className="sidebar-user-block" onClick={() => navigate('/profil')} style={{cursor:'pointer'}}>
+          <div className="sidebar-user-avatar" style={{background: role==='admin'?'linear-gradient(135deg, #f59e0b, #ef4444)':role==='teacher'?'linear-gradient(135deg, #6366f1, #8b5cf6)':'linear-gradient(135deg, #10b981, #06b6d4)'}}>
+            {getInitials(userName)}
+          </div>
+          <div className="sidebar-user-info">
+            <span className="sidebar-user-name">{userName || (role==='admin'?'Yönetici':role==='teacher'?'Eğitmen':'Öğrenci')}</span>
+            <span className="sidebar-user-role">{role === 'admin' ? 'Yönetici' : role === 'teacher' ? 'Eğitmen' : 'Öğrenci'}</span>
+          </div>
+        </div>
+
+        <button className="logout" onClick={handleLogout}>
+          <LogOut size={16} style={{flexShrink: 0}} />
+          Çıkış Yap
+        </button>
       </aside>
 
       <main className="content">

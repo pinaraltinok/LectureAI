@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Users, Star, BookOpen, BarChart3, ClipboardList, AlertTriangle, MessageCircle, CheckCircle, Circle, Activity } from 'lucide-react'
 import { apiGet } from '../api'
 import { formatLessonLabel } from '../utils/lessonLabel'
 import SharedReport from '../components/SharedReport.jsx'
@@ -28,10 +29,10 @@ const TeacherDashboard = () => {
   }, [])
 
   const teacherStats = [
-    { label: "Toplam Öğrenci", value: stats?.totalStudents ?? '—', icon: "👥", color: "#6366f1" },
-    { label: "Anket Skoru", value: stats?.feedbackScore ?? '—', icon: "⭐", color: "#10b981" },
-    { label: "Toplam Grup", value: stats?.totalGroups ?? '—', icon: "📚", color: "#f59e0b" },
-    { label: "Rapor Sayısı", value: stats?.reportCount ?? '—', icon: "📊", color: "#ec4899" }
+    { label: "Toplam Öğrenci", value: stats?.totalStudents ?? '—', icon: <Users size={22} />, color: "#6366f1", gradient: 'linear-gradient(135deg, #6366f1, #8b5cf6)' },
+    { label: "Anket Skoru", value: stats?.feedbackScore ?? '—', icon: <Star size={22} />, color: "#10b981", gradient: 'linear-gradient(135deg, #10b981, #34d399)' },
+    { label: "Toplam Grup", value: stats?.totalGroups ?? '—', icon: <BookOpen size={22} />, color: "#f59e0b", gradient: 'linear-gradient(135deg, #f59e0b, #fbbf24)' },
+    { label: "Rapor Sayısı", value: stats?.reportCount ?? '—', icon: <BarChart3 size={22} />, color: "#ec4899", gradient: 'linear-gradient(135deg, #ec4899, #f472b6)' }
   ]
 
   const currentReport = reports.find(r => r.jobId === selectedReport) || reports[0]
@@ -59,29 +60,86 @@ const TeacherDashboard = () => {
   }
 
   if (loading) {
-    return (<div style={{display:'grid', placeItems:'center', minHeight:'400px'}}><div style={{textAlign:'center', color:'#64748b'}}><div style={{fontSize:'2rem', marginBottom:'1rem'}}>⏳</div><p style={{fontWeight:700}}>Veriler yükleniyor...</p></div></div>)
+    return (
+      <div style={{display:'grid', placeItems:'center', minHeight:'400px'}}>
+        <div className="premium-loader">
+          <div className="loader-ring"></div>
+          <p style={{ fontWeight: 700, color: '#64748b', fontSize: '0.9rem' }}>Dersleriniz yükleniyor...</p>
+        </div>
+      </div>
+    )
   }
   if (error) {
-    return (<div style={{display:'grid', placeItems:'center', minHeight:'400px'}}><div style={{textAlign:'center', color:'#f43f5e'}}><div style={{fontSize:'2rem', marginBottom:'1rem'}}>⚠️</div><p style={{fontWeight:700}}>{error}</p></div></div>)
+    return (
+      <div style={{display:'grid', placeItems:'center', minHeight:'400px'}}>
+        <div style={{textAlign:'center', color:'#f43f5e', animation: 'bounceIn 0.5s ease'}}>
+          <div style={{marginBottom:'1rem'}}><AlertTriangle size={48} color="#f43f5e" /></div>
+          <p style={{fontWeight:700}}>{error}</p>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="teacher-dashboard" style={{animation: 'fadeIn 0.5s ease'}}>
-      <div className="stats-grid" style={{gridTemplateColumns:'repeat(4, 1fr)', gap:'1.5rem', marginBottom:'2.5rem'}}>
-        {teacherStats.map((stat, idx) => (
-          <div key={idx} className="stat-card" style={{ minHeight:'120px', padding:'1.5rem', alignItems:'flex-start', justifyContent:'space-between', borderRadius: '16px', position: 'relative', overflow: 'hidden' }}>
-            <div style={{width:'42px', height:'42px', background:`${stat.color}11`, borderRadius:'12px', display:'grid', placeItems:'center', fontSize:'1.2rem'}}>{stat.icon}</div>
-            <div>
-              <span className="stat-label" style={{fontSize: '0.75rem', fontWeight: 800, textAlign: 'left', marginBottom: '4px', color: '#64748b'}}>{stat.label}</span>
-              <span className="stat-value" style={{fontSize: '1.8rem', display: 'block', fontWeight: 800}}>{stat.value}</span>
+    <div className="dashboard-page">
+      {/* Welcome Banner */}
+      <div className="welcome-banner" style={{
+        background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4338ca 100%)',
+        marginBottom: '2rem',
+        backgroundSize: '200% 200%',
+        animation: 'cardPopIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both, gradientFlow 8s ease infinite',
+      }}>
+        <div className="banner-particle"></div>
+        <div className="banner-particle"></div>
+        <div className="banner-particle"></div>
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+          <div>
+            <div style={{display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px'}}>
+              <span style={{fontSize: '0.7rem', fontWeight: 800, padding: '4px 12px', borderRadius: '100px', background: 'rgba(99, 102, 241, 0.3)', color: '#c7d2fe', letterSpacing: '0.08em'}}>
+                EĞİTMEN PANELİ
+              </span>
             </div>
-            <div style={{position:'absolute', right:'-5%', bottom:'-5%', width:'70px', height:'70px', background:stat.color, opacity:0.05, borderRadius:'50%', filter:'blur(20px)'}}></div>
+            <h2 style={{ fontSize: '1.8rem', fontWeight: 950, letterSpacing: '-0.03em', margin: '0 0 0.5rem', lineHeight: 1.2 }}>
+              Ders <span style={{color: '#818cf8'}}>Analizlerim</span>
+            </h2>
+            <p style={{ fontSize: '0.95rem', opacity: 0.6, fontWeight: 500, margin: 0 }}>
+              Performans trendlerinizi takip edin, AI raporlarınızı inceleyin
+            </p>
+          </div>
+          <div style={{
+            width: '80px', height: '80px', borderRadius: '20px',
+            background: 'rgba(99, 102, 241, 0.15)', backdropFilter: 'blur(10px)',
+            display: 'grid', placeItems: 'center', fontSize: '2.5rem',
+            animation: 'rotateFloat 4s ease-in-out infinite',
+            border: '1px solid rgba(99, 102, 241, 0.2)',
+          }}>
+            <ClipboardList size={36} />
+          </div>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div style={{display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:'1.25rem', marginBottom:'2rem'}}>
+        {teacherStats.map((stat, idx) => (
+          <div key={idx} className="premium-stat-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
+              <div className="stat-icon-bubble" style={{ background: `${stat.color}12`, color: stat.color }}>
+                {stat.icon}
+              </div>
+            </div>
+            <span style={{ fontSize: '0.7rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '6px' }}>
+              {stat.label}
+            </span>
+            <span className="stat-number" style={{animationDelay: `${0.3 + idx * 0.1}s`}}>
+              {stat.value}
+            </span>
+            <div className="stat-bottom-glow" style={{background: stat.color}}></div>
           </div>
         ))}
       </div>
 
       {/* Progress Chart */}
-      <div style={{marginBottom: '2.5rem'}}>
+      <div style={{marginBottom: '2rem', animation: 'cardPopIn 0.5s ease 0.5s both'}}>
         <ProgressChart
           data={progressData}
           title="Performans İlerlemem"
@@ -90,34 +148,42 @@ const TeacherDashboard = () => {
       </div>
 
       {reports.length === 0 ? (
-        <div style={{textAlign:'center', padding:'4rem', color:'#64748b'}}>
-          <div style={{fontSize:'3rem', marginBottom:'1rem'}}>📋</div>
-          <h3 style={{fontWeight:800, color:'#1e293b'}}>Henüz rapor bulunmuyor</h3>
-          <p>Size atanan analiz raporları burada görünecektir.</p>
+        <div style={{
+          textAlign:'center', padding:'4rem',
+          background: '#fff', borderRadius: '24px',
+          border: '1px solid #f1f5f9',
+          animation: 'cardPopIn 0.5s ease 0.6s both'
+        }}>
+          <div style={{marginBottom:'1.5rem', animation: 'float 3s ease-in-out infinite'}}><ClipboardList size={56} color="#94a3b8" /></div>
+          <h3 style={{fontWeight:900, color:'#1e293b', fontSize: '1.3rem', marginBottom: '0.5rem'}}>Henüz rapor bulunmuyor</h3>
+          <p style={{color: '#94a3b8', fontSize: '0.95rem'}}>Size atanan analiz raporları burada görünecektir.</p>
         </div>
       ) : (
         <div style={{display: 'grid', gridTemplateColumns: '320px 1fr', gap: '2rem'}}>
-          <div style={{display:'flex', flexDirection:'column', gap:'1.25rem'}}>
-            <h3 style={{fontSize:'0.9rem', fontWeight:800, color:'#64748b', display:'flex', alignItems:'center', gap:'8px'}}>
-              <span style={{width:'8px', height:'8px', background:'#10b981', borderRadius:'50%'}}></span>
+          <div style={{display:'flex', flexDirection:'column', gap:'0.75rem', animation: 'cardPopIn 0.5s ease 0.6s both'}}>
+            <h3 style={{fontSize:'0.8rem', fontWeight:800, color:'#64748b', display:'flex', alignItems:'center', gap:'8px', marginBottom: '0.5rem'}}>
+              <span style={{width:'8px', height:'8px', background: 'linear-gradient(135deg, #10b981, #06b6d4)', borderRadius:'50%', boxShadow: '0 0 8px rgba(16,185,129,0.4)'}}></span>
               ANALİZ RAPORLARI ({reports.length})
             </h3>
-            {reports.map(report => (
-              <div key={report.jobId} onClick={() => setSelectedReport(report.jobId)} style={{
-                padding: '1.1rem', borderRadius: '16px', border: '1px solid',
-                borderColor: selectedReport === report.jobId ? 'var(--primary)' : '#f1f5f9',
-                background: selectedReport === report.jobId ? '#f5f3ff' : '#fff',
-                cursor: 'pointer', transition: 'all 0.3s ease',
-                boxShadow: selectedReport === report.jobId ? '0 10px 15px -3px rgba(99, 102, 241, 0.1)' : 'none'
-              }}>
+            {reports.map((report, idx) => (
+              <div
+                key={report.jobId}
+                className={`report-selector-item ${selectedReport === report.jobId ? 'selected' : ''}`}
+                onClick={() => setSelectedReport(report.jobId)}
+                style={{animationDelay: `${0.65 + idx * 0.08}s`, animation: `slideInRight 0.4s ease ${0.65 + idx * 0.08}s both`}}
+              >
                 <div style={{display:'flex', justifyContent:'space-between', marginBottom:'6px'}}>
-                  <span style={{fontSize:'10px', fontWeight:800, color: selectedReport === report.jobId ? 'var(--primary)' : '#94a3b8'}}>{formatLessonLabel(report.lessonNo, report.moduleSize)}</span>
-                  <span style={{fontSize:'10px', color:'#94a3b8'}}>{report.createdAt ? new Date(report.createdAt).toLocaleDateString('tr-TR') : ''}</span>
+                  <span style={{fontSize:'10px', fontWeight:800, color: selectedReport === report.jobId ? 'var(--primary)' : '#94a3b8'}}>
+                    {formatLessonLabel(report.lessonNo, report.moduleSize)}
+                  </span>
+                  <span style={{fontSize:'10px', color:'#94a3b8'}}>
+                    {report.createdAt ? new Date(report.createdAt).toLocaleDateString('tr-TR') : ''}
+                  </span>
                 </div>
                 <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
-                  <h4 style={{margin:0, fontSize:'0.9rem', fontWeight:800, color:'#1e293b', flex:1}}>{report.courseName || 'Ders Analizi'}</h4>
+                  <h4 style={{margin:0, fontSize:'0.88rem', fontWeight:800, color:'#1e293b', flex:1}}>{report.courseName || 'Ders Analizi'}</h4>
                   <span style={{
-                    fontSize:'9px', fontWeight:800, padding:'3px 8px', borderRadius:'6px',
+                    fontSize:'9px', fontWeight:800, padding:'3px 10px', borderRadius:'100px',
                     background: report.status === 'FINALIZED' ? '#dcfce7' : '#fef3c7',
                     color: report.status === 'FINALIZED' ? '#16a34a' : '#d97706',
                   }}>
@@ -128,15 +194,37 @@ const TeacherDashboard = () => {
             ))}
           </div>
 
-          <div style={{display: 'flex', flexDirection: 'column', gap: '2rem'}}>
+          <div style={{display: 'flex', flexDirection: 'column', gap: '2rem', animation: 'slideInRight 0.5s ease 0.7s both'}}>
             <SharedReport report={buildReportProps(currentReport)} />
-            <div className="report-card-internal" style={{padding: '2.5rem', background: '#f8fafc', border: '1px solid #cbd5e1'}}>
-              <h5 style={{margin:'0 0 1.25rem 0', fontSize:'11px', fontWeight:800, color:'#0f172a', textTransform:'uppercase', letterSpacing:'0.05em'}}>Eğitmen Yanıtı & Kabul Beyanı</h5>
+            <div style={{
+              padding: '2.5rem', background: '#f8fafc',
+              borderRadius: '24px', border: '1px solid #e2e8f0',
+              transition: 'all 0.3s ease',
+            }}>
+              <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.5rem'}}>
+                <div style={{width: '32px', height: '32px', borderRadius: '10px', background: '#ede9fe', display: 'grid', placeItems: 'center'}}>
+                  <MessageCircle size={16} color="#6366f1" />
+                </div>
+                <h5 style={{margin:0, fontSize:'0.85rem', fontWeight:800, color:'#0f172a'}}>Eğitmen Yanıtı & Kabul Beyanı</h5>
+              </div>
               <textarea placeholder="Rapor hakkında eklemek istediğiniz bir not var mı?" value={teacherComment} onChange={(e) => setTeacherComment(e.target.value)}
-                style={{ width:'100%', minHeight:'120px', padding:'1.5rem', borderRadius:'16px', border:'1px solid #cbd5e1', fontSize:'0.95rem', outline:'none', background:'#fff' }} />
+                style={{
+                  width:'100%', minHeight:'120px', padding:'1.5rem', borderRadius:'16px',
+                  border:'1.5px solid #e2e8f0', fontSize:'0.95rem', outline:'none', background:'#fff',
+                  transition: 'all 0.3s ease', fontFamily: 'inherit',
+                }} 
+                onFocus={e => { e.target.style.borderColor = '#6366f1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.1)'; }}
+                onBlur={e => { e.target.style.borderColor = '#e2e8f0'; e.target.style.boxShadow = 'none'; }}
+              />
               <div style={{display:'flex', justifyContent:'flex-end', gap:'1rem', marginTop:'1.5rem'}}>
                 <button className="primary-btn" onClick={() => { alert("Rapor onaylandı!"); setTeacherComment(""); }}
-                  style={{padding:'12px 32px', background: teacherComment ? 'var(--primary)' : '#e2e8f0', pointerEvents: teacherComment ? 'auto' : 'none'}}>
+                  style={{
+                    padding:'12px 32px', borderRadius: '14px',
+                    background: teacherComment ? 'linear-gradient(135deg, #6366f1, #4f46e5)' : '#e2e8f0',
+                    pointerEvents: teacherComment ? 'auto' : 'none',
+                    boxShadow: teacherComment ? '0 8px 20px -4px rgba(99,102,241,0.3)' : 'none',
+                    transition: 'all 0.3s ease',
+                  }}>
                   Onayla ve Gönder
                 </button>
               </div>
