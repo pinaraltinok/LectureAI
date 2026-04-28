@@ -3,13 +3,14 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const roleGuard = require('../middleware/roleGuard');
 const {
-  getCourses, getEvaluations, submitSurvey,
+  getCourses, getEvaluations, submitSurvey, getMySurveys,
   getLessonDetail, getLessonNotes, createLessonNote, updateLessonNote, deleteLessonNote,
 } = require('../controllers/student.controller');
 
 router.get('/courses', auth, roleGuard('STUDENT'), getCourses);
 router.get('/evaluations', auth, roleGuard('STUDENT'), getEvaluations);
 router.post('/survey/submit', auth, roleGuard('STUDENT'), submitSurvey);
+router.get('/surveys', auth, roleGuard('STUDENT'), getMySurveys);
 
 // Lesson video player + timestamped notes
 router.get('/lesson/:lessonId', auth, roleGuard('STUDENT'), getLessonDetail);

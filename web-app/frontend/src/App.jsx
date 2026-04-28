@@ -255,7 +255,7 @@ function AppContent() {
             </div>
             <div>
               <strong>{userName || (role==='admin'?'Yönetici':role==='teacher'?'Eğitmen':'Öğrenci')}</strong>
-              <small style={{display:'block'}}>{role.toUpperCase()}</small>
+              <small style={{display:'block'}}>{role === 'admin' ? 'YÖNETİCİ' : role === 'teacher' ? 'EĞİTMEN' : 'ÖĞRENCİ'}</small>
             </div>
           </div>
         </header>

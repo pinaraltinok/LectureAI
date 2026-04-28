@@ -204,7 +204,7 @@ const AdminSummary = () => {
             <div style={{width: '36px', height: '36px', borderRadius: '12px', background: '#f0fdf4', display: 'grid', placeItems: 'center'}}>
               <Target size={18} color="#10b981" />
             </div>
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 900, color: '#e2e8f0', margin: 0 }}>Kalite Dağılımı</h3>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 900, color: '#1e293b', margin: 0 }}>Kalite Dağılımı</h3>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
             {[

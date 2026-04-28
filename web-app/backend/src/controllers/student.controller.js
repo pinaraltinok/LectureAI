@@ -123,7 +123,51 @@ async function submitSurvey(req, res) {
   }
 }
 
-module.exports = { getCourses, getEvaluations, submitSurvey, getLessonDetail, getLessonNotes, createLessonNote, updateLessonNote, deleteLessonNote };
+/**
+ * GET /api/student/surveys
+ * Returns all surveys submitted by this student, with lesson & course info.
+ */
+async function getMySurveys(req, res) {
+  try {
+    const studentId = req.user.userId;
+
+    const surveys = await prisma.survey.findMany({
+      where: { studentId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        lesson: {
+          include: {
+            group: {
+              include: {
+                course: { select: { course: true, age: true, moduleSize: true } },
+                teacher: { include: { user: { select: { name: true } } } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const result = surveys.map(s => ({
+      id: s.id,
+      rating: s.rating,
+      note: s.note,
+      createdAt: s.createdAt,
+      lessonNo: s.lesson.lessonNo,
+      courseName: s.lesson.group.course.course,
+      courseAge: s.lesson.group.course.age,
+      moduleSize: s.lesson.group.course.moduleSize,
+      teacherName: s.lesson.group.teacher.user.name,
+    }));
+
+    return res.json(result);
+  } catch (err) {
+    console.error('GetMySurveys error:', err);
+    return res.status(500).json({ error: 'Sunucu hatası.' });
+  }
+}
+
+module.exports = { getCourses, getEvaluations, submitSurvey, getMySurveys, getLessonDetail, getLessonNotes, createLessonNote, updateLessonNote, deleteLessonNote };
 
 /**
  * GET /api/student/lesson/:lessonId
