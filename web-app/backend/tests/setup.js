@@ -1,127 +1,112 @@
 /**
- * Test setup helper — creates test users and returns JWT tokens for each role.
+ * Test Setup — Creates test entities using the CURRENT Prisma schema.
+ *
+ * Seeds fresh test data and returns JWT tokens + entity IDs.
+ * All tests use this shared setup for consistency.
  */
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
-
-// Use a deterministic secret for tests
 const JWT_SECRET = process.env.JWT_SECRET || 'lectureai-dev-secret-key-2024';
 
-/**
- * Cleans all data and creates a fresh set of test users and entities.
- * Returns tokens and IDs for use in tests.
- */
 async function seedTestData() {
-  // Clean in dependency order
-  await prisma.badge.deleteMany();
+  // Clean in reverse dependency order
+  await prisma.studentNote.deleteMany();
   await prisma.survey.deleteMany();
-  await prisma.mentorFeedback.deleteMany();
-  await prisma.personalNote.deleteMany();
-  await prisma.analysisJob.deleteMany();
-  await prisma.lessonEnrollment.deleteMany();
-  await prisma.parentStudent.deleteMany();
+  await prisma.studentEvaluation.deleteMany();
+  await prisma.reportStudent.deleteMany();
+  await prisma.reportTeacher.deleteMany();
+  await prisma.report.deleteMany();
   await prisma.lesson.deleteMany();
+  await prisma.studentGroup.deleteMany();
+  await prisma.group.deleteMany();
+  await prisma.teacherCourse.deleteMany();
+  await prisma.course.deleteMany();
+  await prisma.student.deleteMany();
+  await prisma.teacher.deleteMany();
+  await prisma.admin.deleteMany();
   await prisma.user.deleteMany();
 
   const hash = await bcrypt.hash('test123', 10);
 
-  // ── Users ──────────────────────────────────────────────────
-  const admin = await prisma.user.create({
+  // ── Users + role profiles ────────────────────────────────
+  const adminUser = await prisma.user.create({
     data: { email: 'admin@test.com', password: hash, name: 'Test Admin', role: 'ADMIN' },
   });
+  await prisma.admin.create({ data: { id: adminUser.id } });
 
-  const teacher = await prisma.user.create({
-    data: { email: 'teacher@test.com', password: hash, name: 'Test Teacher', role: 'TEACHER', branch: 'Matematik' },
+  const teacherUser = await prisma.user.create({
+    data: { email: 'teacher@test.com', password: hash, name: 'Test Teacher', role: 'TEACHER' },
   });
+  await prisma.teacher.create({ data: { id: teacherUser.id, startOfDate: new Date() } });
 
-  const student = await prisma.user.create({
+  const studentUser = await prisma.user.create({
     data: { email: 'student@test.com', password: hash, name: 'Test Student', role: 'STUDENT' },
   });
+  await prisma.student.create({ data: { id: studentUser.id, age: 12, parent: 'Test Veli', parentPhone: '05551234567' } });
 
-  const student2 = await prisma.user.create({
-    data: { email: 'student2@test.com', password: hash, name: 'Test Student 2', role: 'STUDENT' },
+  // ── Course ───────────────────────────────────────────────
+  const course = await prisma.course.create({
+    data: { course: 'Test Kurs', age: '10-12', lessonSize: 60, moduleNum: 1, moduleSize: 4 },
   });
 
-  const parent = await prisma.user.create({
-    data: { email: 'parent@test.com', password: hash, name: 'Test Parent', role: 'PARENT' },
+  // ── TeacherCourse ────────────────────────────────────────
+  await prisma.teacherCourse.create({
+    data: { teacherId: teacherUser.id, courseId: course.id },
   });
 
-  // ── Lesson ─────────────────────────────────────────────────
+  // ── Group ────────────────────────────────────────────────
+  const group = await prisma.group.create({
+    data: { courseId: course.id, teacherId: teacherUser.id, name: 'Test Grup', schedule: 'Pzt-Çar 15:00' },
+  });
+
+  // ── StudentGroup ─────────────────────────────────────────
+  await prisma.studentGroup.create({
+    data: { studentId: studentUser.id, groupId: group.id },
+  });
+
+  // ── Lesson ───────────────────────────────────────────────
   const lesson = await prisma.lesson.create({
-    data: { title: 'Test Ders', moduleCode: 'TEST101', teacherId: teacher.id },
+    data: { groupId: group.id, teacherId: teacherUser.id, lessonNo: 1, videoUrl: 'gs://test/video.mp4' },
   });
 
-  // ── Enrollment ─────────────────────────────────────────────
-  await prisma.lessonEnrollment.create({
-    data: { lessonId: lesson.id, studentId: student.id },
-  });
-
-  // ── Parent link ────────────────────────────────────────────
-  await prisma.parentStudent.create({
-    data: { parentId: parent.id, studentId: student.id },
-  });
-
-  // ── Analysis job (DRAFT) ───────────────────────────────────
-  const draftJob = await prisma.analysisJob.create({
+  // ── Report (DRAFT) ───────────────────────────────────────
+  const draftReport = await prisma.report.create({
     data: {
-      videoUrl: 'https://test.com/video.mp4',
-      teacherId: teacher.id,
       lessonId: lesson.id,
       status: 'DRAFT',
-      draftReport: { overallScore: 85, engagement: 'Yüksek', suggestions: ['Test'] },
+      draftReport: { overallScore: 85, genel_sonuc: 'Beklentilere uygundu.', yeterlilikler: 'İyi' },
     },
   });
+  await prisma.reportTeacher.create({
+    data: { reportId: draftReport.id, teacherId: teacherUser.id, score: 4.2 },
+  });
 
-  // ── Analysis job (FINALIZED) ───────────────────────────────
-  const finalizedJob = await prisma.analysisJob.create({
+  // ── Report (FINALIZED) ───────────────────────────────────
+  const finalReport = await prisma.report.create({
     data: {
-      videoUrl: 'https://test.com/video2.mp4',
-      teacherId: teacher.id,
-      lessonId: lesson.id,
-      status: 'FINALIZED',
+      lessonId: lesson.id, adminId: adminUser.id, status: 'FINALIZED',
       draftReport: { overallScore: 92 },
-      finalReport: { overallScore: 92, approvedBy: admin.id, approvedAt: new Date().toISOString() },
+      finalReport: { overallScore: 92, approvedBy: adminUser.id, approvedAt: new Date().toISOString() },
     },
   });
-
-  // ── Mentor Feedback ────────────────────────────────────────
-  const feedback = await prisma.mentorFeedback.create({
-    data: { teacherId: teacher.id, studentId: student.id, lessonId: lesson.id, note: 'Test notu' },
+  await prisma.reportTeacher.create({
+    data: { reportId: finalReport.id, teacherId: teacherUser.id, score: 4.6 },
   });
 
-  // ── Badge ──────────────────────────────────────────────────
-  await prisma.badge.create({
-    data: { studentId: student.id, title: 'Test Rozet', description: 'Test açıklama' },
-  });
-
-  // ── Generate tokens ────────────────────────────────────────
+  // ── Tokens ───────────────────────────────────────────────
   const makeToken = (user) =>
-    jwt.sign({ userId: user.id, email: user.email, name: user.name, role: user.role }, JWT_SECRET, {
-      expiresIn: '1h',
-    });
+    jwt.sign({ userId: user.id, email: user.email, name: user.name, role: user.role }, JWT_SECRET, { expiresIn: '1h' });
 
   return {
     prisma,
-    tokens: {
-      admin: makeToken(admin),
-      teacher: makeToken(teacher),
-      student: makeToken(student),
-      student2: makeToken(student2),
-      parent: makeToken(parent),
-    },
+    tokens: { admin: makeToken(adminUser), teacher: makeToken(teacherUser), student: makeToken(studentUser) },
     ids: {
-      admin: admin.id,
-      teacher: teacher.id,
-      student: student.id,
-      student2: student2.id,
-      parent: parent.id,
-      lesson: lesson.id,
-      draftJob: draftJob.id,
-      finalizedJob: finalizedJob.id,
-      feedback: feedback.id,
+      admin: adminUser.id, teacher: teacherUser.id, student: studentUser.id,
+      course: course.id, group: group.id, lesson: lesson.id,
+      draftReport: draftReport.id, finalReport: finalReport.id,
     },
   };
 }

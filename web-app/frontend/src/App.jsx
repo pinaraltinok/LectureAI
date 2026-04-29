@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, useNavigate, Navigate } from 'react-router-dom'
 import { LayoutDashboard, Users, Upload, Settings, BookOpen, MessageSquare, BarChart3, GraduationCap, ClipboardEdit, StickyNote, LogOut, BookOpenCheck } from 'lucide-react'
+import { AuthProvider, useAuth } from './context/AuthContext.jsx'
 import Login from './Login.jsx'
 
 // ADMIN sayfaları
@@ -25,60 +26,17 @@ import StudentLessonPlayer from './student/StudentLessonPlayer.jsx'
 import ProfilePage from './components/ProfilePage.jsx'
 
 function AppContent() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [role, setRole] = useState('admin')
-  const [userName, setUserName] = useState('')
+  const { user, loading, logout, isAuthenticated } = useAuth()
   const [workflowStep, setWorkflowStep] = useState('upload')
-  const [sessionLoading, setSessionLoading] = useState(true)
   const navigate = useNavigate()
 
-  // Restore session from localStorage token on page load / refresh
-  useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) {
-      setSessionLoading(false)
-      return
-    }
-
-    fetch('/api/auth/me', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-      .then(res => {
-        if (!res.ok) throw new Error('Token expired')
-        return res.json()
-      })
-      .then(data => {
-        setIsLoggedIn(true)
-        setRole(data.role.toLowerCase())
-        setUserName(data.name || '')
-      })
-      .catch(() => {
-        // Token invalid or expired — clear it
-        localStorage.removeItem('token')
-      })
-      .finally(() => setSessionLoading(false))
-  }, [])
-
-  const handleLogin = (userRole, name) => {
-    setIsLoggedIn(true)
-    setRole(userRole || 'student')
-    setUserName(name || '')
-    
-    if (userRole === 'admin') navigate('/admin/kurum-ozeti')
-    else if (userRole === 'teacher') navigate('/teacher/ders-ozeti')
-    else navigate('/student/derslerim')
-  }
-
   const handleLogout = () => {
-    localStorage.removeItem('token')
-    setIsLoggedIn(false)
-    setRole('admin')
-    setUserName('')
+    logout()
     navigate('/')
   }
 
   // Show loading spinner while checking session
-  if (sessionLoading) {
+  if (loading) {
     return (
       <div style={{display:'grid', placeItems:'center', minHeight:'100vh', background:'#0f172a'}}>
         <div style={{textAlign:'center', color:'#94a3b8'}}>
@@ -94,9 +52,12 @@ function AppContent() {
     )
   }
 
-  if (!isLoggedIn) {
-    return <Login onLogin={handleLogin} />
+  if (!isAuthenticated) {
+    return <Login />
   }
+
+  const role = user.role
+  const userName = user.name
 
   const getInitials = (name) => {
     if (!name) return role === 'admin' ? 'A' : '?'
@@ -275,7 +236,7 @@ function AppContent() {
           <Route path="/student/anket" element={<StudentSurvey />} />
           <Route path="/student/notlar" element={<StudentNotes />} />
 
-          <Route path="/profil" element={<ProfilePage onNameChange={setUserName} />} />
+          <Route path="/profil" element={<ProfilePage />} />
 
           <Route path="/" element={<Navigate to={role==='admin'?'/admin/kurum-ozeti':role==='teacher'?'/teacher/ders-ozeti':'/student/derslerim'} />} />
         </Routes>
@@ -287,7 +248,9 @@ function AppContent() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AppContent />
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
     </BrowserRouter>
   )
 }

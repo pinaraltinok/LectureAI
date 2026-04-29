@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
+const asyncHandler = require('../middleware/asyncHandler');
+const validate = require('../middleware/validate');
+const { loginSchema, registerSchema, updateProfileSchema } = require('../schemas/auth.schema');
 const { login, register, getMe, updateProfile, logout } = require('../controllers/auth.controller');
 
 /**
@@ -38,7 +41,7 @@ const { login, register, getMe, updateProfile, logout } = require('../controller
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post('/login', login);
+router.post('/login', validate(loginSchema), asyncHandler(login));
 
 /**
  * @swagger
@@ -71,7 +74,7 @@ router.post('/login', login);
  *       409:
  *         description: Email zaten kayıtlı
  */
-router.post('/register', register);
+router.post('/register', validate(registerSchema), asyncHandler(register));
 
 /**
  * @swagger
@@ -92,8 +95,8 @@ router.post('/register', register);
  *       401:
  *         description: Yetkilendirme hatası
  */
-router.get('/me', auth, getMe);
-router.put('/me', auth, updateProfile);
+router.get('/me', auth, asyncHandler(getMe));
+router.put('/me', auth, validate(updateProfileSchema), asyncHandler(updateProfile));
 
 /**
  * @swagger
@@ -112,6 +115,6 @@ router.put('/me', auth, updateProfile);
  *             schema:
  *               $ref: '#/components/schemas/Success'
  */
-router.post('/logout', auth, logout);
+router.post('/logout', auth, asyncHandler(logout));
 
 module.exports = router;

@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { apiGet, apiPut } from '../api'
+import { useAuth } from '../context/AuthContext.jsx'
 
-const ProfilePage = ({ onNameChange }) => {
+const ProfilePage = () => {
+  const { updateName } = useAuth()
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
@@ -30,7 +32,7 @@ const ProfilePage = ({ onNameChange }) => {
       setForm(updated)
       setEditing(false)
       setSaved(true)
-      if (onNameChange && updated.name) onNameChange(updated.name)
+      if (updated.name) updateName(updated.name)
       setTimeout(() => setSaved(false), 2500)
     } catch (err) {
       alert(err.message)

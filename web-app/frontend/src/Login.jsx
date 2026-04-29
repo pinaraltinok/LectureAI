@@ -1,7 +1,11 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from './context/AuthContext.jsx'
 import './Login.css'
 
-export default function Login({ onLogin }) {
+export default function Login() {
+  const { login } = useAuth()
+  const navigate = useNavigate()
   const [isLogin, setIsLogin] = useState(true)
   const [role, setRole] = useState('student')
   const [name, setName] = useState('')
@@ -26,7 +30,11 @@ export default function Login({ onLogin }) {
         const data = await response.json()
         if (response.ok) {
           localStorage.setItem('token', data.token)
-          onLogin(data.role.toLowerCase(), data.name || '')
+          login(data.token, data)
+          const r = data.role.toLowerCase()
+          if (r === 'admin') navigate('/admin/kurum-ozeti')
+          else if (r === 'teacher') navigate('/teacher/ders-ozeti')
+          else navigate('/student/derslerim')
         } else {
           setErrorMsg(data.error || 'Giriş başarısız oldu')
         }
@@ -49,7 +57,11 @@ export default function Login({ onLogin }) {
         const data = await response.json()
         if (response.ok) {
           localStorage.setItem('token', data.token)
-          onLogin(data.role.toLowerCase(), data.name || '')
+          login(data.token, data)
+          const r = data.role.toLowerCase()
+          if (r === 'admin') navigate('/admin/kurum-ozeti')
+          else if (r === 'teacher') navigate('/teacher/ders-ozeti')
+          else navigate('/student/derslerim')
         } else {
           setErrorMsg(data.error || 'Kayıt başarısız oldu')
         }

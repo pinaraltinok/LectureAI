@@ -1,15 +1,14 @@
 const { Storage } = require('@google-cloud/storage');
 const path = require('path');
 const { analysisProgress } = require('./admin.controller');
+const { PROCESSED_BUCKET } = require('../config/constants');
 
-// ─── GCS Config ─────────────────────────────────────────────
+// ─── GCS Client ─────────────────────────────────────────────
 const projectRoot = path.resolve(__dirname, '..', '..', '..', '..');
 const credentialPath = path.join(projectRoot, 'senior-design-488908-1d5d3e1681ee.json');
 
 let gcsStorage;
 try { gcsStorage = new Storage({ keyFilename: credentialPath }); } catch (e) { console.warn('[Pipeline] GCS init failed:', e.message); }
-
-const PROCESSED_BUCKET = 'lectureai_processed';
 
 // ─── In-memory pipeline events store ────────────────────────
 // Map<videoId, Array<{ stage, status, detail, receivedAt }>>

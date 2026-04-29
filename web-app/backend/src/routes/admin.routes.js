@@ -3,6 +3,9 @@ const multer = require('multer');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const roleGuard = require('../middleware/roleGuard');
+const asyncHandler = require('../middleware/asyncHandler');
+const validate = require('../middleware/validate');
+const { assignAnalysisSchema, createUserSchema, createGroupSchema, createCourseSchema } = require('../schemas/admin.schema');
 const {
   getStats, getTeachers, uploadAnalysis, assignAnalysis, getDraft,
   regenerateAnalysis, finalizeAnalysis, getLessons, getAnalysisJobs,
@@ -23,37 +26,37 @@ const multerStorage = multer.diskStorage({
 });
 const upload = multer({ storage: multerStorage });
 
-router.get('/stats', auth, roleGuard('ADMIN'), getStats);
-router.get('/teachers', auth, roleGuard('ADMIN'), getTeachers);
-router.get('/courses', auth, roleGuard('ADMIN'), getCourses);
-router.get('/groups', auth, roleGuard('ADMIN'), getGroups);
-router.get('/lessons', auth, roleGuard('ADMIN'), getLessons);
-router.get('/analysis/jobs', auth, roleGuard('ADMIN'), getAnalysisJobs);
-router.get('/analysis/progress/:jobId', auth, roleGuard('ADMIN'), getAnalysisProgress);
-router.get('/analysis/draft/:jobId', auth, roleGuard('ADMIN'), getDraft);
-router.get('/teacher/:teacherId/reports', auth, roleGuard('ADMIN'), getTeacherReports);
-router.get('/teacher/:teacherId/progress', auth, roleGuard('ADMIN'), getTeacherProgress);
+router.get('/stats', auth, roleGuard('ADMIN'), asyncHandler(getStats));
+router.get('/teachers', auth, roleGuard('ADMIN'), asyncHandler(getTeachers));
+router.get('/courses', auth, roleGuard('ADMIN'), asyncHandler(getCourses));
+router.get('/groups', auth, roleGuard('ADMIN'), asyncHandler(getGroups));
+router.get('/lessons', auth, roleGuard('ADMIN'), asyncHandler(getLessons));
+router.get('/analysis/jobs', auth, roleGuard('ADMIN'), asyncHandler(getAnalysisJobs));
+router.get('/analysis/progress/:jobId', auth, roleGuard('ADMIN'), asyncHandler(getAnalysisProgress));
+router.get('/analysis/draft/:jobId', auth, roleGuard('ADMIN'), asyncHandler(getDraft));
+router.get('/teacher/:teacherId/reports', auth, roleGuard('ADMIN'), asyncHandler(getTeacherReports));
+router.get('/teacher/:teacherId/progress', auth, roleGuard('ADMIN'), asyncHandler(getTeacherProgress));
 
-router.post('/analysis/upload', auth, roleGuard('ADMIN'), upload.single('video'), uploadAnalysis);
-router.post('/analysis/assign', auth, roleGuard('ADMIN'), assignAnalysis);
-router.post('/analysis/regenerate', auth, roleGuard('ADMIN'), regenerateAnalysis);
-router.post('/analysis/finalize', auth, roleGuard('ADMIN'), finalizeAnalysis);
-router.post('/sync-reports', auth, roleGuard('ADMIN'), syncGCSReports);
+router.post('/analysis/upload', auth, roleGuard('ADMIN'), upload.single('video'), asyncHandler(uploadAnalysis));
+router.post('/analysis/assign', auth, roleGuard('ADMIN'), validate(assignAnalysisSchema), asyncHandler(assignAnalysis));
+router.post('/analysis/regenerate', auth, roleGuard('ADMIN'), asyncHandler(regenerateAnalysis));
+router.post('/analysis/finalize', auth, roleGuard('ADMIN'), asyncHandler(finalizeAnalysis));
+router.post('/sync-reports', auth, roleGuard('ADMIN'), asyncHandler(syncGCSReports));
 
 // User & Group Management
-router.get('/students', auth, roleGuard('ADMIN'), getStudents);
-router.post('/users', auth, roleGuard('ADMIN'), createUser);
-router.post('/student-group/assign', auth, roleGuard('ADMIN'), assignStudentToGroup);
-router.post('/student-group/remove', auth, roleGuard('ADMIN'), removeStudentFromGroup);
-router.get('/teacher/:teacherId/courses', auth, roleGuard('ADMIN'), getTeacherCourses);
-router.post('/teacher-courses', auth, roleGuard('ADMIN'), setTeacherCourses);
-router.post('/groups', auth, roleGuard('ADMIN'), createGroup);
-router.post('/courses', auth, roleGuard('ADMIN'), createCourse);
-router.put('/groups/:id', auth, roleGuard('ADMIN'), updateGroup);
-router.delete('/groups/:id', auth, roleGuard('ADMIN'), deleteGroup);
-router.put('/users/:id', auth, roleGuard('ADMIN'), updateUser);
-router.delete('/users/:id', auth, roleGuard('ADMIN'), deleteUser);
-router.put('/courses/:id', auth, roleGuard('ADMIN'), updateCourse);
-router.delete('/courses/:id', auth, roleGuard('ADMIN'), deleteCourse);
+router.get('/students', auth, roleGuard('ADMIN'), asyncHandler(getStudents));
+router.post('/users', auth, roleGuard('ADMIN'), validate(createUserSchema), asyncHandler(createUser));
+router.post('/student-group/assign', auth, roleGuard('ADMIN'), asyncHandler(assignStudentToGroup));
+router.post('/student-group/remove', auth, roleGuard('ADMIN'), asyncHandler(removeStudentFromGroup));
+router.get('/teacher/:teacherId/courses', auth, roleGuard('ADMIN'), asyncHandler(getTeacherCourses));
+router.post('/teacher-courses', auth, roleGuard('ADMIN'), asyncHandler(setTeacherCourses));
+router.post('/groups', auth, roleGuard('ADMIN'), validate(createGroupSchema), asyncHandler(createGroup));
+router.post('/courses', auth, roleGuard('ADMIN'), validate(createCourseSchema), asyncHandler(createCourse));
+router.put('/groups/:id', auth, roleGuard('ADMIN'), asyncHandler(updateGroup));
+router.delete('/groups/:id', auth, roleGuard('ADMIN'), asyncHandler(deleteGroup));
+router.put('/users/:id', auth, roleGuard('ADMIN'), asyncHandler(updateUser));
+router.delete('/users/:id', auth, roleGuard('ADMIN'), asyncHandler(deleteUser));
+router.put('/courses/:id', auth, roleGuard('ADMIN'), asyncHandler(updateCourse));
+router.delete('/courses/:id', auth, roleGuard('ADMIN'), asyncHandler(deleteCourse));
 
 module.exports = router;

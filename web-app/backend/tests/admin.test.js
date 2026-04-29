@@ -1,3 +1,6 @@
+/**
+ * Admin API Integration Tests — Validates RBAC, CRUD, and Zod validation.
+ */
 const request = require('supertest');
 const app = require('../src/app');
 const { seedTestData, cleanup } = require('./setup');
@@ -14,166 +17,166 @@ afterAll(async () => {
   await cleanup();
 });
 
-describe('Admin Endpoints', () => {
-  // ─── GET /api/admin/stats ──────────────────────────────────
-  describe('GET /api/admin/stats', () => {
-    it('should return institution stats for admin', async () => {
-      const res = await request(app)
-        .get('/api/admin/stats')
-        .set('Authorization', `Bearer ${tokens.admin}`);
-
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('institutionScore');
-      expect(res.body).toHaveProperty('activeTeachers');
-      expect(res.body).toHaveProperty('pendingAnalysis');
-      expect(res.body).toHaveProperty('totalStudents');
-      expect(res.body).toHaveProperty('totalLessons');
-    });
-
-    it('should reject non-admin user', async () => {
-      const res = await request(app)
-        .get('/api/admin/stats')
-        .set('Authorization', `Bearer ${tokens.teacher}`);
-
-      expect(res.status).toBe(403);
-    });
+// ── RBAC ─────────────────────────────────────────────────────
+describe('Admin RBAC (roleGuard)', () => {
+  test('student cannot access admin endpoints', async () => {
+    const res = await request(app)
+      .get('/api/admin/stats')
+      .set('Authorization', `Bearer ${tokens.student}`);
+    expect(res.status).toBe(403);
   });
 
-  // ─── GET /api/admin/teachers ───────────────────────────────
-  describe('GET /api/admin/teachers', () => {
-    it('should return teacher list', async () => {
-      const res = await request(app)
-        .get('/api/admin/teachers')
-        .set('Authorization', `Bearer ${tokens.admin}`);
-
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBeGreaterThanOrEqual(1);
-      expect(res.body[0]).toHaveProperty('id');
-      expect(res.body[0]).toHaveProperty('name');
-      expect(res.body[0]).toHaveProperty('branch');
-    });
+  test('teacher cannot access admin endpoints', async () => {
+    const res = await request(app)
+      .get('/api/admin/stats')
+      .set('Authorization', `Bearer ${tokens.teacher}`);
+    expect(res.status).toBe(403);
   });
 
-  // ─── POST /api/admin/analysis/upload ───────────────────────
-  describe('POST /api/admin/analysis/upload', () => {
-    it('should upload analysis with videoUrl', async () => {
-      const res = await request(app)
-        .post('/api/admin/analysis/upload')
-        .set('Authorization', `Bearer ${tokens.admin}`)
-        .send({ videoUrl: 'https://test.com/new-video.mp4' });
+  test('unauthenticated request returns 401', async () => {
+    const res = await request(app).get('/api/admin/stats');
+    expect(res.status).toBe(401);
+  });
+});
 
-      expect(res.status).toBe(201);
-      expect(res.body).toHaveProperty('jobId');
-      expect(res.body).toHaveProperty('status', 'PENDING');
-    });
+// ── Stats ────────────────────────────────────────────────────
+describe('GET /api/admin/stats', () => {
+  test('returns institution statistics for admin', async () => {
+    const res = await request(app)
+      .get('/api/admin/stats')
+      .set('Authorization', `Bearer ${tokens.admin}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('activeTeachers');
+    expect(res.body).toHaveProperty('totalStudents');
+    expect(res.body).toHaveProperty('totalLessons');
+    expect(res.body).toHaveProperty('pendingAnalysis');
+    expect(typeof res.body.activeTeachers).toBe('number');
+  });
+});
 
-    it('should reject without video', async () => {
-      const res = await request(app)
-        .post('/api/admin/analysis/upload')
-        .set('Authorization', `Bearer ${tokens.admin}`)
-        .send({});
+// ── Teachers ─────────────────────────────────────────────────
+describe('GET /api/admin/teachers', () => {
+  test('returns teacher list with report info', async () => {
+    const res = await request(app)
+      .get('/api/admin/teachers')
+      .set('Authorization', `Bearer ${tokens.admin}`);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBeGreaterThanOrEqual(1);
+    expect(res.body[0]).toHaveProperty('name');
+    expect(res.body[0]).toHaveProperty('reportCount');
+  });
+});
 
-      expect(res.status).toBe(400);
-    });
+// ── Courses CRUD ─────────────────────────────────────────────
+describe('Courses CRUD', () => {
+  let createdCourseId;
+
+  test('GET /api/admin/courses — lists all courses', async () => {
+    const res = await request(app)
+      .get('/api/admin/courses')
+      .set('Authorization', `Bearer ${tokens.admin}`);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
   });
 
-  // ─── POST /api/admin/analysis/assign ───────────────────────
-  describe('POST /api/admin/analysis/assign', () => {
-    it('should assign analysis to teacher and lesson', async () => {
-      // First create a job
-      const uploadRes = await request(app)
-        .post('/api/admin/analysis/upload')
-        .set('Authorization', `Bearer ${tokens.admin}`)
-        .send({ videoUrl: 'https://test.com/assign-test.mp4' });
-
-      const res = await request(app)
-        .post('/api/admin/analysis/assign')
-        .set('Authorization', `Bearer ${tokens.admin}`)
-        .send({
-          jobId: uploadRes.body.jobId,
-          teacherId: ids.teacher,
-          lessonId: ids.lesson,
-        });
-
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('status', 'PROCESSING');
-    });
-
-    it('should reject missing fields', async () => {
-      const res = await request(app)
-        .post('/api/admin/analysis/assign')
-        .set('Authorization', `Bearer ${tokens.admin}`)
-        .send({ jobId: ids.draftJob });
-
-      expect(res.status).toBe(400);
-    });
+  test('POST /api/admin/courses — creates a new course', async () => {
+    const res = await request(app)
+      .post('/api/admin/courses')
+      .set('Authorization', `Bearer ${tokens.admin}`)
+      .send({ course: 'Unity Game Dev', age: '12-14', lessonSize: 90, moduleNum: 2, moduleSize: 4 });
+    expect(res.status).toBe(201);
+    expect(res.body.course).toBe('Unity Game Dev');
+    createdCourseId = res.body.id;
   });
 
-  // ─── GET /api/admin/analysis/draft/:jobId ──────────────────
-  describe('GET /api/admin/analysis/draft/:jobId', () => {
-    it('should return draft report', async () => {
-      const res = await request(app)
-        .get(`/api/admin/analysis/draft/${ids.draftJob}`)
-        .set('Authorization', `Bearer ${tokens.admin}`);
-
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('jobId', ids.draftJob);
-      expect(res.body).toHaveProperty('draftReport');
-      expect(res.body.draftReport).toHaveProperty('overallScore');
-    });
-
-    it('should return 404 for non-existent job', async () => {
-      const res = await request(app)
-        .get('/api/admin/analysis/draft/00000000-0000-0000-0000-000000000000')
-        .set('Authorization', `Bearer ${tokens.admin}`);
-
-      expect(res.status).toBe(404);
-    });
+  test('POST /api/admin/courses — Zod rejects missing fields', async () => {
+    const res = await request(app)
+      .post('/api/admin/courses')
+      .set('Authorization', `Bearer ${tokens.admin}`)
+      .send({ course: '', age: '' });
+    expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('details');
   });
 
-  // ─── POST /api/admin/analysis/regenerate ───────────────────
-  describe('POST /api/admin/analysis/regenerate', () => {
-    it('should queue report regeneration', async () => {
-      const res = await request(app)
-        .post('/api/admin/analysis/regenerate')
-        .set('Authorization', `Bearer ${tokens.admin}`)
-        .send({ jobId: ids.draftJob, feedback: 'Daha detaylı analiz gerekli.' });
+  test('DELETE /api/admin/courses/:id — deletes course', async () => {
+    if (!createdCourseId) return;
+    const res = await request(app)
+      .delete(`/api/admin/courses/${createdCourseId}`)
+      .set('Authorization', `Bearer ${tokens.admin}`);
+    expect(res.status).toBe(200);
+  });
+});
 
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('status', 'PROCESSING');
-    });
+// ── Groups CRUD ──────────────────────────────────────────────
+describe('Groups CRUD', () => {
+  test('GET /api/admin/groups — lists all groups', async () => {
+    const res = await request(app)
+      .get('/api/admin/groups')
+      .set('Authorization', `Bearer ${tokens.admin}`);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    if (res.body.length > 0) {
+      expect(res.body[0]).toHaveProperty('teacherName');
+      expect(res.body[0]).toHaveProperty('studentCount');
+    }
   });
 
-  // ─── POST /api/admin/analysis/finalize ─────────────────────
-  describe('POST /api/admin/analysis/finalize', () => {
-    it('should finalize a draft report', async () => {
-      // Reset the draft job status first (regenerate changed it to PROCESSING)
-      const { prisma } = require('./setup');
-      await prisma.analysisJob.update({
-        where: { id: ids.draftJob },
-        data: {
-          status: 'DRAFT',
-          draftReport: { overallScore: 88, engagement: 'Yüksek' },
-        },
-      });
+  test('POST /api/admin/groups — Zod rejects missing courseId', async () => {
+    const res = await request(app)
+      .post('/api/admin/groups')
+      .set('Authorization', `Bearer ${tokens.admin}`)
+      .send({ teacherId: ids.teacher });
+    expect(res.status).toBe(400);
+  });
+});
 
-      const res = await request(app)
-        .post('/api/admin/analysis/finalize')
-        .set('Authorization', `Bearer ${tokens.admin}`)
-        .send({ jobId: ids.draftJob });
+// ── Report Draft ─────────────────────────────────────────────
+describe('GET /api/admin/analysis/draft/:jobId', () => {
+  test('returns draft report details', async () => {
+    const res = await request(app)
+      .get(`/api/admin/analysis/draft/${ids.draftReport}`)
+      .set('Authorization', `Bearer ${tokens.admin}`);
+    expect(res.status).toBe(200);
+    expect(res.body.jobId).toBe(ids.draftReport);
+    expect(res.body.status).toBe('DRAFT');
+    expect(res.body.draftReport).toHaveProperty('overallScore');
+  });
 
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty('status', 'FINALIZED');
-    });
+  test('returns 404 for non-existent report', async () => {
+    const res = await request(app)
+      .get('/api/admin/analysis/draft/00000000-0000-0000-0000-000000000000')
+      .set('Authorization', `Bearer ${tokens.admin}`);
+    expect(res.status).toBe(404);
+  });
+});
 
-    it('should reject missing jobId', async () => {
-      const res = await request(app)
-        .post('/api/admin/analysis/finalize')
-        .set('Authorization', `Bearer ${tokens.admin}`)
-        .send({});
+// ── Teacher Reports & Progress ───────────────────────────────
+describe('Teacher Reports & Progress', () => {
+  test('GET /api/admin/teacher/:id/reports — returns teacher reports', async () => {
+    const res = await request(app)
+      .get(`/api/admin/teacher/${ids.teacher}/reports`)
+      .set('Authorization', `Bearer ${tokens.admin}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('teacher');
+    expect(res.body).toHaveProperty('reports');
+    expect(res.body.teacher.name).toBe('Test Teacher');
+  });
 
-      expect(res.status).toBe(400);
-    });
+  test('GET /api/admin/teacher/:id/progress — returns progress data', async () => {
+    const res = await request(app)
+      .get(`/api/admin/teacher/${ids.teacher}/progress`)
+      .set('Authorization', `Bearer ${tokens.admin}`);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+  });
+});
+
+// ── Health Check ─────────────────────────────────────────────
+describe('GET /health', () => {
+  test('returns ok', async () => {
+    const res = await request(app).get('/health');
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('ok');
   });
 });

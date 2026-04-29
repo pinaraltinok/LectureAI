@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const roleGuard = require('../middleware/roleGuard');
+const asyncHandler = require('../middleware/asyncHandler');
 const {
   getStudentOverview,
   getStudentMentorNotes,
@@ -36,7 +37,7 @@ const {
  *       404:
  *         description: Bağlı öğrenci bulunamadı
  */
-router.get('/student/overview', auth, roleGuard('PARENT'), getStudentOverview);
+router.get('/student/overview', auth, roleGuard('PARENT'), asyncHandler(getStudentOverview));
 
 /**
  * @swagger
@@ -59,7 +60,7 @@ router.get('/student/overview', auth, roleGuard('PARENT'), getStudentOverview);
  *       404:
  *         description: Bağlı öğrenci bulunamadı
  */
-router.get('/student/mentor-notes', auth, roleGuard('PARENT'), getStudentMentorNotes);
+router.get('/student/mentor-notes', auth, roleGuard('PARENT'), asyncHandler(getStudentMentorNotes));
 
 /**
  * @swagger
@@ -82,6 +83,6 @@ router.get('/student/mentor-notes', auth, roleGuard('PARENT'), getStudentMentorN
  *       404:
  *         description: Bağlı öğrenci bulunamadı
  */
-router.get('/quality-approvals', auth, roleGuard('PARENT'), getQualityApprovals);
+router.get('/quality-approvals', auth, roleGuard('PARENT'), asyncHandler(getQualityApprovals));
 
 module.exports = router;

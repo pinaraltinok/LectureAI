@@ -70,10 +70,16 @@ app.use((req, res) => {
   res.status(404).json({ error: `Route bulunamadı: ${req.method} ${req.originalUrl}` });
 });
 
-// ─── Global Error Handler ────────────────────────────────────
+// ─── Global Error Handler (works with asyncHandler + AppError) ─
 app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({ error: 'Beklenmeyen bir sunucu hatası oluştu.' });
+  const statusCode = err.statusCode || 500;
+  const message = err.isOperational
+    ? err.message
+    : 'Beklenmeyen bir sunucu hatası oluştu.';
+
+  // Log full stack for debugging; hide internals from client
+  console.error(`[${req.method} ${req.originalUrl}] ${err.message}`, err.stack);
+  res.status(statusCode).json({ error: message });
 });
 
 module.exports = app;

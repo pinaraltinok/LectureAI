@@ -1,13 +1,33 @@
+/**
+ * Admin Controller — Thin Controller Layer.
+ *
+ * This controller is a lightweight adapter between HTTP requests and service
+ * layer methods. It handles only:
+ *   1. Request parsing (extracting params, body, query)
+ *   2. Delegating to appropriate service
+ *   3. Formatting the HTTP response
+ *
+ * All business logic resides in the services/ directory.
+ *
+ * Architecture: 3-Tier Layered Architecture (Buschmann et al., POSA, 1996)
+ *   Routes (HTTP) → Controller (thin) → Service (logic) → Prisma (data)
+ *
+ * SOLID: Single Responsibility — HTTP request/response handling only
+ */
 const prisma = require('../config/db');
 const path = require('path');
 const { Storage } = require('@google-cloud/storage');
 const { PubSub } = require('@google-cloud/pubsub');
+const AppError = require('../utils/AppError');
+const {
+  GCP_PROJECT_ID, PUBSUB_TOPIC, PROCESSED_BUCKET,
+  VIDEO_BUCKET, VIDEO_PREFIX, GCS_POLL_INTERVAL, GCS_MAX_POLLS,
+} = require('../config/constants');
 
-// ─── GCP Config ─────────────────────────────────────────────
-const PROJECT_ID = 'senior-design-488908';
-const PUBSUB_TOPIC = 'lecture-analysis-requested';
-const PROCESSED_BUCKET = 'lectureai_processed';
+// ─── Service Layer Imports (via Composition Root — DIP) ─────
+const { reportService, userService, courseService, groupService } = require('../services');
 
+// ─── GCP Clients ────────────────────────────────────────────
 const projectRoot = path.resolve(__dirname, '..', '..', '..', '..');
 const credentialPath = path.join(projectRoot, 'senior-design-488908-1d5d3e1681ee.json');
 
@@ -15,118 +35,98 @@ let gcsStorage;
 try { gcsStorage = new Storage({ keyFilename: credentialPath }); } catch (e) { console.warn('[GCS] Storage client init failed:', e.message); }
 
 let pubsub;
-try { pubsub = new PubSub({ projectId: PROJECT_ID, keyFilename: credentialPath }); } catch (e) { console.warn('[PubSub] Client init failed:', e.message); }
+try { pubsub = new PubSub({ projectId: GCP_PROJECT_ID, keyFilename: credentialPath }); } catch (e) { console.warn('[PubSub] Client init failed:', e.message); }
 
-const VIDEO_BUCKET = 'lectureai_full_videos';
-const VIDEO_PREFIX = 'Lesson_Records';
 const analysisProgress = new Map();
 
-// ─── Stats ──────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+// STATS
+// ═══════════════════════════════════════════════════════════
 async function getStats(req, res) {
-  try {
-    const [activeTeachers, totalStudents, totalLessons, pendingAnalysis, finalizedJobs] = await Promise.all([
-      prisma.teacher.count(),
-      prisma.student.count(),
-      prisma.lesson.count(),
-      prisma.report.count({ where: { status: { in: ['PENDING', 'PROCESSING'] } } }),
-      prisma.report.findMany({ where: { status: 'FINALIZED', finalReport: { not: null } }, select: { finalReport: true } }),
-    ]);
+  const [activeTeachers, totalStudents, totalLessons, pendingAnalysis, finalizedJobs] = await Promise.all([
+    prisma.teacher.count(),
+    prisma.student.count(),
+    prisma.lesson.count(),
+    prisma.report.count({ where: { status: { in: ['PENDING', 'PROCESSING'] } } }),
+    prisma.report.findMany({ where: { status: 'FINALIZED', finalReport: { not: null } }, select: { finalReport: true } }),
+  ]);
 
-    let institutionScore = 0;
-    if (finalizedJobs.length > 0) {
-      const scores = finalizedJobs.map(j => j.finalReport?.overallScore).filter(s => s != null);
-      if (scores.length > 0) institutionScore = Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10;
-    }
-
-    return res.json({ institutionScore, activeTeachers, totalStudents, totalLessons, pendingAnalysis });
-  } catch (err) {
-    console.error('GetStats error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
+  let institutionScore = 0;
+  if (finalizedJobs.length > 0) {
+    const scores = finalizedJobs.map(j => j.finalReport?.overallScore).filter(s => s != null);
+    if (scores.length > 0) institutionScore = Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10;
   }
+
+  return res.json({ institutionScore, activeTeachers, totalStudents, totalLessons, pendingAnalysis });
 }
 
-// ─── Teachers ───────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+// TEACHERS
+// ═══════════════════════════════════════════════════════════
 async function getTeachers(req, res) {
-  try {
-    const teachers = await prisma.teacher.findMany({
-      include: {
-        user: { select: { id: true, name: true, email: true, phone: true } },
-        reportTeachers: { orderBy: { report: { updatedAt: 'desc' } }, include: { report: { select: { id: true, finalReport: true, draftReport: true, status: true } } } },
-      },
-    });
+  const teachers = await prisma.teacher.findMany({
+    include: {
+      user: { select: { id: true, name: true, email: true, phone: true } },
+      reportTeachers: { orderBy: { report: { updatedAt: 'desc' } }, include: { report: { select: { id: true, finalReport: true, draftReport: true, status: true } } } },
+    },
+  });
 
-    const result = teachers.map(t => {
-      const allReports = t.reportTeachers;
-      const latest = allReports[0]?.report || null;
-      const fr = latest?.finalReport || latest?.draftReport || null;
-      let lastScore = t.reportTeachers[0]?.score || null;
-      if (!lastScore && fr?.overallScore != null) lastScore = fr.overallScore;
+  const result = teachers.map(t => {
+    const allReports = t.reportTeachers;
+    const latest = allReports[0]?.report || null;
+    const fr = latest?.finalReport || latest?.draftReport || null;
+    let lastScore = t.reportTeachers[0]?.score || null;
+    if (!lastScore && fr?.overallScore != null) lastScore = fr.overallScore;
 
-      return {
-        id: t.id,
-        name: t.user.name,
-        email: t.user.email,
-        phone: t.user.phone,
-        startOfDate: t.startOfDate,
-        lastScore,
-        latestJobId: latest?.id || null,
-        reportCount: allReports.length,
-      };
-    });
+    return {
+      id: t.id, name: t.user.name, email: t.user.email, phone: t.user.phone,
+      startOfDate: t.startOfDate, lastScore, latestJobId: latest?.id || null, reportCount: allReports.length,
+    };
+  });
 
-    return res.json(result);
-  } catch (err) {
-    console.error('GetTeachers error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
+  return res.json(result);
 }
 
-// ─── Upload Analysis ────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+// UPLOAD & ANALYSIS (stays in controller — cloud I/O heavy)
+// ═══════════════════════════════════════════════════════════
 async function uploadAnalysis(req, res) {
-  try {
-    const file = req.file;
-    const videoUrl = req.body.videoUrl;
-    const teacherName = req.body.teacherName || '';
+  const file = req.file;
+  const videoUrl = req.body.videoUrl;
+  const teacherName = req.body.teacherName || '';
 
-    if (!file && !videoUrl) return res.status(400).json({ error: 'Video dosyası veya videoUrl gereklidir.' });
+  if (!file && !videoUrl) throw new AppError('Video dosyası veya videoUrl gereklidir.', 400);
 
-    let resolvedUrl = videoUrl || null;
-    let videoFilename = file ? file.originalname : null;
+  let resolvedUrl = videoUrl || null;
+  let videoFilename = file ? file.originalname : null;
 
-    if (file && !videoUrl && gcsStorage) {
-      try {
-        const gcsFileName = `${VIDEO_PREFIX}/${file.filename}`;
-        const localFilePath = path.resolve(file.destination, file.filename);
-        await gcsStorage.bucket(VIDEO_BUCKET).upload(localFilePath, { destination: gcsFileName, metadata: { contentType: file.mimetype || 'video/mp4', metadata: { originalName: file.originalname } } });
-        resolvedUrl = `gs://${VIDEO_BUCKET}/${gcsFileName}`;
-      } catch (gcsErr) {
-        console.error('[Upload] GCS upload failed:', gcsErr.message);
-        resolvedUrl = `/uploads/${file.filename}`;
-      }
-    } else if (file && !videoUrl) {
+  if (file && !videoUrl && gcsStorage) {
+    try {
+      const gcsFileName = `${VIDEO_PREFIX}/${file.filename}`;
+      const localFilePath = path.resolve(file.destination, file.filename);
+      await gcsStorage.bucket(VIDEO_BUCKET).upload(localFilePath, { destination: gcsFileName, metadata: { contentType: file.mimetype || 'video/mp4', metadata: { originalName: file.originalname } } });
+      resolvedUrl = `gs://${VIDEO_BUCKET}/${gcsFileName}`;
+    } catch (gcsErr) {
+      console.error('[Upload] GCS upload failed:', gcsErr.message);
       resolvedUrl = `/uploads/${file.filename}`;
     }
-
-    const report = await prisma.report.create({ data: { status: 'PENDING' } });
-
-    // Store video info temporarily in report metadata (will be moved to lesson on assign)
-    // For now, we track it by creating a placeholder lesson or storing in report's draftReport
-    if (resolvedUrl) {
-      await prisma.report.update({ where: { id: report.id }, data: { draftReport: { _videoUrl: resolvedUrl, _videoFilename: videoFilename } } });
-    }
-
-    if (resolvedUrl && (resolvedUrl.startsWith('gs://') || resolvedUrl.startsWith('https://storage.googleapis.com/'))) {
-      triggerVideoAnalysis(report.id, resolvedUrl, teacherName);
-    }
-
-    return res.status(201).json({ jobId: report.id, status: report.status, videoUrl: resolvedUrl, message: 'Video başarıyla yüklendi.' });
-  } catch (err) {
-    console.error('UploadAnalysis error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
+  } else if (file && !videoUrl) {
+    resolvedUrl = `/uploads/${file.filename}`;
   }
+
+  const report = await prisma.report.create({ data: { status: 'PENDING' } });
+
+  if (resolvedUrl) {
+    await prisma.report.update({ where: { id: report.id }, data: { draftReport: { _videoUrl: resolvedUrl, _videoFilename: videoFilename } } });
+  }
+
+  if (resolvedUrl && (resolvedUrl.startsWith('gs://') || resolvedUrl.startsWith('https://storage.googleapis.com/'))) {
+    triggerVideoAnalysis(report.id, resolvedUrl, teacherName);
+  }
+
+  return res.status(201).json({ jobId: report.id, status: report.status, videoUrl: resolvedUrl, message: 'Video başarıyla yüklendi.' });
 }
 
-// ─── Trigger Video Analysis (Pub/Sub) ───────────────────────
 async function triggerVideoAnalysis(jobId, videoUri, teacherName) {
   const videoId = videoUri.split('/').pop().replace(/\.[^.]+$/, '');
   analysisProgress.set(jobId, { stage: 'queued', message: 'Analiz isteği gönderiliyor...', percent: 5, startedAt: new Date().toISOString(), videoId });
@@ -147,10 +147,7 @@ async function triggerVideoAnalysis(jobId, videoUri, teacherName) {
   }
 }
 
-// ─── Poll GCS for Report ────────────────────────────────────
 function pollGCSForReport(jobId, videoId) {
-  const POLL_INTERVAL = 5000;
-  const MAX_POLLS = 720;
   let pollCount = 0;
   const stageMessages = [
     { at: 6, stage: 'processing', message: 'Video işleniyor...', percent: 30 },
@@ -181,717 +178,291 @@ function pollGCSForReport(jobId, videoId) {
       }
     } catch (e) { if (pollCount % 12 === 0) console.error(`[GCS] Poll error:`, e.message); }
 
-    if (pollCount >= MAX_POLLS) {
+    if (pollCount >= GCS_MAX_POLLS) {
       clearInterval(interval);
       analysisProgress.set(jobId, { stage: 'failed', message: 'Analiz zaman aşımına uğradı', percent: 0 });
       await prisma.report.update({ where: { id: jobId }, data: { status: 'PENDING', adminFeedback: 'Analysis timed out' } }).catch(() => {});
     }
-  }, POLL_INTERVAL);
+  }, GCS_POLL_INTERVAL);
 }
 
-// ─── Assign Analysis ────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+// ASSIGN ANALYSIS
+// ═══════════════════════════════════════════════════════════
 async function assignAnalysis(req, res) {
-  try {
-    const { jobId, teacherId, lessonId, groupId, lessonCode, lessonDate } = req.body;
-    if (!jobId || !teacherId) return res.status(400).json({ error: 'jobId ve teacherId gereklidir.' });
+  const { jobId, teacherId, lessonId, groupId, lessonCode, lessonDate } = req.body;
+  if (!jobId || !teacherId) throw new AppError('jobId ve teacherId gereklidir.', 400);
 
-    const report = await prisma.report.findUnique({ where: { id: jobId } });
-    if (!report) return res.status(404).json({ error: 'Rapor bulunamadı.' });
+  const report = await prisma.report.findUnique({ where: { id: jobId } });
+  if (!report) throw new AppError('Rapor bulunamadı.', 404);
 
-    // Link teacher to report
-    await prisma.reportTeacher.upsert({
-      where: { reportId_teacherId: { reportId: jobId, teacherId } },
-      update: {},
-      create: { reportId: jobId, teacherId },
+  await prisma.reportTeacher.upsert({
+    where: { reportId_teacherId: { reportId: jobId, teacherId } },
+    update: {},
+    create: { reportId: jobId, teacherId },
+  });
+
+  let resolvedLessonId = lessonId || null;
+
+  if (groupId && lessonCode) {
+    const moduleNo = parseInt(lessonCode.match(/M(\d+)/)?.[1] || '1');
+    const lessonInModule = parseInt(lessonCode.match(/L(\d+)/)?.[1] || '1');
+    const group = await prisma.group.findUnique({ where: { id: groupId }, include: { course: true } });
+    const moduleSize = group?.course?.moduleSize || 4;
+    const lessonNo = (moduleNo === 0 && lessonInModule === 0) ? 0 : (moduleNo - 1) * moduleSize + lessonInModule;
+    const reportData = (typeof report.draftReport === 'object' && report.draftReport) ? report.draftReport : {};
+    const videoUrl = reportData._videoUrl || null;
+    const videoFilename = reportData._videoFilename || null;
+    const dateTime = lessonDate ? new Date(lessonDate) : new Date();
+
+    const lesson = await prisma.lesson.create({
+      data: { groupId, teacherId, lessonNo, videoUrl, videoFilename, dateTime },
     });
-
-    let resolvedLessonId = lessonId || null;
-
-    // If groupId is provided, create a Lesson record so students in that group can see the video
-    if (groupId && lessonCode) {
-      const moduleNo = parseInt(lessonCode.match(/M(\d+)/)?.[1] || '1');
-      const lessonInModule = parseInt(lessonCode.match(/L(\d+)/)?.[1] || '1');
-      // Look up moduleSize from the group's course to compute flat sequential lessonNo
-      const group = await prisma.group.findUnique({ where: { id: groupId }, include: { course: true } });
-      const moduleSize = group?.course?.moduleSize || 4;
-      // M0L0 = Tanışma dersi (orientation), stored as lessonNo 0
-      const lessonNo = (moduleNo === 0 && lessonInModule === 0) ? 0 : (moduleNo - 1) * moduleSize + lessonInModule;
-      const reportData = (typeof report.draftReport === 'object' && report.draftReport) ? report.draftReport : {};
-      const videoUrl = reportData._videoUrl || null;
-      const videoFilename = reportData._videoFilename || null;
-      const dateTime = lessonDate ? new Date(lessonDate) : new Date();
-
-      const lesson = await prisma.lesson.create({
-        data: {
-          groupId,
-          teacherId,
-          lessonNo,
-          videoUrl,
-          videoFilename,
-          dateTime,
-        },
-      });
-      resolvedLessonId = lesson.id;
-      console.log(`[Assign] Lesson ${lesson.id} created for group ${groupId}, lessonNo=${lessonNo}`);
-    }
-
-    const updated = await prisma.report.update({
-      where: { id: jobId },
-      data: { lessonId: resolvedLessonId, status: 'PROCESSING' },
-    });
-
-    return res.json({ jobId: updated.id, status: updated.status, lessonId: resolvedLessonId, message: 'Analiz başarıyla atandı.' });
-  } catch (err) {
-    console.error('AssignAnalysis error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
+    resolvedLessonId = lesson.id;
   }
+
+  const updated = await prisma.report.update({
+    where: { id: jobId },
+    data: { lessonId: resolvedLessonId, status: 'PROCESSING' },
+  });
+
+  return res.json({ jobId: updated.id, status: updated.status, lessonId: resolvedLessonId, message: 'Analiz başarıyla atandı.' });
 }
 
-// ─── Get Draft ──────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+// REPORTS — delegated to reportService
+// ═══════════════════════════════════════════════════════════
 async function getDraft(req, res) {
-  try {
-    const { jobId } = req.params;
-    const report = await prisma.report.findUnique({
-      where: { id: jobId },
-      include: {
-        reportTeachers: { include: { teacher: { include: { user: { select: { name: true } } } } } },
-        lesson: { include: { group: { include: { course: true } } } },
-      },
-    });
-    if (!report) return res.status(404).json({ error: 'Rapor bulunamadı.' });
-
-    const teacher = report.reportTeachers[0];
-    return res.json({
-      jobId: report.id, status: report.status, videoUrl: report.lesson?.videoUrl || null, videoFilename: report.lesson?.videoFilename || null,
-      draftReport: report.draftReport, finalReport: report.finalReport,
-      teacher: teacher ? { id: teacher.teacherId, name: teacher.teacher.user.name } : null,
-      lesson: report.lesson ? { id: report.lesson.id, lessonNo: report.lesson.lessonNo, course: report.lesson.group?.course?.course } : null,
-      createdAt: report.createdAt,
-    });
-  } catch (err) {
-    console.error('GetDraft error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
+  const report = await reportService.getDraft(req.params.jobId);
+  const teacher = report.reportTeachers[0];
+  return res.json({
+    jobId: report.id, status: report.status,
+    videoUrl: report.lesson?.videoUrl || null, videoFilename: report.lesson?.videoFilename || null,
+    draftReport: report.draftReport, finalReport: report.finalReport,
+    teacher: teacher ? { id: teacher.teacherId, name: teacher.teacher.user.name } : null,
+    lesson: report.lesson ? { id: report.lesson.id, lessonNo: report.lesson.lessonNo, course: report.lesson.group?.course?.course } : null,
+    createdAt: report.createdAt,
+  });
 }
 
-// ─── Regenerate Analysis ────────────────────────────────────
 async function regenerateAnalysis(req, res) {
-  try {
-    const { jobId, feedback } = req.body;
-    if (!jobId) return res.status(400).json({ error: 'jobId gereklidir.' });
-    const report = await prisma.report.findUnique({ where: { id: jobId } });
-    if (!report) return res.status(404).json({ error: 'Rapor bulunamadı.' });
-
-    const updated = await prisma.report.update({
-      where: { id: jobId },
-      data: { adminFeedback: feedback || null, status: 'PROCESSING', draftReport: { ...(typeof report.draftReport === 'object' ? report.draftReport : {}), regeneratedAt: new Date().toISOString(), adminFeedback: feedback } },
-    });
-    return res.json({ jobId: updated.id, status: updated.status, message: 'Rapor yeniden oluşturulması için kuyruğa alındı.' });
-  } catch (err) {
-    console.error('RegenerateAnalysis error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
+  const updated = await reportService.regenerate(req.body.jobId, req.body.feedback);
+  return res.json({ jobId: updated.id, status: updated.status, message: 'Rapor yeniden oluşturulması için kuyruğa alındı.' });
 }
 
-// ─── Finalize Analysis ──────────────────────────────────────
 async function finalizeAnalysis(req, res) {
-  try {
-    const { jobId } = req.body;
-    if (!jobId) return res.status(400).json({ error: 'jobId gereklidir.' });
-    const report = await prisma.report.findUnique({ where: { id: jobId } });
-    if (!report) return res.status(404).json({ error: 'Rapor bulunamadı.' });
-    if (!report.draftReport) return res.status(400).json({ error: 'Onaylanacak taslak rapor bulunamadı.' });
-
-    const updated = await prisma.report.update({
-      where: { id: jobId },
-      data: { status: 'FINALIZED', adminId: req.user.userId, finalReport: { ...(typeof report.draftReport === 'object' ? report.draftReport : {}), approvedBy: req.user.userId, approvedAt: new Date().toISOString() } },
-    });
-    return res.json({ jobId: updated.id, status: updated.status, message: 'Rapor onaylandı ve yayınlandı.' });
-  } catch (err) {
-    console.error('FinalizeAnalysis error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
+  const updated = await reportService.finalize(req.body.jobId, req.user.userId);
+  return res.json({ jobId: updated.id, status: updated.status, message: 'Rapor onaylandı ve yayınlandı.' });
 }
 
-// ─── Get Courses (eski getCurricula) ────────────────────────
-async function getCourses(req, res) {
-  try {
-    const courses = await prisma.course.findMany({ orderBy: { course: 'asc' } });
-    return res.json(courses);
-  } catch (err) {
-    console.error('GetCourses error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
+async function getTeacherReports(req, res) {
+  const result = await reportService.getTeacherReports(req.params.teacherId);
+  return res.json(result);
 }
 
-// ─── Get Groups ─────────────────────────────────────────────
-async function getGroups(req, res) {
-  try {
-    const groups = await prisma.group.findMany({
-      include: {
-        course: true,
-        teacher: { include: { user: { select: { name: true } } } },
-        studentGroups: { select: { studentId: true } },
-      },
-    });
-    const result = groups.map(g => ({
-      id: g.id, name: g.name, courseId: g.courseId, courseName: g.course.course, teacherId: g.teacherId,
-      teacherName: g.teacher.user.name, schedule: g.schedule, studentCount: g.studentGroups.length,
-    }));
-    return res.json(result);
-  } catch (err) {
-    console.error('GetGroups error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
+async function getTeacherProgress(req, res) {
+  const dataPoints = await reportService.getTeacherProgress(req.params.teacherId);
+  return res.json(dataPoints);
 }
 
-// ─── Get Lessons ────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+// LESSONS, JOBS, PROGRESS — lightweight queries stay here
+// ═══════════════════════════════════════════════════════════
 async function getLessons(req, res) {
-  try {
-    const lessons = await prisma.lesson.findMany({
-      include: {
-        teacher: { include: { user: { select: { name: true } } } },
-        group: { include: { course: true } },
-      },
-      orderBy: { dateTime: 'desc' },
-    });
-    const result = lessons.map(l => ({
-      id: l.id, lessonNo: l.lessonNo, dateTime: l.dateTime,
-      courseName: l.group.course.course, groupId: l.groupId,
-      teacherId: l.teacherId, teacherName: l.teacher.user.name,
-    }));
-    return res.json(result);
-  } catch (err) {
-    console.error('GetLessons error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
+  const lessons = await prisma.lesson.findMany({
+    include: { teacher: { include: { user: { select: { name: true } } } }, group: { include: { course: true } } },
+    orderBy: { dateTime: 'desc' },
+  });
+  return res.json(lessons.map(l => ({
+    id: l.id, lessonNo: l.lessonNo, dateTime: l.dateTime,
+    courseName: l.group.course.course, groupId: l.groupId,
+    teacherId: l.teacherId, teacherName: l.teacher.user.name,
+  })));
 }
 
-// ─── Get Analysis Jobs ──────────────────────────────────────
 async function getAnalysisJobs(req, res) {
-  try {
-    const jobs = await prisma.report.findMany({
-      include: {
-        reportTeachers: { include: { teacher: { include: { user: { select: { name: true } } } } } },
-        lesson: { include: { group: { include: { course: true } } } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-    const result = jobs.map(j => ({
-      jobId: j.id, videoFilename: j.lesson?.videoFilename || null, status: j.status,
-      teacherId: j.reportTeachers[0]?.teacherId || null,
-      teacherName: j.reportTeachers[0]?.teacher?.user?.name || null,
-      lessonId: j.lesson?.id || null,
-      lessonNo: j.lesson?.lessonNo || null,
-      moduleSize: j.lesson?.group?.course?.moduleSize || 4,
-      courseName: j.lesson?.group?.course?.course || null,
-      createdAt: j.createdAt, updatedAt: j.updatedAt,
-    }));
-    return res.json(result);
-  } catch (err) {
-    console.error('GetAnalysisJobs error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
+  const jobs = await prisma.report.findMany({
+    include: {
+      reportTeachers: { include: { teacher: { include: { user: { select: { name: true } } } } } },
+      lesson: { include: { group: { include: { course: true } } } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+  return res.json(jobs.map(j => ({
+    jobId: j.id, videoFilename: j.lesson?.videoFilename || null, status: j.status,
+    teacherId: j.reportTeachers[0]?.teacherId || null,
+    teacherName: j.reportTeachers[0]?.teacher?.user?.name || null,
+    lessonId: j.lesson?.id || null, lessonNo: j.lesson?.lessonNo || null,
+    moduleSize: j.lesson?.group?.course?.moduleSize || 4,
+    courseName: j.lesson?.group?.course?.course || null,
+    createdAt: j.createdAt, updatedAt: j.updatedAt,
+  })));
 }
 
-// ─── Get Analysis Progress ──────────────────────────────────
 async function getAnalysisProgress(req, res) {
   const { jobId } = req.params;
   const progress = analysisProgress.get(jobId);
   if (progress) return res.json({ jobId, ...progress });
 
-  try {
-    const report = await prisma.report.findUnique({ where: { id: jobId }, select: { status: true } });
-    if (!report) return res.status(404).json({ error: 'İş bulunamadı.' });
-    const statusMap = {
-      PENDING: { stage: 'queued', message: 'Sırada bekliyor...', percent: 0 },
-      PROCESSING: { stage: 'processing', message: 'Analiz devam ediyor...', percent: 50 },
-      DRAFT: { stage: 'completed', message: 'Analiz tamamlandı!', percent: 100 },
-      FINALIZED: { stage: 'completed', message: 'Rapor onaylandı.', percent: 100 },
-    };
-    return res.json({ jobId, ...(statusMap[report.status] || statusMap.PENDING) });
-  } catch (err) { return res.status(500).json({ error: 'Sunucu hatası.' }); }
+  const report = await prisma.report.findUnique({ where: { id: jobId }, select: { status: true } });
+  if (!report) throw new AppError('İş bulunamadı.', 404);
+  const statusMap = {
+    PENDING: { stage: 'queued', message: 'Sırada bekliyor...', percent: 0 },
+    PROCESSING: { stage: 'processing', message: 'Analiz devam ediyor...', percent: 50 },
+    DRAFT: { stage: 'completed', message: 'Analiz tamamlandı!', percent: 100 },
+    FINALIZED: { stage: 'completed', message: 'Rapor onaylandı.', percent: 100 },
+  };
+  return res.json({ jobId, ...(statusMap[report.status] || statusMap.PENDING) });
 }
 
-// ─── Get Teacher Reports ────────────────────────────────────
-async function getTeacherReports(req, res) {
-  try {
-    const { teacherId } = req.params;
-    const teacher = await prisma.teacher.findUnique({ where: { id: teacherId }, include: { user: { select: { name: true } } } });
-    if (!teacher) return res.status(404).json({ error: 'Eğitmen bulunamadı.' });
-
-    const reportTeachers = await prisma.reportTeacher.findMany({
-      where: { teacherId },
-      include: {
-        report: {
-          include: { lesson: { include: { group: { include: { course: true } } } } },
-        },
-      },
-      orderBy: { report: { createdAt: 'desc' } },
-    });
-
-    const reports = [
-      ...reportTeachers.map(rt => {
-        const j = rt.report;
-        const rpt = j.finalReport || j.draftReport || {};
-        return {
-          jobId: j.id, videoUrl: j.lesson?.videoUrl || null, videoFilename: j.lesson?.videoFilename || null, status: j.status, createdAt: j.createdAt,
-          courseName: j.lesson?.group?.course?.course || null, moduleSize: j.lesson?.group?.course?.moduleSize || 4, lessonNo: j.lesson?.lessonNo || null,
-          groupName: j.lesson?.group?.name || null, schedule: j.lesson?.group?.schedule || null, age: j.lesson?.group?.course?.age || null,
-          assignedTeacher: teacher.user.name, isUnassigned: false, score: rt.score,
-          genel_sonuc: rpt.genel_sonuc || null, yeterlilikler: rpt.yeterlilikler || null,
-          speaking_time_rating: rpt.speaking_time_rating || null, feedback_metni: rpt.feedback_metni || null,
-        };
-      }),
-    ];
-
-    return res.json({ teacher: { id: teacher.id, name: teacher.user.name }, reports });
-  } catch (err) {
-    console.error('GetTeacherReports error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
-}
-
-// ─── Sync GCS Reports ───────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+// SYNC GCS REPORTS — cloud I/O stays in controller
+// ═══════════════════════════════════════════════════════════
 async function syncGCSReports(req, res) {
-  try {
-    if (!gcsStorage) return res.status(500).json({ error: 'GCS client not initialized' });
-    const bucket = gcsStorage.bucket(PROCESSED_BUCKET);
-    const [files] = await bucket.getFiles({ prefix: 'reports/' });
-    const jsonFiles = files.filter(f => f.name.endsWith('.json'));
-    let synced = 0, skipped = 0;
+  if (!gcsStorage) throw new AppError('GCS client not initialized', 500);
+  const bucket = gcsStorage.bucket(PROCESSED_BUCKET);
+  const [files] = await bucket.getFiles({ prefix: 'reports/' });
+  const jsonFiles = files.filter(f => f.name.endsWith('.json'));
+  let synced = 0, skipped = 0;
 
-    for (const file of jsonFiles) {
-      const videoId = file.name.replace('reports/', '').replace('.json', '');
-      if (!videoId) continue;
+  for (const file of jsonFiles) {
+    const videoId = file.name.replace('reports/', '').replace('.json', '');
+    if (!videoId) continue;
 
-      // Check if report already exists:
-      // 1. By lesson videoFilename/videoUrl
-      // 2. By draftReport JSON containing the videoId (for reports without lesson link)
-      const existing = await prisma.report.findFirst({
-        where: {
-          OR: [
-            { lesson: { videoFilename: { contains: videoId } } },
-            { lesson: { videoUrl: { contains: videoId } } },
-            { draftReport: { path: ['_videoUrl'], string_contains: videoId } },
-            { draftReport: { path: ['_videoFilename'], string_contains: videoId } },
-            { draftReport: { path: ['video_id'], string_contains: videoId } },
-          ],
-          status: { in: ['DRAFT', 'FINALIZED'] },
-          draftReport: { not: null },
-        },
-      });
-      if (existing) { skipped++; continue; }
-
-      // Also check if we already synced this exact videoId (by searching all existing reports for this filename)
-      const alreadySynced = await prisma.report.findFirst({
-        where: {
-          status: { in: ['DRAFT', 'FINALIZED'] },
-          draftReport: { not: null },
-          // Check if this report's lessonId is null and it was created by sync
-          lessonId: null,
-          reportTeachers: { none: {} },
-        },
-      });
-      // If there are orphan reports, be more conservative
-
-      const pendingJob = await prisma.report.findFirst({
-        where: {
-          OR: [
-            { lesson: { videoFilename: { contains: videoId } } },
-            { lesson: { videoUrl: { contains: videoId } } },
-            { draftReport: { path: ['_videoUrl'], string_contains: videoId } },
-            { draftReport: { path: ['_videoFilename'], string_contains: videoId } },
-          ],
-          status: { in: ['PROCESSING', 'PENDING'] },
-        },
-      });
-
-      const [content] = await file.download();
-      let reportData = {};
-      try { reportData = JSON.parse(content.toString()); } catch (e) { continue; }
-
-      if (pendingJob) {
-        await prisma.report.update({ where: { id: pendingJob.id }, data: { status: 'DRAFT', draftReport: reportData } });
-      } else {
-        // Only create a new report if one doesn't already exist with matching video_id in draftReport
-        const duplicateCheck = await prisma.$queryRawUnsafe(
-          `SELECT id FROM reports WHERE status IN ('DRAFT', 'FINALIZED') AND draft_report IS NOT NULL AND draft_report::text LIKE $1 LIMIT 1`,
-          `%${videoId}%`
-        ).catch(() => []);
-
-        if (duplicateCheck.length > 0) {
-          skipped++;
-          continue;
-        }
-
-        await prisma.report.create({ data: { status: 'DRAFT', draftReport: reportData } });
-      }
-      synced++;
-    }
-
-    return res.json({ synced, skipped, total: jsonFiles.length });
-  } catch (err) {
-    console.error('SyncGCSReports error:', err);
-    return res.status(500).json({ error: 'Senkronizasyon hatası: ' + err.message });
-  }
-}
-
-// ─── Create User (Admin adds Teacher/Student) ───────────────
-async function createUser(req, res) {
-  try {
-    const { name, email, password, phone, role, age, parent, parentPhone, startOfDate } = req.body;
-    if (!name || !email || !role) return res.status(400).json({ error: 'Ad, email ve rol gereklidir.' });
-
-    const roleMap = { student: 'STUDENT', teacher: 'TEACHER', admin: 'ADMIN' };
-    const userRole = roleMap[role.toLowerCase()];
-    if (!userRole) return res.status(400).json({ error: 'Geçersiz rol.' });
-
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) return res.status(409).json({ error: 'Bu email adresi zaten kayıtlı.' });
-
-    const bcrypt = require('bcryptjs');
-    const hashedPassword = await bcrypt.hash(password || 'password123', 10);
-
-    const user = await prisma.$transaction(async (tx) => {
-      const newUser = await tx.user.create({
-        data: { name, email, password: hashedPassword, phone: phone || null, role: userRole },
-      });
-      if (userRole === 'ADMIN') await tx.admin.create({ data: { id: newUser.id } });
-      else if (userRole === 'TEACHER') await tx.teacher.create({ data: { id: newUser.id, startOfDate: startOfDate ? new Date(startOfDate) : new Date() } });
-      else if (userRole === 'STUDENT') await tx.student.create({ data: { id: newUser.id, age: age ? parseInt(age) : null, parent: parent || null, parentPhone: parentPhone || null } });
-      return newUser;
-    });
-
-    return res.status(201).json({ id: user.id, name: user.name, email: user.email, role: user.role, message: 'Kullanıcı başarıyla oluşturuldu.' });
-  } catch (err) {
-    console.error('CreateUser error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
-}
-
-// ─── Get All Students ───────────────────────────────────────
-async function getStudents(req, res) {
-  try {
-    const students = await prisma.student.findMany({
-      include: { user: { select: { id: true, name: true, email: true, phone: true } }, studentGroups: { include: { group: { include: { course: true } } } } },
-    });
-    const result = students.map(s => ({
-      id: s.id, name: s.user.name, email: s.user.email, phone: s.user.phone, age: s.age, parent: s.parent, parentPhone: s.parentPhone,
-      groups: s.studentGroups.map(sg => ({ groupId: sg.groupId, courseName: sg.group.course.course, schedule: sg.group.schedule })),
-    }));
-    return res.json(result);
-  } catch (err) {
-    console.error('GetStudents error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
-}
-
-// ─── Assign Student to Group ────────────────────────────────
-async function assignStudentToGroup(req, res) {
-  try {
-    const { studentId, groupId } = req.body;
-    if (!studentId || !groupId) return res.status(400).json({ error: 'studentId ve groupId gereklidir.' });
-
-    const student = await prisma.student.findUnique({ where: { id: studentId } });
-    if (!student) return res.status(404).json({ error: 'Öğrenci bulunamadı.' });
-    const group = await prisma.group.findUnique({ where: { id: groupId } });
-    if (!group) return res.status(404).json({ error: 'Grup bulunamadı.' });
-
-    const existing = await prisma.studentGroup.findUnique({ where: { studentId_groupId: { studentId, groupId } } });
-    if (existing) return res.status(409).json({ error: 'Öğrenci zaten bu gruba kayıtlı.' });
-
-    await prisma.studentGroup.create({ data: { studentId, groupId } });
-    return res.json({ message: 'Öğrenci gruba başarıyla atandı.' });
-  } catch (err) {
-    console.error('AssignStudentToGroup error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
-}
-
-// ─── Remove Student from Group ──────────────────────────────
-async function removeStudentFromGroup(req, res) {
-  try {
-    const { studentId, groupId } = req.body;
-    if (!studentId || !groupId) return res.status(400).json({ error: 'studentId ve groupId gereklidir.' });
-    await prisma.studentGroup.delete({ where: { studentId_groupId: { studentId, groupId } } });
-    return res.json({ message: 'Öğrenci gruptan çıkarıldı.' });
-  } catch (err) {
-    console.error('RemoveStudentFromGroup error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
-}
-
-// ─── Set Teacher Courses ────────────────────────────────────
-async function setTeacherCourses(req, res) {
-  try {
-    const { teacherId, courseIds } = req.body;
-    if (!teacherId || !Array.isArray(courseIds)) return res.status(400).json({ error: 'teacherId ve courseIds (array) gereklidir.' });
-
-    await prisma.teacherCourse.deleteMany({ where: { teacherId } });
-    if (courseIds.length > 0) {
-      await prisma.teacherCourse.createMany({ data: courseIds.map(courseId => ({ teacherId, courseId })) });
-    }
-    return res.json({ message: 'Eğitmen kursları güncellendi.', count: courseIds.length });
-  } catch (err) {
-    console.error('SetTeacherCourses error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
-}
-
-// ─── Get Teacher Courses ────────────────────────────────────
-async function getTeacherCourses(req, res) {
-  try {
-    const { teacherId } = req.params;
-    const tc = await prisma.teacherCourse.findMany({ where: { teacherId }, include: { course: true } });
-    return res.json(tc.map(t => t.course));
-  } catch (err) {
-    console.error('GetTeacherCourses error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
-}
-
-// ─── Create Group (assign teacher to group) ─────────────────
-async function createGroup(req, res) {
-  try {
-    const { courseId, teacherId, schedule, name } = req.body;
-    if (!courseId || !teacherId) return res.status(400).json({ error: 'courseId ve teacherId gereklidir.' });
-
-    const course = await prisma.course.findUnique({ where: { id: courseId } });
-    if (!course) return res.status(404).json({ error: 'Kurs bulunamadı.' });
-    const teacher = await prisma.teacher.findUnique({ where: { id: teacherId } });
-    if (!teacher) return res.status(404).json({ error: 'Eğitmen bulunamadı.' });
-
-    const group = await prisma.group.create({ data: { courseId, teacherId, schedule: schedule || null, name: name || null } });
-    return res.status(201).json({ id: group.id, name: group.name, courseId, teacherId, schedule: group.schedule, message: 'Grup başarıyla oluşturuldu.' });
-  } catch (err) {
-    console.error('CreateGroup error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
-}
-
-// ─── Create Course ──────────────────────────────────────────
-async function createCourse(req, res) {
-  try {
-    const { course, age, lessonSize, moduleNum, moduleSize } = req.body;
-    if (!course || !age) return res.status(400).json({ error: 'Kurs adı ve yaş grubu gereklidir.' });
-
-    const existing = await prisma.course.findFirst({ where: { course, age } });
-    if (existing) return res.status(409).json({ error: 'Bu isim ve yaş grubuna sahip kurs zaten mevcut.' });
-
-    const newCourse = await prisma.course.create({
-      data: {
-        course,
-        age,
-        lessonSize: lessonSize ? parseInt(lessonSize) : 60,
-        moduleNum: moduleNum ? parseInt(moduleNum) : 1,
-        moduleSize: moduleSize ? parseInt(moduleSize) : 4,
-      },
-    });
-    return res.status(201).json({ ...newCourse, message: 'Kurs başarıyla oluşturuldu.' });
-  } catch (err) {
-    console.error('CreateCourse error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
-}
-
-// ─── Update Group ───────────────────────────────────────────
-async function updateGroup(req, res) {
-  try {
-    const { id } = req.params;
-    const { teacherId, schedule, name } = req.body;
-    const data = {};
-    if (teacherId !== undefined) data.teacherId = teacherId;
-    if (schedule !== undefined) data.schedule = schedule;
-    if (name !== undefined) data.name = name;
-    if (Object.keys(data).length === 0) return res.status(400).json({ error: 'Güncellenecek alan belirtilmedi.' });
-
-    const group = await prisma.group.update({ where: { id }, data });
-    return res.json({ ...group, message: 'Grup başarıyla güncellendi.' });
-  } catch (err) {
-    if (err.code === 'P2025') return res.status(404).json({ error: 'Grup bulunamadı.' });
-    console.error('UpdateGroup error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
-}
-
-// ─── Delete Group ───────────────────────────────────────────
-async function deleteGroup(req, res) {
-  try {
-    const { id } = req.params;
-    await prisma.studentGroup.deleteMany({ where: { groupId: id } });
-    await prisma.lesson.deleteMany({ where: { groupId: id } });
-    await prisma.group.delete({ where: { id } });
-    return res.json({ message: 'Grup başarıyla silindi.' });
-  } catch (err) {
-    if (err.code === 'P2025') return res.status(404).json({ error: 'Grup bulunamadı.' });
-    console.error('DeleteGroup error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
-}
-
-// ─── Update User ────────────────────────────────────────────
-async function updateUser(req, res) {
-  try {
-    const { id } = req.params;
-    const { name, email, phone, age, parent, parentPhone, startOfDate } = req.body;
-
-    const userData = {};
-    if (name) userData.name = name;
-    if (email) userData.email = email;
-    if (phone !== undefined) userData.phone = phone;
-
-    const user = await prisma.user.update({ where: { id }, data: userData, include: { student: true, teacher: true } });
-
-    if (user.role === 'STUDENT' && user.student) {
-      const studentData = {};
-      if (age !== undefined) studentData.age = age ? parseInt(age) : null;
-      if (parent !== undefined) studentData.parent = parent;
-      if (parentPhone !== undefined) studentData.parentPhone = parentPhone;
-      if (Object.keys(studentData).length > 0) await prisma.student.update({ where: { id }, data: studentData });
-    }
-    if (user.role === 'TEACHER' && user.teacher) {
-      if (startOfDate !== undefined) await prisma.teacher.update({ where: { id }, data: { startOfDate: new Date(startOfDate) } });
-    }
-
-    return res.json({ message: 'Kullanıcı başarıyla güncellendi.' });
-  } catch (err) {
-    if (err.code === 'P2025') return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
-    console.error('UpdateUser error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
-}
-
-// ─── Delete User ────────────────────────────────────────────
-async function deleteUser(req, res) {
-  try {
-    const { id } = req.params;
-    const user = await prisma.user.findUnique({ where: { id }, include: { student: true, teacher: true, admin: true } });
-    if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
-
-    await prisma.$transaction(async (tx) => {
-      if (user.student) {
-        await tx.studentGroup.deleteMany({ where: { studentId: id } });
-        await tx.studentEvaluation.deleteMany({ where: { studentId: id } });
-        await tx.survey.deleteMany({ where: { studentId: id } });
-        await tx.reportStudent.deleteMany({ where: { studentId: id } });
-        await tx.student.delete({ where: { id } });
-      }
-      if (user.teacher) {
-        await tx.teacherCourse.deleteMany({ where: { teacherId: id } });
-        await tx.reportTeacher.deleteMany({ where: { teacherId: id } });
-        await tx.group.updateMany({ where: { teacherId: id }, data: { teacherId: id } });
-        await tx.teacher.delete({ where: { id } });
-      }
-      if (user.admin) {
-        await tx.admin.delete({ where: { id } });
-      }
-      await tx.user.delete({ where: { id } });
-    });
-
-    return res.json({ message: 'Kullanıcı başarıyla silindi.' });
-  } catch (err) {
-    console.error('DeleteUser error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
-}
-
-// ─── Update Course ──────────────────────────────────────────
-async function updateCourse(req, res) {
-  try {
-    const { id } = req.params;
-    const { course, age, lessonSize, moduleNum, moduleSize } = req.body;
-    const data = {};
-    if (course) data.course = course;
-    if (age) data.age = age;
-    if (lessonSize !== undefined) data.lessonSize = parseInt(lessonSize);
-    if (moduleNum !== undefined) data.moduleNum = parseInt(moduleNum);
-    if (moduleSize !== undefined) data.moduleSize = parseInt(moduleSize);
-
-    const updated = await prisma.course.update({ where: { id }, data });
-    return res.json({ ...updated, message: 'Kurs başarıyla güncellendi.' });
-  } catch (err) {
-    if (err.code === 'P2025') return res.status(404).json({ error: 'Kurs bulunamadı.' });
-    console.error('UpdateCourse error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
-}
-
-// ─── Delete Course ──────────────────────────────────────────
-async function deleteCourse(req, res) {
-  try {
-    const { id } = req.params;
-    const groups = await prisma.group.findMany({ where: { courseId: id } });
-    if (groups.length > 0) return res.status(409).json({ error: `Bu kursa bağlı ${groups.length} grup var. Önce grupları silin.` });
-
-    await prisma.teacherCourse.deleteMany({ where: { courseId: id } });
-    await prisma.course.delete({ where: { id } });
-    return res.json({ message: 'Kurs başarıyla silindi.' });
-  } catch (err) {
-    if (err.code === 'P2025') return res.status(404).json({ error: 'Kurs bulunamadı.' });
-    console.error('DeleteCourse error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
-  }
-}
-
-// ─── Get Teacher Progress (Time series for chart) ──────────
-async function getTeacherProgress(req, res) {
-  try {
-    const { teacherId } = req.params;
-
-    const reportTeachers = await prisma.reportTeacher.findMany({
+    const existing = await prisma.report.findFirst({
       where: {
-        teacherId,
-        report: { status: { in: ['DRAFT', 'FINALIZED'] } },
+        OR: [
+          { lesson: { videoFilename: { contains: videoId } } },
+          { lesson: { videoUrl: { contains: videoId } } },
+          { draftReport: { path: ['_videoUrl'], string_contains: videoId } },
+          { draftReport: { path: ['_videoFilename'], string_contains: videoId } },
+          { draftReport: { path: ['video_id'], string_contains: videoId } },
+        ],
+        status: { in: ['DRAFT', 'FINALIZED'] },
+        draftReport: { not: null },
       },
-      include: {
-        report: {
-          include: {
-            lesson: {
-              include: { group: { include: { course: true } } },
-            },
-          },
-        },
+    });
+    if (existing) { skipped++; continue; }
+
+    const pendingJob = await prisma.report.findFirst({
+      where: {
+        OR: [
+          { lesson: { videoFilename: { contains: videoId } } },
+          { lesson: { videoUrl: { contains: videoId } } },
+          { draftReport: { path: ['_videoUrl'], string_contains: videoId } },
+          { draftReport: { path: ['_videoFilename'], string_contains: videoId } },
+        ],
+        status: { in: ['PROCESSING', 'PENDING'] },
       },
     });
 
-    const dataPoints = reportTeachers
-      .filter(rt => rt.report)
-      .map(rt => {
-        const report = rt.report;
-        const fr = report.finalReport || report.draftReport || {};
-        const lesson = report.lesson;
+    const [content] = await file.download();
+    let reportData = {};
+    try { reportData = JSON.parse(content.toString()); } catch (e) { continue; }
 
-        // Try to extract a numeric score from the report JSON
-        let score = rt.score;
-        if (score == null && fr.overallScore != null) score = fr.overallScore;
-        if (score == null && fr.genel_sonuc != null) {
-          const parsed = parseFloat(fr.genel_sonuc);
-          if (!isNaN(parsed)) score = parsed;
-        }
-        if (score == null && fr.yeterlilikler) {
-          const map = { 'çok iyi': 5, 'iyi': 4, 'orta': 3, 'geliştirilmeli': 2, 'düşük': 2, 'yetersiz': 1 };
-          score = map[fr.yeterlilikler.toLowerCase()] || null;
-        }
-        if (score == null) score = 3;
-        if (score > 5) score = score / 20;
+    if (pendingJob) {
+      await prisma.report.update({ where: { id: pendingJob.id }, data: { status: 'DRAFT', draftReport: reportData } });
+    } else {
+      const duplicateCheck = await prisma.$queryRawUnsafe(
+        `SELECT id FROM reports WHERE status IN ('DRAFT', 'FINALIZED') AND draft_report IS NOT NULL AND draft_report::text LIKE $1 LIMIT 1`,
+        `%${videoId}%`
+      ).catch(() => []);
 
-        const date = lesson?.dateTime || report.createdAt;
-        const label = lesson
-          ? `${lesson.group?.course?.course || ''} - Ders ${lesson.lessonNo || ''}`
-          : '';
-
-        return { date, score: Math.round(score * 10) / 10, label };
-      })
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    return res.json(dataPoints);
-  } catch (err) {
-    console.error('GetTeacherProgress error:', err);
-    return res.status(500).json({ error: 'Sunucu hatası.' });
+      if (duplicateCheck.length > 0) { skipped++; continue; }
+      await prisma.report.create({ data: { status: 'DRAFT', draftReport: reportData } });
+    }
+    synced++;
   }
+
+  return res.json({ synced, skipped, total: jsonFiles.length });
 }
 
+// ═══════════════════════════════════════════════════════════
+// USER MANAGEMENT — delegated to userService
+// ═══════════════════════════════════════════════════════════
+async function createUser(req, res) {
+  const user = await userService.createUser(req.body);
+  return res.status(201).json({ ...user, message: 'Kullanıcı başarıyla oluşturuldu.' });
+}
+
+async function getStudents(req, res) {
+  return res.json(await userService.getStudents());
+}
+
+async function assignStudentToGroup(req, res) {
+  await userService.assignStudentToGroup(req.body.studentId, req.body.groupId);
+  return res.json({ message: 'Öğrenci gruba başarıyla atandı.' });
+}
+
+async function removeStudentFromGroup(req, res) {
+  await userService.removeStudentFromGroup(req.body.studentId, req.body.groupId);
+  return res.json({ message: 'Öğrenci gruptan çıkarıldı.' });
+}
+
+async function updateUser(req, res) {
+  await userService.updateUser(req.params.id, req.body);
+  return res.json({ message: 'Kullanıcı başarıyla güncellendi.' });
+}
+
+async function deleteUser(req, res) {
+  await userService.deleteUser(req.params.id);
+  return res.json({ message: 'Kullanıcı başarıyla silindi.' });
+}
+
+// ═══════════════════════════════════════════════════════════
+// COURSES — delegated to courseService
+// ═══════════════════════════════════════════════════════════
+async function getCourses(req, res) {
+  return res.json(await courseService.getCourses());
+}
+
+async function createCourse(req, res) {
+  const course = await courseService.createCourse(req.body);
+  return res.status(201).json({ ...course, message: 'Kurs başarıyla oluşturuldu.' });
+}
+
+async function updateCourse(req, res) {
+  const updated = await courseService.updateCourse(req.params.id, req.body);
+  return res.json({ ...updated, message: 'Kurs başarıyla güncellendi.' });
+}
+
+async function deleteCourse(req, res) {
+  await courseService.deleteCourse(req.params.id);
+  return res.json({ message: 'Kurs başarıyla silindi.' });
+}
+
+async function getTeacherCourses(req, res) {
+  return res.json(await courseService.getTeacherCourses(req.params.teacherId));
+}
+
+async function setTeacherCourses(req, res) {
+  const count = await courseService.setTeacherCourses(req.body.teacherId, req.body.courseIds);
+  return res.json({ message: 'Eğitmen kursları güncellendi.', count });
+}
+
+// ═══════════════════════════════════════════════════════════
+// GROUPS — delegated to groupService
+// ═══════════════════════════════════════════════════════════
+async function getGroups(req, res) {
+  return res.json(await groupService.getGroups());
+}
+
+async function createGroup(req, res) {
+  const group = await groupService.createGroup(req.body);
+  return res.status(201).json({ id: group.id, name: group.name, courseId: group.courseId, teacherId: group.teacherId, schedule: group.schedule, message: 'Grup başarıyla oluşturuldu.' });
+}
+
+async function updateGroup(req, res) {
+  const group = await groupService.updateGroup(req.params.id, req.body);
+  return res.json({ ...group, message: 'Grup başarıyla güncellendi.' });
+}
+
+async function deleteGroup(req, res) {
+  await groupService.deleteGroup(req.params.id);
+  return res.json({ message: 'Grup başarıyla silindi.' });
+}
+
+// ═══════════════════════════════════════════════════════════
 module.exports = {
   getStats, getTeachers, uploadAnalysis, assignAnalysis, getDraft,
   regenerateAnalysis, finalizeAnalysis, getLessons, getAnalysisJobs,
@@ -900,5 +471,5 @@ module.exports = {
   setTeacherCourses, getTeacherCourses, createGroup, createCourse,
   updateGroup, deleteGroup, updateUser, deleteUser, updateCourse, deleteCourse,
   getTeacherProgress,
-  analysisProgress, // shared with pipeline controller
+  analysisProgress,
 };
