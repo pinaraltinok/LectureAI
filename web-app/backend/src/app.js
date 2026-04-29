@@ -49,13 +49,24 @@ app.use('/api/gcs', require('./routes/gcs.routes'));
 app.use('/api', require('./routes/analysis.routes'));
 app.use('/api/pipeline', require('./routes/pipeline.routes'));
 
+// ─── Serve Frontend (if build exists) ────────────────────────
+const frontendPath = path.join(__dirname, '..', 'public');
+const frontendIndex = path.join(frontendPath, 'index.html');
+if (fs.existsSync(frontendIndex)) {
+  app.use(express.static(frontendPath));
+}
+
 // ─── Health Check ────────────────────────────────────────────
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// ─── 404 Handler ─────────────────────────────────────────────
+// ─── 404 / SPA Fallback Handler ──────────────────────────────
 app.use((req, res) => {
+  // Serve index.html for non-API routes (SPA client-side routing)
+  if (!req.originalUrl.startsWith('/api') && fs.existsSync(frontendIndex)) {
+    return res.sendFile(frontendIndex);
+  }
   res.status(404).json({ error: `Route bulunamadı: ${req.method} ${req.originalUrl}` });
 });
 
