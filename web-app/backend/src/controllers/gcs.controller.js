@@ -6,8 +6,25 @@ const projectRoot = path.resolve(__dirname, '..', '..', '..', '..');
 const credentialPath = path.join(projectRoot, 'senior-design-488908-1d5d3e1681ee.json');
 const storage = new Storage({ keyFilename: credentialPath });
 
-// Signed URL expires in 60 minutes (1 hour) – videos are typically longer than 15 min
+// Signed URL expires in 60 minutes (1 hour)
 const SIGNED_URL_EXPIRY_MINUTES = 60;
+
+// Allowed buckets (whitelist)
+const ALLOWED_BUCKETS = ['lectureai_full_videos', 'lectureai_processed'];
+
+/**
+ * Security: Validates GCS object path against path traversal attacks.
+ * Blocks: ../ sequences, null bytes, absolute paths, backslashes.
+ */
+function isValidObjectPath(objectPath) {
+  if (!objectPath || typeof objectPath !== 'string') return false;
+  if (objectPath.includes('..')) return false;           // Path traversal
+  if (objectPath.includes('\0')) return false;            // Null byte injection
+  if (objectPath.startsWith('/')) return false;           // Absolute path
+  if (objectPath.includes('\\')) return false;            // Windows backslash
+  if (objectPath.length > 1024) return false;             // Path length limit
+  return true;
+}
 
 /**
  * GET /api/gcs/signed-url?bucket=BUCKET&object=OBJECT_PATH
@@ -22,13 +39,14 @@ async function getSignedUrl(req, res) {
       return res.status(400).json({ error: 'bucket ve object parametreleri gereklidir.' });
     }
 
+    // Security: path traversal prevention
+    if (!isValidObjectPath(object)) {
+      return res.status(400).json({ error: 'Geçersiz dosya yolu.' });
+    }
+
     // Security: only allow our known buckets
-    const ALLOWED_BUCKETS = [
-      'lectureai_full_videos',
-      'lectureai_processed',
-    ];
     if (!ALLOWED_BUCKETS.includes(bucket)) {
-      return res.status(403).json({ error: 'Bu bucket\'a erişim izni yok.' });
+      return res.status(403).json({ error: 'Bu kaynağa erişim izni yok.' });
     }
 
     const [url] = await storage
@@ -43,7 +61,7 @@ async function getSignedUrl(req, res) {
     return res.json({ url, expiresInMinutes: SIGNED_URL_EXPIRY_MINUTES });
   } catch (err) {
     console.error('GetSignedUrl error:', err.message);
-    return res.status(500).json({ error: 'Signed URL oluşturulamadı: ' + err.message });
+    return res.status(500).json({ error: 'Dosya URL\'i oluşturulamadı.' });
   }
 }
 
@@ -60,7 +78,7 @@ async function getBatchSignedUrls(req, res) {
       return res.status(400).json({ error: 'uris dizisi gereklidir.' });
     }
 
-    const ALLOWED_BUCKETS = ['lectureai_full_videos', 'lectureai_processed'];
+    const BATCH_ALLOWED_BUCKETS = ALLOWED_BUCKETS;
     const expires = Date.now() + SIGNED_URL_EXPIRY_MINUTES * 60 * 1000;
 
     const results = await Promise.all(
@@ -73,7 +91,7 @@ async function getBatchSignedUrls(req, res) {
             const httpsMatch = uri.match(/^https:\/\/storage\.googleapis\.com\/([^/]+)\/(.+)$/);
             if (httpsMatch) {
               const [, bucket, object] = httpsMatch;
-              if (!ALLOWED_BUCKETS.includes(bucket)) return { uri, error: 'Bucket izni yok' };
+              if (!BATCH_ALLOWED_BUCKETS.includes(bucket)) return { uri, error: 'Erişim izni yok' };
               const [url] = await storage.bucket(bucket).file(decodeURIComponent(object)).getSignedUrl({
                 version: 'v4', action: 'read', expires,
               });
@@ -83,7 +101,7 @@ async function getBatchSignedUrls(req, res) {
           }
 
           const [, bucket, object] = match;
-          if (!ALLOWED_BUCKETS.includes(bucket)) return { uri, error: 'Bucket izni yok' };
+          if (!BATCH_ALLOWED_BUCKETS.includes(bucket)) return { uri, error: 'Erişim izni yok' };
 
           const [url] = await storage.bucket(bucket).file(object).getSignedUrl({
             version: 'v4', action: 'read', expires,
@@ -98,7 +116,7 @@ async function getBatchSignedUrls(req, res) {
     return res.json({ results, expiresInMinutes: SIGNED_URL_EXPIRY_MINUTES });
   } catch (err) {
     console.error('BatchSignedUrls error:', err.message);
-    return res.status(500).json({ error: 'Sunucu hatası: ' + err.message });
+    return res.status(500).json({ error: 'Sunucu hatası oluştu.' });
   }
 }
 
@@ -116,9 +134,13 @@ async function streamFile(req, res) {
       return res.status(400).json({ error: 'bucket ve object parametreleri gereklidir.' });
     }
 
-    const ALLOWED_BUCKETS = ['lectureai_full_videos', 'lectureai_processed'];
+    // Security: path traversal prevention
+    if (!isValidObjectPath(object)) {
+      return res.status(400).json({ error: 'Geçersiz dosya yolu.' });
+    }
+
     if (!ALLOWED_BUCKETS.includes(bucket)) {
-      return res.status(403).json({ error: "Bu bucket'a erişim izni yok." });
+      return res.status(403).json({ error: 'Bu kaynağa erişim izni yok.' });
     }
 
     const file = storage.bucket(bucket).file(object);
@@ -172,7 +194,7 @@ async function streamFile(req, res) {
   } catch (err) {
     console.error('StreamFile error:', err.message);
     if (!res.headersSent) {
-      return res.status(500).json({ error: 'Dosya stream edilemedi: ' + err.message });
+      return res.status(500).json({ error: 'Dosya yüklenemedi.' });
     }
   }
 }

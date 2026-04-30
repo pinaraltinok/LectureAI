@@ -48,14 +48,16 @@ const STAGE_PROGRESS_MAP = {
  * Auth: Bearer token matching PIPELINE_WEBHOOK_SECRET (optional in dev).
  */
 async function postWorkerPipelineEvent(req, res) {
-  // ── Auth check ──
+  // ── Auth check (mandatory — prevents fake pipeline events) ──
   const secret = process.env.PIPELINE_WEBHOOK_SECRET;
-  if (secret) {
-    const authHeader = req.headers.authorization || '';
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-    if (token !== secret) {
-      return res.status(401).json({ error: 'Yetkisiz: Geçersiz pipeline secret.' });
-    }
+  if (!secret) {
+    console.error('[Pipeline] PIPELINE_WEBHOOK_SECRET is not set. Rejecting event.');
+    return res.status(500).json({ error: 'Pipeline yapılandırma hatası.' });
+  }
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  if (token !== secret) {
+    return res.status(401).json({ error: 'Yetkisiz: Geçersiz pipeline secret.' });
   }
 
   const { video_id, stage, status, detail } = req.body;

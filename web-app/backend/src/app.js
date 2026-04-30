@@ -2,6 +2,9 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./utils/swagger');
 const fs = require('fs');
@@ -9,10 +12,55 @@ const path = require('path');
 
 // ─── Express App ─────────────────────────────────────────────
 const app = express();
+app.disable('x-powered-by'); // Prevent Express version fingerprinting
 
-// ─── Middleware ──────────────────────────────────────────────
-app.use(cors());
-app.use(express.json());
+// ─── Security: Helmet (HTTP security headers) ───────────────
+app.use(helmet({
+  contentSecurityPolicy: false,        // Disable CSP for SPA compatibility
+  crossOriginEmbedderPolicy: false,    // Allow video embeds
+}));
+
+// ─── Security: CORS (restrict origins) ──────────────────────
+const ALLOWED_ORIGINS = [
+  'http://localhost:5173',             // Vite dev server
+  'http://localhost:3001',             // Backend self (Swagger)
+  process.env.FRONTEND_URL,           // Production frontend
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (server-to-server, Postman)
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    callback(new Error('CORS politikası ihlali: Bu kaynaktan erişim engellendi.'));
+  },
+  credentials: true,                  // Allow cookies (httpOnly JWT)
+}));
+
+// ─── Security: Rate Limiting ────────────────────────────────
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,           // 15 minutes
+  max: 200,                           // 200 requests per window per IP
+  message: { error: 'Çok fazla istek gönderildi. Lütfen 15 dakika bekleyin.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api', apiLimiter);
+
+// Strict rate limit for auth endpoints (brute-force protection)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,           // 15 minutes
+  max: 15,                            // 15 login attempts per window
+  message: { error: 'Çok fazla giriş denemesi. Lütfen 15 dakika bekleyin.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+
+// ─── Body Parsers ────────────────────────────────────────────
+app.use(cookieParser());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // ─── Ensure uploads directory exists ─────────────────────────
@@ -21,24 +69,25 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// ─── Swagger UI ──────────────────────────────────────────────
-app.use(
-  '/api-docs',
-  swaggerUi.serve,
-  swaggerUi.setup(swaggerSpec, {
-    customCss: '.swagger-ui .topbar { display: none }',
-    customSiteTitle: 'LectureAI API Documentation',
-  })
-);
+// ─── Swagger UI (only in development) ────────────────────────
+if (process.env.NODE_ENV !== 'production') {
+  app.use(
+    '/api-docs',
+    swaggerUi.serve,
+    swaggerUi.setup(swaggerSpec, {
+      customCss: '.swagger-ui .topbar { display: none }',
+      customSiteTitle: 'LectureAI API Documentation',
+    })
+  );
+  app.get('/api-docs.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.send(swaggerSpec);
+  });
+}
 
-// Serve raw OpenAPI spec as JSON
-app.get('/api-docs.json', (req, res) => {
-  res.setHeader('Content-Type', 'application/json');
-  res.send(swaggerSpec);
-});
-
-// ─── Serve uploaded files (videos, etc.) ─────────────────────
-app.use('/uploads', express.static(path.resolve(uploadDir)));
+// ─── Serve uploaded files (protected by auth) ────────────────
+const auth = require('./middleware/auth');
+app.use('/uploads', auth, express.static(path.resolve(uploadDir)));
 
 // ─── Routes ──────────────────────────────────────────────────
 app.use('/api/auth', require('./routes/auth.routes'));
@@ -67,7 +116,7 @@ app.use((req, res) => {
   if (!req.originalUrl.startsWith('/api') && fs.existsSync(frontendIndex)) {
     return res.sendFile(frontendIndex);
   }
-  res.status(404).json({ error: `Route bulunamadı: ${req.method} ${req.originalUrl}` });
+  res.status(404).json({ error: 'Sayfa bulunamadı.' });
 });
 
 // ─── Global Error Handler (works with asyncHandler + AppError) ─

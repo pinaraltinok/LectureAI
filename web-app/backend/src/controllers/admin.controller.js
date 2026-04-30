@@ -363,9 +363,9 @@ async function syncGCSReports(req, res) {
     if (pendingJob) {
       await prisma.report.update({ where: { id: pendingJob.id }, data: { status: 'DRAFT', draftReport: reportData } });
     } else {
-      const duplicateCheck = await prisma.$queryRawUnsafe(
-        `SELECT id FROM reports WHERE status IN ('DRAFT', 'FINALIZED') AND draft_report IS NOT NULL AND draft_report::text LIKE $1 LIMIT 1`,
-        `%${videoId}%`
+      const { Prisma } = require('@prisma/client');
+      const duplicateCheck = await prisma.$queryRaw(
+        Prisma.sql`SELECT id FROM reports WHERE status IN ('DRAFT', 'FINALIZED') AND draft_report IS NOT NULL AND draft_report::text LIKE ${'%' + videoId + '%'} LIMIT 1`
       ).catch(() => []);
 
       if (duplicateCheck.length > 0) { skipped++; continue; }

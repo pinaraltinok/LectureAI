@@ -1,15 +1,12 @@
 /**
  * Authentication Context — Provider Pattern implementation.
  *
- * Centralizes authentication state (user, token, role) and exposes it
- * to all child components via React Context API, eliminating prop drilling.
+ * JWT token is stored in an httpOnly cookie (set by backend).
+ * Browser sends the cookie automatically — NO token in localStorage.
+ * This prevents XSS attacks from reading the token via F12 DevTools.
  *
  * Design Pattern: Provider Pattern (React Context)
  * SOLID Principle: Single Responsibility — auth state management only
- *
- * Usage:
- *   // In App.jsx: wrap with <AuthProvider>
- *   // In any component: const { user, login, logout } = useAuth();
  */
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
@@ -21,13 +18,10 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Restore session from localStorage on mount
+  // Restore session from httpOnly cookie on mount
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) { setLoading(false); return; }
-
     fetch(`${API_BASE}/api/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include', // Send httpOnly cookie
     })
       .then(res => { if (!res.ok) throw new Error(); return res.json(); })
       .then(data => {
@@ -38,12 +32,13 @@ export function AuthProvider({ children }) {
           email: data.email,
         });
       })
-      .catch(() => localStorage.removeItem('token'))
+      .catch(() => {/* No valid session — stay logged out */})
       .finally(() => setLoading(false));
   }, []);
 
-  const login = useCallback((token, userData) => {
-    localStorage.setItem('token', token);
+  const login = useCallback((userData) => {
+    // Token is already set as httpOnly cookie by backend
+    // We only store non-sensitive user info in React state
     setUser({
       userId: userData.userId,
       name: userData.name,
@@ -52,8 +47,12 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem('token');
+  const logout = useCallback(async () => {
+    // Tell backend to clear the httpOnly cookie
+    await fetch(`${API_BASE}/api/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+    }).catch(() => {});
     setUser(null);
   }, []);
 

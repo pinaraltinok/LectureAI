@@ -24,6 +24,17 @@ module.exports = {
   GCS_MAX_POLLS:      parseInt(process.env.GCS_MAX_POLLS     || '720', 10),
 
   // ── Authentication ─────────────────────────────────────────
-  JWT_SECRET:         process.env.JWT_SECRET,
+  JWT_SECRET:         (() => {
+    const secret = process.env.JWT_SECRET;
+    if (!secret) {
+      console.error('FATAL: JWT_SECRET environment variable is not set!');
+      process.exit(1);
+    }
+    if (secret.length < 16) {
+      console.error('FATAL: JWT_SECRET must be at least 16 characters long!');
+      process.exit(1);
+    }
+    return secret;
+  })(),
   JWT_EXPIRES_IN:     process.env.JWT_EXPIRES_IN || '24h',
 };

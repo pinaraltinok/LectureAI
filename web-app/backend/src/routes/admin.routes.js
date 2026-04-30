@@ -16,7 +16,7 @@ const {
   getTeacherProgress,
 } = require('../controllers/admin.controller');
 
-// Multer configuration
+// Multer configuration with security limits
 const multerStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, process.env.UPLOAD_DIR || './uploads'),
   filename: (req, file, cb) => {
@@ -24,7 +24,18 @@ const multerStorage = multer.diskStorage({
     cb(null, Date.now() + '_' + sanitized);
   },
 });
-const upload = multer({ storage: multerStorage });
+const ALLOWED_MIMETYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska'];
+const upload = multer({
+  storage: multerStorage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB max
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_MIMETYPES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Sadece video dosyaları (mp4, webm, mov, avi, mkv) yüklenebilir.'), false);
+    }
+  },
+});
 
 router.get('/stats', auth, roleGuard('ADMIN'), asyncHandler(getStats));
 router.get('/teachers', auth, roleGuard('ADMIN'), asyncHandler(getTeachers));

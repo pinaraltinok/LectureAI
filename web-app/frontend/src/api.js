@@ -1,20 +1,23 @@
 /**
  * Centralized API helper for authenticated requests.
- * Reads JWT token from localStorage and attaches it to every request.
+ * JWT token is stored in an httpOnly cookie (set by backend).
+ * Browser automatically sends the cookie with every request.
+ * Token is NOT stored in localStorage — invisible to F12 DevTools.
  */
 
 const API_BASE = '/api';
 
 function getHeaders(isJson = true) {
   const headers = {};
-  const token = localStorage.getItem('token');
-  if (token) headers['Authorization'] = `Bearer ${token}`;
   if (isJson) headers['Content-Type'] = 'application/json';
   return headers;
 }
 
 export async function apiGet(path) {
-  const res = await fetch(`${API_BASE}${path}`, { headers: getHeaders() });
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: getHeaders(),
+    credentials: 'include',  // Send httpOnly cookies
+  });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Sunucu hatası' }));
     throw new Error(err.error || `HTTP ${res.status}`);
@@ -26,6 +29,7 @@ export async function apiPost(path, body) {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
     headers: getHeaders(),
+    credentials: 'include',
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -36,13 +40,9 @@ export async function apiPost(path, body) {
 }
 
 export async function apiUpload(path, formData) {
-  const headers = {};
-  const token = localStorage.getItem('token');
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  // Don't set Content-Type for multipart — browser sets it with boundary
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
-    headers,
+    credentials: 'include',
     body: formData,
   });
   if (!res.ok) {
@@ -56,6 +56,7 @@ export async function apiPut(path, body) {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'PUT',
     headers: getHeaders(),
+    credentials: 'include',
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -69,6 +70,7 @@ export async function apiDelete(path) {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'DELETE',
     headers: getHeaders(),
+    credentials: 'include',
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Sunucu hatası' }));

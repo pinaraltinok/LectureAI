@@ -25,12 +25,12 @@ export default function Login() {
         const response = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({ email, password })
         })
         const data = await response.json()
         if (response.ok) {
-          localStorage.setItem('token', data.token)
-          login(data.token, data)
+          login(data)
           const r = data.role.toLowerCase()
           if (r === 'admin') navigate('/admin/kurum-ozeti')
           else if (r === 'teacher') navigate('/teacher/ders-ozeti')
@@ -52,12 +52,12 @@ export default function Login() {
         const response = await fetch('/api/auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify(body)
         })
         const data = await response.json()
         if (response.ok) {
-          localStorage.setItem('token', data.token)
-          login(data.token, data)
+          login(data)
           const r = data.role.toLowerCase()
           if (r === 'admin') navigate('/admin/kurum-ozeti')
           else if (r === 'teacher') navigate('/teacher/ders-ozeti')

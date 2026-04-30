@@ -5,6 +5,21 @@ const AppError = require('../utils/AppError');
 const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config/constants');
 
 /**
+ * Sets the JWT token as an httpOnly cookie.
+ * Token is NOT accessible via JavaScript (F12 console) — only sent by browser automatically.
+ */
+function setCookieToken(res, token) {
+  const isProduction = process.env.NODE_ENV === 'production';
+  res.cookie('token', token, {
+    httpOnly: true,          // JavaScript cannot read this cookie
+    secure: isProduction,    // HTTPS only in production
+    sameSite: 'strict',      // Prevent CSRF
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    path: '/',
+  });
+}
+
+/**
  * POST /api/auth/login
  * Authenticates user with email & password, returns JWT token.
  */
@@ -31,8 +46,9 @@ async function login(req, res) {
 
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 
+  setCookieToken(res, token);
+
   return res.json({
-    token,
     role: user.role,
     userId: user.id,
     name: user.name,
@@ -136,8 +152,9 @@ async function register(req, res) {
 
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 
+  setCookieToken(res, token);
+
   return res.status(201).json({
-    token,
     role: user.role,
     userId: user.id,
     name: user.name,
@@ -188,6 +205,7 @@ async function updateProfile(req, res) {
  * Stateless logout — client should discard the token.
  */
 async function logout(req, res) {
+  res.clearCookie('token', { httpOnly: true, sameSite: 'strict', path: '/' });
   return res.json({ message: 'Oturum başarıyla sonlandırıldı.' });
 }
 
