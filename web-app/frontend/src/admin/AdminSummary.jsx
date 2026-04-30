@@ -17,15 +17,8 @@ const AdminSummary = () => {
       .finally(() => setLoading(false))
   }, [])
 
-  // Trend data - will be dynamic when historical tracking is added
-  const data = [
-    { month: 'Eki', skor: 65 },
-    { month: 'Kas', skor: 72 },
-    { month: 'Ara', skor: 68 },
-    { month: 'Oca', skor: 85 },
-    { month: 'Şub', skor: 92 },
-    { month: 'Mar', skor: stats?.institutionScore ? Math.min(Math.round(stats.institutionScore), 100) : 94 },
-  ]
+  // Trend data - only real data from API (no mock data)
+  const data = stats?.performanceTrend || []
 
   if (loading) {
     return (
@@ -56,11 +49,11 @@ const AdminSummary = () => {
     { label: 'Bekleyen Analiz', value: stats?.pendingAnalysis ?? '0', icon: <Hourglass size={22} />, color: '#f43f5e', trend: 'İşlem bekliyor', gradient: 'linear-gradient(135deg, #f43f5e, #fb7185)' },
   ]
 
-  // Derive quality distribution from institution score
-  const totalTeachers = stats?.activeTeachers || 1
-  const excellent = Math.round(totalTeachers * 0.75)
-  const good = Math.round(totalTeachers * 0.19)
-  const needsWork = totalTeachers - excellent - good
+  // Quality distribution from real API data
+  const totalTeachers = stats?.activeTeachers || 0
+  const excellent = stats?.qualityDistribution?.excellent ?? 0
+  const good = stats?.qualityDistribution?.good ?? 0
+  const needsWork = stats?.qualityDistribution?.needsWork ?? 0
 
   return (
     <div className="dashboard-page">
