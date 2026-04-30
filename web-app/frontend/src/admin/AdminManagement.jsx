@@ -113,6 +113,17 @@ const AdminManagement = () => {
     try {
       const res = await apiPost('/admin/teacher-courses', { teacherId: selectedTeacherId, courseIds: selectedCourseIds })
       showMsg(res.message || 'Kurslar güncellendi!')
+      // If this teacher is also selected in group creation, refresh its course list instantly
+      if (groupForm.teacherId === selectedTeacherId) {
+        apiGet(`/admin/teacher/${selectedTeacherId}/courses`)
+          .then(data => {
+            setGroupTeacherCourses(data)
+            if (data.length > 0 && !data.some(c => c.id === groupForm.courseId)) {
+              setGroupForm(f => ({ ...f, courseId: data[0].id }))
+            }
+          })
+          .catch(() => {})
+      }
     } catch (err) { showMsg(err.message, true) }
   }
 
@@ -209,7 +220,7 @@ const AdminManagement = () => {
               </div>
               {form.role === 'student' && (
                 <>
-                  <InputField label="YAŞ" value={form.age} onChange={v => setForm(f => ({ ...f, age: v }))} placeholder="10" type="number" />
+                  <InputField label="YAŞ" value={form.age} onChange={v => { const n = parseInt(v); if (v === '' || (n >= 0 && n <= 120)) setForm(f => ({ ...f, age: v })) }} placeholder="10" type="number" min="0" />
                   <InputField label="VELİ ADI" value={form.parent} onChange={v => setForm(f => ({ ...f, parent: v }))} placeholder="Veli Adı Soyadı" />
                   <InputField label="VELİ TELEFONU" value={form.parentPhone} onChange={v => setForm(f => ({ ...f, parentPhone: v }))} placeholder="+90 5xx" />
                 </>
@@ -532,9 +543,10 @@ const AdminManagement = () => {
                       {isEditing ? (
                         <div style={{display:'flex', flexDirection:'column', gap:'6px'}}>
                           <input value={editingCourse.course} onChange={e => setEditingCourse(p => ({...p, course: e.target.value}))} style={{padding:'6px 10px', borderRadius:'8px', border:'1px solid #e2e8f0', fontSize:'0.85rem', fontWeight:700}} />
-                          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'4px'}}>
+                          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:'4px'}}>
                             <input value={editingCourse.age} onChange={e => setEditingCourse(p => ({...p, age: e.target.value}))} placeholder="Yaş" style={{padding:'6px', borderRadius:'8px', border:'1px solid #e2e8f0', fontSize:'0.75rem'}} />
-                            <input type="number" value={editingCourse.moduleNum} onChange={e => setEditingCourse(p => ({...p, moduleNum: e.target.value}))} placeholder="Modül" style={{padding:'6px', borderRadius:'8px', border:'1px solid #e2e8f0', fontSize:'0.75rem'}} />
+                            <input type="number" value={editingCourse.moduleNum} onChange={e => setEditingCourse(p => ({...p, moduleNum: e.target.value}))} placeholder="Modül Sayısı" style={{padding:'6px', borderRadius:'8px', border:'1px solid #e2e8f0', fontSize:'0.75rem'}} />
+                            <input type="number" value={editingCourse.moduleSize} onChange={e => setEditingCourse(p => ({...p, moduleSize: e.target.value}))} placeholder="Ders/Modül" style={{padding:'6px', borderRadius:'8px', border:'1px solid #e2e8f0', fontSize:'0.75rem'}} />
                             <input type="number" value={editingCourse.lessonSize} onChange={e => setEditingCourse(p => ({...p, lessonSize: e.target.value}))} placeholder="dk" style={{padding:'6px', borderRadius:'8px', border:'1px solid #e2e8f0', fontSize:'0.75rem'}} />
                           </div>
                           <div style={{display:'flex', gap:'6px'}}>
@@ -574,10 +586,11 @@ const AdminManagement = () => {
 const labelStyle = { fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }
 const selectStyle = { width: '100%', padding: '0.9rem 1.1rem' }
 
-const InputField = ({ label, value, onChange, placeholder, type = 'text' }) => (
+const InputField = ({ label, value, onChange, placeholder, type = 'text', min }) => (
   <div>
     <label style={labelStyle}>{label}</label>
     <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+      min={min} 
       style={{ width: '100%', padding: '12px', borderRadius: '14px', border: '1px solid #e2e8f0', fontSize: '0.9rem', fontWeight: 600, outline: 'none', background: '#f8fafc', boxSizing: 'border-box' }} />
   </div>
 )

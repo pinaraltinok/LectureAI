@@ -121,6 +121,7 @@ const AnalysisWorkflow = ({ onStepChange }) => {
           jobId,
           status: 'PROCESSING',
           draftReport: null,
+          videoUrl: uploadRes.videoUrl || null,
           teacher: teachers.find(t => t.id === selectedTeacherId),
           course: selectedCourse,
           lessonCode: selectedLessonCode,
@@ -549,6 +550,7 @@ const AnalysisWorkflow = ({ onStepChange }) => {
       ? [{ t: 'AI Değerlendirmesi', c: draftReport.feedback_metni }]
       : [{ t: 'Durum', c: draftData?.status === 'PROCESSING' ? 'Analiz devam ediyor. Pipeline tamamlandığında rapor burada görünecektir.' : 'Taslak rapor henüz oluşturulmadı.' }],
     videoUrl: draftData?.videoUrl || null,
+    localVideoUrl: draftData?.localVideoUrl || null,
     draftReport,
   }
 

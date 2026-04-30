@@ -117,7 +117,8 @@ async function uploadAnalysis(req, res) {
   const report = await prisma.report.create({ data: { status: 'PENDING' } });
 
   if (resolvedUrl) {
-    await prisma.report.update({ where: { id: report.id }, data: { draftReport: { _videoUrl: resolvedUrl, _videoFilename: videoFilename } } });
+    const localPath = file ? `/uploads/${file.filename}` : null;
+    await prisma.report.update({ where: { id: report.id }, data: { draftReport: { _videoUrl: resolvedUrl, _videoFilename: videoFilename, _localVideoUrl: localPath } } });
   }
 
   if (resolvedUrl && (resolvedUrl.startsWith('gs://') || resolvedUrl.startsWith('https://storage.googleapis.com/'))) {
@@ -172,7 +173,11 @@ function pollGCSForReport(jobId, videoId) {
         const [content] = await reportBlob.download();
         let draftReport = {};
         try { draftReport = JSON.parse(content.toString()); } catch (e) { console.error(`[GCS] Report parse error:`, e.message); }
-        await prisma.report.update({ where: { id: jobId }, data: { status: 'DRAFT', draftReport } });
+        // Merge with existing draftReport to preserve _videoUrl, _localVideoUrl, _videoFilename
+        const existing = await prisma.report.findUnique({ where: { id: jobId }, select: { draftReport: true } });
+        const existingDraft = (typeof existing?.draftReport === 'object' && existing.draftReport) || {};
+        const mergedDraft = { ...existingDraft, ...draftReport };
+        await prisma.report.update({ where: { id: jobId }, data: { status: 'DRAFT', draftReport: mergedDraft } });
         analysisProgress.set(jobId, { stage: 'completed', message: 'Analiz tamamlandı!', percent: 100, videoId });
         setTimeout(() => analysisProgress.delete(jobId), 5 * 60 * 1000);
       }
@@ -235,9 +240,12 @@ async function assignAnalysis(req, res) {
 async function getDraft(req, res) {
   const report = await reportService.getDraft(req.params.jobId);
   const teacher = report.reportTeachers[0];
+  const dr = (typeof report.draftReport === 'object' && report.draftReport) || {};
   return res.json({
     jobId: report.id, status: report.status,
-    videoUrl: report.lesson?.videoUrl || null, videoFilename: report.lesson?.videoFilename || null,
+    videoUrl: report.lesson?.videoUrl || dr._videoUrl || null,
+    localVideoUrl: dr._localVideoUrl || null,
+    videoFilename: report.lesson?.videoFilename || dr._videoFilename || null,
     draftReport: report.draftReport, finalReport: report.finalReport,
     teacher: teacher ? { id: teacher.teacherId, name: teacher.teacher.user.name } : null,
     lesson: report.lesson ? { id: report.lesson.id, lessonNo: report.lesson.lessonNo, course: report.lesson.group?.course?.course } : null,
@@ -288,15 +296,18 @@ async function getAnalysisJobs(req, res) {
     },
     orderBy: { createdAt: 'desc' },
   });
-  return res.json(jobs.map(j => ({
-    jobId: j.id, videoFilename: j.lesson?.videoFilename || null, status: j.status,
-    teacherId: j.reportTeachers[0]?.teacherId || null,
-    teacherName: j.reportTeachers[0]?.teacher?.user?.name || null,
-    lessonId: j.lesson?.id || null, lessonNo: j.lesson?.lessonNo || null,
-    moduleSize: j.lesson?.group?.course?.moduleSize || 4,
-    courseName: j.lesson?.group?.course?.course || null,
-    createdAt: j.createdAt, updatedAt: j.updatedAt,
-  })));
+  return res.json(jobs.map(j => {
+    const dr = (typeof j.draftReport === 'object' && j.draftReport) || {};
+    return {
+      jobId: j.id, videoFilename: j.lesson?.videoFilename || dr._videoFilename || null, status: j.status,
+      teacherId: j.reportTeachers[0]?.teacherId || null,
+      teacherName: j.reportTeachers[0]?.teacher?.user?.name || null,
+      lessonId: j.lesson?.id || null, lessonNo: j.lesson?.lessonNo || null,
+      moduleSize: j.lesson?.group?.course?.moduleSize || 4,
+      courseName: j.lesson?.group?.course?.course || null,
+      createdAt: j.createdAt, updatedAt: j.updatedAt,
+    };
+  }));
 }
 
 async function getAnalysisProgress(req, res) {
@@ -361,7 +372,9 @@ async function syncGCSReports(req, res) {
     try { reportData = JSON.parse(content.toString()); } catch (e) { continue; }
 
     if (pendingJob) {
-      await prisma.report.update({ where: { id: pendingJob.id }, data: { status: 'DRAFT', draftReport: reportData } });
+      const existingDraft = (typeof pendingJob.draftReport === 'object' && pendingJob.draftReport) || {};
+      const mergedDraft = { ...existingDraft, ...reportData };
+      await prisma.report.update({ where: { id: pendingJob.id }, data: { status: 'DRAFT', draftReport: mergedDraft } });
     } else {
       const { Prisma } = require('@prisma/client');
       const duplicateCheck = await prisma.$queryRaw(

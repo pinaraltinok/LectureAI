@@ -6,10 +6,10 @@ const { z } = require('zod');
 const assignAnalysisSchema = z.object({
   jobId: z.string().min(1, 'jobId gereklidir.'),
   teacherId: z.string().min(1, 'teacherId gereklidir.'),
-  lessonId: z.string().optional(),
-  groupId: z.string().optional(),
-  lessonCode: z.string().optional(),
-  lessonDate: z.string().optional(),
+  lessonId: z.string().nullable().optional(),
+  groupId: z.string().nullable().optional(),
+  lessonCode: z.string().nullable().optional(),
+  lessonDate: z.string().nullable().optional(),
 });
 
 const createUserSchema = z.object({

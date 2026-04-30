@@ -69,6 +69,18 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
+// ─── Serve uploaded files (auth-protected) ───────────────────
+const auth = require('./middleware/auth');
+app.use('/uploads', auth, express.static(path.resolve(uploadDir), {
+  setHeaders: (res, filePath) => {
+    const ext = path.extname(filePath).toLowerCase();
+    if (['.mp4', '.webm', '.ogg'].includes(ext)) {
+      res.set('Content-Type', ext === '.mp4' ? 'video/mp4' : ext === '.webm' ? 'video/webm' : 'video/ogg');
+      res.set('Accept-Ranges', 'bytes');
+    }
+  },
+}));
+
 // ─── Swagger UI (only in development) ────────────────────────
 if (process.env.NODE_ENV !== 'production') {
   app.use(
@@ -84,10 +96,6 @@ if (process.env.NODE_ENV !== 'production') {
     res.send(swaggerSpec);
   });
 }
-
-// ─── Serve uploaded files (protected by auth) ────────────────
-const auth = require('./middleware/auth');
-app.use('/uploads', auth, express.static(path.resolve(uploadDir)));
 
 // ─── Routes ──────────────────────────────────────────────────
 app.use('/api/auth', require('./routes/auth.routes'));
@@ -121,6 +129,20 @@ app.use((req, res) => {
 
 // ─── Global Error Handler (works with asyncHandler + AppError) ─
 app.use((err, req, res, next) => {
+  // Handle Multer file upload errors with user-friendly messages
+  if (err.name === 'MulterError') {
+    const multerMessages = {
+      LIMIT_FILE_SIZE: 'Dosya boyutu çok büyük. Maksimum 500 MB yüklenebilir.',
+      LIMIT_UNEXPECTED_FILE: 'Beklenmeyen dosya alanı.',
+    };
+    return res.status(400).json({ error: multerMessages[err.code] || 'Dosya yükleme hatası.' });
+  }
+
+  // Handle multer fileFilter rejection
+  if (err.message && err.message.includes('Sadece video dosyaları')) {
+    return res.status(400).json({ error: err.message });
+  }
+
   const statusCode = err.statusCode || 500;
   const message = err.isOperational
     ? err.message

@@ -89,6 +89,7 @@ const SharedReport = ({ report }) => {
   const [videoError, setVideoError] = useState(null)
 
   const rawVideoUrl = report?.videoUrl || null
+  const localVideoUrl = report?.localVideoUrl || null
   const rawPdfUrl = report?.pdfUrl || report?.draftReport?.pdfUrl || report?.finalReport?.pdfUrl || (() => {
     // Auto-construct PDF URL from video URL if available
     if (rawVideoUrl && rawVideoUrl.startsWith('gs://')) {
@@ -98,8 +99,12 @@ const SharedReport = ({ report }) => {
     return null
   })()
 
-  // Convert GCS URLs to signed URLs (with auto-refresh)
-  const { signedUrl: videoUrl, loading: videoLoading, refresh: refreshVideo } = useGcsUrl(rawVideoUrl)
+  // Convert GCS URLs to signed URLs (with auto-refresh) — only if no local path
+  const needsGcs = rawVideoUrl && rawVideoUrl.startsWith('gs://') && !localVideoUrl
+  const { signedUrl: gcsVideoUrl, loading: gcsLoading, refresh: refreshVideo } = useGcsUrl(needsGcs ? rawVideoUrl : null)
+  // Prefer local uploads path (faster, no GCS credentials needed), then GCS signed URL
+  const videoUrl = localVideoUrl || gcsVideoUrl || null
+  const videoLoading = needsGcs ? gcsLoading : false
   const { signedUrl: pdfUrl, loading: pdfLoading, refresh: refreshPdf } = useGcsUrl(rawPdfUrl)
 
   const [isPdfVisible, setIsPdfVisible] = useState(false)

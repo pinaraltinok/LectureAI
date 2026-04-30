@@ -1,31 +1,35 @@
-const { PrismaClient } = require('@prisma/client');
-const p = new PrismaClient();
+require('dotenv').config();
+const prisma = require('./src/config/db');
 
-async function main() {
-  const reports = await p.report.findMany({
-    include: {
-      reportTeachers: { include: { teacher: { include: { user: { select: { name: true } } } } } },
-      lesson: { select: { lessonNo: true, videoUrl: true, videoFilename: true, group: { select: { course: { select: { course: true } } } } } },
-    },
+async function check() {
+  const r = await prisma.report.findFirst({
     orderBy: { createdAt: 'desc' },
+    include: { lesson: true }
   });
-
-  console.log(`\n=== Toplam ${reports.length} rapor ===\n`);
-
-  reports.forEach((j, i) => {
-    console.log(`--- [${i + 1}] ---`);
-    console.log(`  ID:        ${j.id}`);
-    console.log(`  Status:    ${j.status}`);
-    console.log(`  Video:     ${j.lesson?.videoFilename || j.lesson?.videoUrl || '-'}`);
-    console.log(`  Teacher:   ${j.reportTeachers[0]?.teacher?.user?.name || '-'}`);
-    console.log(`  Lesson:    ${j.lesson?.group?.course?.course || '-'} (Ders ${j.lesson?.lessonNo || '-'})`);
-    console.log(`  Created:   ${j.createdAt}`);
-    console.log(`  Draft:     ${j.draftReport ? JSON.stringify(j.draftReport).substring(0, 150) + '...' : 'YOK'}`);
-    console.log(`  Final:     ${j.finalReport ? JSON.stringify(j.finalReport).substring(0, 150) + '...' : 'YOK'}`);
-    console.log(`  Feedback:  ${j.adminFeedback || '-'}`);
-    console.log('');
-  });
-
-  await p.$disconnect();
+  const dr = (typeof r.draftReport === 'object' && r.draftReport) || {};
+  
+  console.log('=== Latest Report ===');
+  console.log('ID:', r.id);
+  console.log('Status:', r.status);
+  console.log('LessonID:', r.lessonId);
+  console.log('');
+  console.log('--- lesson table ---');
+  console.log('lesson.videoUrl:', r.lesson?.videoUrl || 'NULL');
+  console.log('lesson.videoFilename:', r.lesson?.videoFilename || 'NULL');
+  console.log('');
+  console.log('--- draftReport fields ---');
+  console.log('dr._videoUrl:', dr._videoUrl || 'NULL');
+  console.log('dr._localVideoUrl:', dr._localVideoUrl || 'NULL');
+  console.log('dr._videoFilename:', dr._videoFilename || 'NULL');
+  console.log('');
+  
+  // What getDraft would return:
+  const videoUrl = r.lesson?.videoUrl || dr._videoUrl || null;
+  const localVideoUrl = dr._localVideoUrl || null;
+  console.log('=== getDraft would return ===');
+  console.log('videoUrl:', videoUrl);
+  console.log('localVideoUrl:', localVideoUrl);
+  
+  await prisma.$disconnect();
 }
-main();
+check();
