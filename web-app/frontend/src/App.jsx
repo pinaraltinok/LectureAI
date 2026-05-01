@@ -69,16 +69,11 @@ function AppContent() {
       <aside className="sidebar">
         <div className="brand" style={{marginBottom: '2.5rem', padding: '0 1.2rem'}}>
           <div style={{display:'flex', alignItems:'center', gap:'1rem'}}>
-            <div className="brand-icon-premium" style={{
-              background: 'linear-gradient(135deg, #6366f1 0%, #06b6d4 100%)',
-              boxShadow: '0 10px 25px -5px rgba(99, 102, 241, 0.3)',
+            <div style={{
               width: '42px', height: '42px', borderRadius: '12px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center'
+              overflow: 'hidden', flexShrink: 0
             }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
-                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-              </svg>
+              <img src="/logo.png" alt="LectureAI" style={{width: '100%', height: '100%', objectFit: 'cover'}} />
             </div>
             <div style={{display:'flex', flexDirection:'column', lineHeight: 1.2}}>
               <span style={{fontSize: '1.25rem', fontWeight: 950, letterSpacing: '-0.02em', color: '#fff'}}>
