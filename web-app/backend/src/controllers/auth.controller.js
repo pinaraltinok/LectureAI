@@ -205,7 +205,13 @@ async function updateProfile(req, res) {
  * Stateless logout — client should discard the token.
  */
 async function logout(req, res) {
-  res.clearCookie('token', { httpOnly: true, sameSite: 'strict', path: '/' });
+  const isProduction = process.env.NODE_ENV === 'production';
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: 'strict',
+    path: '/',
+  });
   return res.json({ message: 'Oturum başarıyla sonlandırıldı.' });
 }
 

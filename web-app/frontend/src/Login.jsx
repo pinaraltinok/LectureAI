@@ -76,8 +76,8 @@ export default function Login() {
       <div className="background-overlay"></div>
       <div className="login-card">
         <div className="login-header">
-          <img src="/logo.png" alt="LectureAI" style={{width: '80px', height: '80px', objectFit: 'contain', filter: 'drop-shadow(0 10px 25px rgba(99, 102, 241, 0.3))'}} />
-          <h1 className="brand-name">LectureAI</h1>
+          <img src="/logo.png" alt="LectureAI" className="login-logo" />
+          <h1 className="brand-name">Lecture<span className="ai-highlight">AI</span></h1>
           <p className="brand-tagline">
             {isLogin ? "Geleceğin Eğitim Analiz Platformu" : "Aramıza Katılın"}
           </p>

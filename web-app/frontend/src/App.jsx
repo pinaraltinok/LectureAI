@@ -70,7 +70,7 @@ function AppContent() {
         <div className="brand" style={{marginBottom: '2.5rem', padding: '0 1.2rem'}}>
           <div style={{display:'flex', alignItems:'center', gap:'1rem'}}>
             <div style={{
-              width: '42px', height: '42px', borderRadius: '12px',
+              width: '52px', height: '52px', borderRadius: '50%',
               overflow: 'hidden', flexShrink: 0
             }}>
               <img src="/logo.png" alt="LectureAI" style={{width: '100%', height: '100%', objectFit: 'cover'}} />
