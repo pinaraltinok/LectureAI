@@ -24,7 +24,9 @@ app.use(helmet({
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',             // Vite dev server
   'http://localhost:3001',             // Backend self (Swagger)
-  process.env.FRONTEND_URL,           // Production frontend
+  'https://lectureai.online',         // Production domain
+  'https://www.lectureai.online',     // Production www subdomain
+  process.env.FRONTEND_URL,           // Production frontend (env override)
 ].filter(Boolean);
 
 app.use(cors({
