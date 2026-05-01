@@ -502,7 +502,7 @@ const AnalysisWorkflow = ({ onStepChange }) => {
               onClick={handleUploadAndAnalyze}
               disabled={!selectedTeacherId}
             >
-              Analizi Başlat & Raporu Hazırla
+              Analizi Başlat
             </button>
           </div>
         </div>
