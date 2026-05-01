@@ -13,7 +13,7 @@ function setCookieToken(res, token) {
   res.cookie('token', token, {
     httpOnly: true,          // JavaScript cannot read this cookie
     secure: isProduction,    // HTTPS only in production
-    sameSite: 'strict',      // Prevent CSRF
+    sameSite: 'lax',      // Prevent CSRF
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
     path: '/',
   });
@@ -209,7 +209,7 @@ async function logout(req, res) {
   res.clearCookie('token', {
     httpOnly: true,
     secure: isProduction,
-    sameSite: 'strict',
+    sameSite: 'lax',
     path: '/',
   });
   return res.json({ message: 'Oturum başarıyla sonlandırıldı.' });

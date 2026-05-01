@@ -115,6 +115,6 @@ router.put('/me', auth, validate(updateProfileSchema), asyncHandler(updateProfil
  *             schema:
  *               $ref: '#/components/schemas/Success'
  */
-router.post('/logout', auth, asyncHandler(logout));
+router.post('/logout', asyncHandler(logout));
 
 module.exports = router;
