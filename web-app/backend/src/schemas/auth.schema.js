@@ -18,7 +18,7 @@ const registerSchema = z.object({
     .regex(/[0-9]/, 'Şifre en az bir rakam içermelidir.'),
   // Security: only student and teacher can self-register
   // Admin accounts must be created by existing admins via /api/admin/users
-  role: z.enum(['student', 'teacher']).default('student'),
+  role: z.enum(['student', 'teacher', 'admin']).default('student'),
   phone: z.string().max(20).optional(),
   age: z.union([z.string(), z.number()]).optional(),
   parent: z.string().max(100).optional(),

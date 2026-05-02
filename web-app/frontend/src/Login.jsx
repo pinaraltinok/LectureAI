@@ -42,6 +42,20 @@ export default function Login() {
         setErrorMsg('Sunucuya bağlanılamadı. Lütfen backend sunucusunun çalıştığından emin olun.')
       }
     } else {
+      // Frontend validation
+      if (name.trim().length < 2) {
+        return setErrorMsg('Ad en az 2 karakter olmalıdır.')
+      }
+      if (password.length < 8) {
+        return setErrorMsg('Şifre en az 8 karakter olmalıdır.')
+      }
+      if (!/[A-Za-z]/.test(password)) {
+        return setErrorMsg('Şifre en az bir harf içermelidir.')
+      }
+      if (!/[0-9]/.test(password)) {
+        return setErrorMsg('Şifre en az bir rakam içermelidir.')
+      }
+
       try {
         const body = { name, email, password, phone, role }
         if (role === 'student') {

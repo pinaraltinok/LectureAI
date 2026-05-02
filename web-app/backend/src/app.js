@@ -23,9 +23,11 @@ app.use(helmet({
 // ─── Security: CORS (restrict origins) ──────────────────────
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',             // Vite dev server
+  'http://localhost:5174',             // Vite dev server (alt port)
   'http://localhost:3001',             // Backend self (Swagger)
   'https://lectureai.online',         // Production domain
   'https://www.lectureai.online',     // Production www subdomain
+  'https://lectureai-679435321951.europe-west4.run.app', // Cloud Run direct URL
   process.env.FRONTEND_URL,           // Production frontend (env override)
 ].filter(Boolean);
 
@@ -122,8 +124,9 @@ app.get('/health', (req, res) => {
 
 // ─── 404 / SPA Fallback Handler ──────────────────────────────
 app.use((req, res) => {
-  // Serve index.html for non-API routes (SPA client-side routing)
-  if (!req.originalUrl.startsWith('/api') && fs.existsSync(frontendIndex)) {
+  // Serve index.html for non-API, non-static-asset routes (SPA client-side routing)
+  const hasFileExtension = path.extname(req.originalUrl) !== '';
+  if (!req.originalUrl.startsWith('/api') && !hasFileExtension && fs.existsSync(frontendIndex)) {
     return res.sendFile(frontendIndex);
   }
   res.status(404).json({ error: 'Sayfa bulunamadı.' });
