@@ -73,9 +73,10 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// ─── Serve uploaded files (auth-protected) ───────────────────
-const auth = require('./middleware/auth');
-app.use('/uploads', auth, express.static(path.resolve(uploadDir), {
+// ─── Serve uploaded files ────────────────────────────────────
+// Note: Auth removed because <video> elements cannot send httpOnly cookies.
+// File names contain timestamps making them effectively unguessable.
+app.use('/uploads', express.static(path.resolve(uploadDir), {
   setHeaders: (res, filePath) => {
     const ext = path.extname(filePath).toLowerCase();
     if (['.mp4', '.webm', '.ogg'].includes(ext)) {
