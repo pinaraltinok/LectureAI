@@ -99,12 +99,16 @@ const SharedReport = ({ report }) => {
     return null
   })()
 
-  // Convert GCS URLs to signed URLs (with auto-refresh) — only if no local path
-  const needsGcs = rawVideoUrl && rawVideoUrl.startsWith('gs://') && !localVideoUrl
-  const { signedUrl: gcsVideoUrl, loading: gcsLoading, refresh: refreshVideo } = useGcsUrl(needsGcs ? rawVideoUrl : null)
-  // Prefer local uploads path (faster, no GCS credentials needed), then GCS signed URL
-  const videoUrl = localVideoUrl || gcsVideoUrl || null
-  const videoLoading = needsGcs ? gcsLoading : false
+  // Always fetch GCS signed URL as fallback (even if localVideoUrl exists)
+  const hasGcsUrl = rawVideoUrl && (rawVideoUrl.startsWith('gs://') || rawVideoUrl.includes('storage.googleapis.com'))
+  const { signedUrl: gcsVideoUrl, loading: gcsLoading, refresh: refreshVideo } = useGcsUrl(hasGcsUrl ? rawVideoUrl : null)
+  
+  // State to track if local video failed (so we fallback to GCS)
+  const [localFailed, setLocalFailed] = useState(false)
+  
+  // Prefer local uploads path (faster), then GCS signed URL
+  const videoUrl = (!localFailed && localVideoUrl) ? localVideoUrl : (gcsVideoUrl || localVideoUrl || null)
+  const videoLoading = hasGcsUrl ? gcsLoading : false
   const { signedUrl: pdfUrl, loading: pdfLoading, refresh: refreshPdf } = useGcsUrl(rawPdfUrl)
 
   const [isPdfVisible, setIsPdfVisible] = useState(false)
@@ -241,6 +245,14 @@ const SharedReport = ({ report }) => {
                      onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
                      onLoadedMetadata={(e) => { setVideoDuration(e.target.duration); setVideoError(null); videoRetryRef.current = 0 }}
                      onError={() => {
+                       // If local URL failed, switch to GCS signed URL
+                       if (localVideoUrl && !localFailed && gcsVideoUrl) {
+                         console.warn('[SharedReport] Local video failed, switching to GCS signed URL')
+                         setLocalFailed(true)
+                         setVideoError('GCS üzerinden yükleniyor...')
+                         setTimeout(() => setVideoError(null), 3000)
+                         return
+                       }
                        if (videoRetryRef.current < 2) {
                          videoRetryRef.current += 1
                          console.warn('[SharedReport] Video load error, retry', videoRetryRef.current)
