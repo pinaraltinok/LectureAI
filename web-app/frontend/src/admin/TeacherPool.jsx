@@ -74,6 +74,9 @@ const TeacherPool = () => {
   const handleViewReport = async (report) => {
     try {
       const draft = await apiGet(`/admin/analysis/draft/${report.jobId}`)
+      console.log('[TeacherPool] Draft API response:', draft)
+      console.log('[TeacherPool] draftReport:', draft.draftReport)
+      console.log('[TeacherPool] finalReport:', draft.finalReport)
       const fr = draft.finalReport || draft.draftReport || {}
       setSelectedReport({
         jobId: report.jobId,

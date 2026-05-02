@@ -255,9 +255,9 @@ const SharedReport = ({ report }) => {
                      onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
                      onLoadedMetadata={(e) => { setVideoDuration(e.target.duration); setVideoError(null); videoRetryRef.current = 0 }}
                      onError={() => {
-                       // If local URL failed, switch to GCS signed URL
-                       if (localVideoUrl && !localFailed && gcsVideoUrl) {
-                         console.warn('[SharedReport] Local video failed, switching to GCS signed URL')
+                       // If local URL failed, switch to GCS stream proxy or signed URL
+                       if (localVideoUrl && !localFailed && (gcsStreamUrl || gcsVideoUrl)) {
+                         console.warn('[SharedReport] Local video failed, switching to GCS stream proxy')
                          setLocalFailed(true)
                          setVideoError('GCS üzerinden yükleniyor...')
                          setTimeout(() => setVideoError(null), 3000)
