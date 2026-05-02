@@ -137,9 +137,25 @@ body {
   height: 100vh;
   position: sticky;
   top: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   animation: sidebarSlideIn 0.5s ease-out;
   border-right: 1px solid rgba(99, 102, 241, 0.08);
+}
+
+/* Hide scrollbar but keep functionality */
+.sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.2);
+  border-radius: 4px;
+}
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.4);
 }
 
 /* Animated background orbs */
@@ -1800,14 +1816,7 @@ textarea:focus {
     gap: 1.5rem !important;
   }
 
-  /* TeacherPool table-like grids */
-  .responsive-pool-header,
-  .responsive-pool-row {
-    grid-template-columns: 1fr !important;
-    gap: 0.5rem !important;
-    padding: 1rem 1.25rem !important;
-  }
-
+  /* ─── TeacherPool TABLE → CARD TRANSFORM ─── */
   .responsive-pool-header {
     display: none !important;
   }
@@ -1815,9 +1824,134 @@ textarea:focus {
   .responsive-pool-row {
     display: flex !important;
     flex-direction: column !important;
+    gap: 0.75rem !important;
+    padding: 1.25rem !important;
     border-left: 3px solid var(--primary) !important;
-    margin: 0.5rem 0.75rem !important;
+    margin: 0.5rem 0 !important;
     border-radius: var(--radius-md) !important;
+    background: var(--bg-glass) !important;
+  }
+
+  /* ─── TeacherPool REPORT LIST CARDS (3-col grid → stack) ─── */
+  .responsive-report-row {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem !important;
+    padding: 1.25rem 1rem !important;
+  }
+
+  /* ─── TeacherPool PAGE HEADER → stack ─── */
+  .responsive-page-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 1rem !important;
+  }
+
+  .responsive-page-header input {
+    min-width: 100% !important;
+    width: 100% !important;
+  }
+
+  .responsive-search-row {
+    flex-direction: column !important;
+    width: 100% !important;
+    gap: 0.75rem !important;
+  }
+
+  .responsive-search-row input {
+    min-width: 100% !important;
+  }
+
+  /* ─── TeacherPool TEACHER INFO CARD → compact ─── */
+  .responsive-teacher-info {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.75rem !important;
+    padding: 1.25rem !important;
+  }
+
+  /* ─── SharedReport INLINE GRIDS → stack ─── */
+  .responsive-report-meta {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem !important;
+  }
+
+  .responsive-report-meta-3col {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem !important;
+  }
+
+  .responsive-obs-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+
+  /* ─── SharedReport VIDEO CONTAINER ─── */
+  .responsive-video-container video,
+  .responsive-video-container iframe {
+    max-height: 240px !important;
+  }
+
+  /* ─── ADMIN ACTION BUTTONS → stack ─── */
+  .responsive-action-buttons {
+    flex-direction: column !important;
+    gap: 0.75rem !important;
+  }
+
+  .responsive-action-buttons button {
+    width: 100% !important;
+    flex: none !important;
+  }
+
+  /* ─── STUDENT SURVEY CARDS → stack rating ─── */
+  .responsive-survey-card {
+    flex-direction: column !important;
+    gap: 1rem !important;
+  }
+
+  .responsive-survey-rating {
+    margin-left: 0 !important;
+    align-self: flex-start !important;
+    flex-direction: row !important;
+    gap: 8px !important;
+  }
+
+  /* ─── STAR RATING BUTTONS → smaller on mobile ─── */
+  .responsive-star-grid button {
+    width: 52px !important;
+    height: 52px !important;
+    border-radius: 14px !important;
+  }
+
+  .responsive-star-grid button svg {
+    width: 22px !important;
+    height: 22px !important;
+  }
+
+  /* ─── STUDENT NOTES → compact ─── */
+  .responsive-notes-footer {
+    flex-direction: column !important;
+    gap: 0.75rem !important;
+    align-items: flex-start !important;
+  }
+
+  /* ─── GENERAL UTILITY: Inline paddings & gaps ─── */
+  /* Override large inline paddings on mobile */
+  [style*="padding: 2rem"],
+  [style*="padding: 2.5rem"],
+  [style*="padding: 3rem"] {
+    padding: 1.25rem !important;
+  }
+
+  /* Override large inline gaps */
+  [style*="gap: 3rem"],
+  [style*="gap: 2.5rem"] {
+    gap: 1.25rem !important;
+  }
+
+  /* Override fixed-width inline grids */
+  [style*="gridTemplateColumns: '2fr 1fr 1fr 1fr'"],
+  [style*="grid-template-columns: 2fr 1fr 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
   }
 
   /* Scrollable overflows */
@@ -1932,6 +2066,7 @@ textarea:focus {
 
   .responsive-report-stats {
     grid-template-columns: 1fr !important;
+    padding: 1rem !important;
   }
 
   .responsive-competency-grid {
@@ -1948,5 +2083,75 @@ textarea:focus {
 
   .report-selector-item {
     padding: 1rem;
+  }
+
+  /* SharedReport body compact */
+  .responsive-report-body {
+    padding: 1rem !important;
+    gap: 1.5rem !important;
+  }
+
+  /* TeacherPool report row compact */
+  .responsive-report-row {
+    padding: 1rem !important;
+    gap: 0.5rem !important;
+    border-radius: 14px !important;
+  }
+
+  /* Page headers compact */
+  .responsive-page-header h1 {
+    font-size: 1.35rem !important;
+  }
+
+  .responsive-page-header p {
+    font-size: 0.85rem !important;
+  }
+
+  /* TeacherPool teacher info compact */
+  .responsive-teacher-info {
+    padding: 1rem !important;
+    border-radius: 14px !important;
+  }
+
+  .responsive-teacher-info h2 {
+    font-size: 1.15rem !important;
+  }
+
+  /* Admin action buttons full-width */
+  .responsive-action-buttons {
+    flex-direction: column !important;
+  }
+
+  .responsive-action-buttons button {
+    width: 100% !important;
+    flex: none !important;
+  }
+
+  /* Survey star buttons even smaller */
+  .responsive-star-grid button {
+    width: 46px !important;
+    height: 46px !important;
+    border-radius: 12px !important;
+  }
+
+  .responsive-star-grid button svg {
+    width: 20px !important;
+    height: 20px !important;
+  }
+
+  /* StudentNotes card compact */
+  .responsive-notes-footer {
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+  }
+
+  /* Survey cards compact padding */
+  .responsive-survey-card {
+    flex-direction: column !important;
+  }
+
+  .responsive-survey-rating {
+    margin-left: 0 !important;
+    align-self: flex-start !important;
   }
 }

@@ -164,7 +164,7 @@ const StudentNotes = () => {
           </div>
 
           {/* Footer */}
-          <div style={{
+          <div className="responsive-notes-footer" style={{
             marginTop:'1.5rem', display:'flex', justifyContent:'space-between', alignItems:'center',
             paddingTop:'1.25rem', borderTop:'1px solid #f1f5f9',
           }}>

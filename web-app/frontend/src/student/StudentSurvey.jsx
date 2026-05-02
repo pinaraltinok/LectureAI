@@ -158,7 +158,7 @@ const StudentSurvey = () => {
                   e.currentTarget.style.boxShadow = 'none'
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div className="responsive-survey-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
                       <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 900, color: '#1e293b' }}>
@@ -197,7 +197,7 @@ const StudentSurvey = () => {
                   </div>
 
                   {/* Rating Display */}
-                  <div style={{
+                  <div className="responsive-survey-rating" style={{
                     display: 'flex', flexDirection: 'column', alignItems: 'center',
                     padding: '12px 18px', borderRadius: '16px',
                     background: `${RATING_ICONS[survey.rating - 1]?.color}10`,
@@ -320,7 +320,7 @@ const StudentSurvey = () => {
             <p style={{ fontSize: '0.75rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '1.25rem' }}>
               Bu dersi nasıl buldun?
             </p>
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+            <div className="responsive-star-grid" style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
               {[1, 2, 3, 4, 5].map(num => {
                 const isSelected = rating >= num
                 const hoverColor = RATING_ICONS[(rating || num) - 1]?.color || '#6366f1'

@@ -202,7 +202,7 @@ const TeacherPool = () => {
               onBlur={e => e.currentTarget.style.borderColor = '#e2e8f0'}
             />
 
-            <div style={{display: 'flex', gap: '1rem', marginTop: '1.25rem'}}>
+            <div className="responsive-action-buttons" style={{display: 'flex', gap: '1rem', marginTop: '1.25rem'}}>
               <button
                 onClick={handleRegenerate}
                 disabled={!adminNote.trim()}
@@ -278,7 +278,7 @@ const TeacherPool = () => {
         </button>
 
         {/* Teacher info card */}
-        <div style={{
+        <div className="responsive-teacher-info" style={{
           display: 'flex', alignItems: 'center', gap: '1.5rem',
           padding: '1.5rem 2rem', background: '#fff', border: '1px solid #e2e8f0',
           borderRadius: '16px', marginBottom: '2rem',
@@ -364,6 +364,7 @@ const TeacherPool = () => {
                 <div
                   key={report.jobId}
                   onClick={() => handleViewReport(report)}
+                  className="responsive-report-row"
                   style={{
                     display: 'grid', gridTemplateColumns: 'auto 1fr auto',
                     alignItems: 'center', gap: '1.5rem',
@@ -483,12 +484,12 @@ const TeacherPool = () => {
   return (
     <div style={{ padding: '1rem', animation: 'fadeIn 0.5s ease' }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
+      <div className="responsive-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
         <div>
           <h1 style={{ fontSize: '2rem', fontWeight: 950, color: '#0f172a', letterSpacing: '-0.02em', margin: 0 }}>Eğitmen Havuzu</h1>
           <p style={{ color: '#64748b', fontSize: '1rem', marginTop: '4px' }}>Raporları inceleyin ve eğitmen performansını yönetin.</p>
         </div>
-        <div style={{ display: 'flex', gap: '1rem' }}>
+        <div className="responsive-search-row" style={{ display: 'flex', gap: '1rem' }}>
           <input
             placeholder="Eğitmen ara..."
             value={searchQuery}

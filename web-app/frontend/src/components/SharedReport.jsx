@@ -334,7 +334,7 @@ const SharedReport = ({ report }) => {
        </div>
 
        {/* Detailed Body */}
-       <div style={{padding: '2.5rem', display: 'flex', flexDirection: 'column', gap: '2.5rem'}}>
+       <div className="responsive-report-body" style={{padding: '2.5rem', display: 'flex', flexDirection: 'column', gap: '2.5rem'}}>
           
           {/* Teaching Competencies Grid */}
           <div style={{border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden'}}>
