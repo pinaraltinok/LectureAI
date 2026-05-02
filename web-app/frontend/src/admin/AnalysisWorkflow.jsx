@@ -87,6 +87,10 @@ const AnalysisWorkflow = ({ onStepChange }) => {
       setError('Lütfen bir eğitmen seçin.')
       return
     }
+    if (!selectedGroupId) {
+      setError('Lütfen bir grup seçin.')
+      return
+    }
 
     // Create instant local preview URL from selected file
     if (selectedFile) {
@@ -463,7 +467,7 @@ const AnalysisWorkflow = ({ onStepChange }) => {
 
             {/* 4. Grup Seçimi */}
             <div>
-              <label style={{fontSize: '11px', fontWeight: 800, color: '#64748b', marginBottom: '8px', display: 'block', letterSpacing: '0.05em'}}>GRUP SEÇİMİ (OPSİYONEL)</label>
+              <label style={{fontSize: '11px', fontWeight: 800, color: '#64748b', marginBottom: '8px', display: 'block', letterSpacing: '0.05em'}}>GRUP SEÇİMİ <span style={{color: '#ef4444'}}>*</span></label>
               <select
                 value={selectedGroupId}
                 onChange={(e) => setSelectedGroupId(e.target.value)}
@@ -510,7 +514,7 @@ const AnalysisWorkflow = ({ onStepChange }) => {
               className="primary-btn" 
               style={{marginTop: '1rem', padding: '1.25rem', fontSize: '1rem', boxShadow: '0 20px 25px -5px rgba(99, 102, 241, 0.4)'}} 
               onClick={handleUploadAndAnalyze}
-              disabled={!selectedTeacherId}
+              disabled={!selectedTeacherId || !selectedGroupId}
             >
               Analizi Başlat
             </button>
