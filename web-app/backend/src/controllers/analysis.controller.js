@@ -1,18 +1,14 @@
-const { Storage } = require('@google-cloud/storage');
-const { PubSub } = require('@google-cloud/pubsub');
-const path = require('path');
+const { getStorageClient, getPubSubClient } = require('../utils/gcp');
 const { GCP_PROJECT_ID, PUBSUB_TOPIC, PROCESSED_BUCKET } = require('../config/constants');
-
-const credentialPath = path.resolve(__dirname, '..', '..', '..', '..', 'senior-design-488908-1d5d3e1681ee.json');
 
 let storage, pubsub;
 try {
-  storage = new Storage({ keyFilename: credentialPath });
+  storage = getStorageClient();
 } catch (e) {
   console.warn('[Analysis] GCS client init failed:', e.message);
 }
 try {
-  pubsub = new PubSub({ projectId: GCP_PROJECT_ID, keyFilename: credentialPath });
+  pubsub = getPubSubClient();
 } catch (e) {
   console.warn('[Analysis] PubSub client init failed:', e.message);
 }

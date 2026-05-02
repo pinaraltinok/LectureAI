@@ -103,11 +103,19 @@ const SharedReport = ({ report }) => {
   const hasGcsUrl = rawVideoUrl && (rawVideoUrl.startsWith('gs://') || rawVideoUrl.includes('storage.googleapis.com'))
   const { signedUrl: gcsVideoUrl, loading: gcsLoading, refresh: refreshVideo } = useGcsUrl(hasGcsUrl ? rawVideoUrl : null)
   
+  // Build a backend stream proxy URL as ultimate fallback
+  const gcsStreamUrl = (() => {
+    if (!hasGcsUrl) return null
+    const match = rawVideoUrl.match(/^gs:\/\/([^/]+)\/(.+)$/)
+    if (match) return `/api/gcs/stream?bucket=${encodeURIComponent(match[1])}&object=${encodeURIComponent(match[2])}`
+    return null
+  })()
+  
   // State to track if local video failed (so we fallback to GCS)
   const [localFailed, setLocalFailed] = useState(false)
   
-  // Prefer local uploads path (faster), then GCS signed URL
-  const videoUrl = (!localFailed && localVideoUrl) ? localVideoUrl : (gcsVideoUrl || localVideoUrl || null)
+  // Priority: local path → GCS signed URL → GCS stream proxy
+  const videoUrl = (!localFailed && localVideoUrl) ? localVideoUrl : (gcsVideoUrl || gcsStreamUrl || localVideoUrl || null)
   const videoLoading = hasGcsUrl ? gcsLoading : false
   const { signedUrl: pdfUrl, loading: pdfLoading, refresh: refreshPdf } = useGcsUrl(rawPdfUrl)
 

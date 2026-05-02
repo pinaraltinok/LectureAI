@@ -16,8 +16,6 @@
  */
 const prisma = require('../config/db');
 const path = require('path');
-const { Storage } = require('@google-cloud/storage');
-const { PubSub } = require('@google-cloud/pubsub');
 const AppError = require('../utils/AppError');
 const {
   GCP_PROJECT_ID, PUBSUB_TOPIC, PROCESSED_BUCKET,
@@ -27,15 +25,14 @@ const {
 // ─── Service Layer Imports (via Composition Root — DIP) ─────
 const { reportService, userService, courseService, groupService } = require('../services');
 
-// ─── GCP Clients ────────────────────────────────────────────
-const projectRoot = path.resolve(__dirname, '..', '..', '..', '..');
-const credentialPath = path.join(projectRoot, 'senior-design-488908-1d5d3e1681ee.json');
+// ─── GCP Clients (centralized credential management) ────────
+const { getStorageClient, getPubSubClient } = require('../utils/gcp');
 
 let gcsStorage;
-try { gcsStorage = new Storage({ keyFilename: credentialPath }); } catch (e) { console.warn('[GCS] Storage client init failed:', e.message); }
+try { gcsStorage = getStorageClient(); } catch (e) { console.warn('[GCS] Storage client init failed:', e.message); }
 
 let pubsub;
-try { pubsub = new PubSub({ projectId: GCP_PROJECT_ID, keyFilename: credentialPath }); } catch (e) { console.warn('[PubSub] Client init failed:', e.message); }
+try { pubsub = getPubSubClient(); } catch (e) { console.warn('[PubSub] Client init failed:', e.message); }
 
 const analysisProgress = new Map();
 

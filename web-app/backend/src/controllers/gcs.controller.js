@@ -1,10 +1,8 @@
-const { Storage } = require('@google-cloud/storage');
+const { getStorageClient } = require('../utils/gcp');
 const path = require('path');
 
-// Initialize Storage with explicit credentials
-const projectRoot = path.resolve(__dirname, '..', '..', '..', '..');
-const credentialPath = path.join(projectRoot, 'senior-design-488908-1d5d3e1681ee.json');
-const storage = new Storage({ keyFilename: credentialPath });
+// Initialize Storage with centralized credentials
+const storage = getStorageClient();
 
 // Signed URL expires in 60 minutes (1 hour)
 const SIGNED_URL_EXPIRY_MINUTES = 60;
