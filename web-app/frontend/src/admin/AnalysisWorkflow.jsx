@@ -79,10 +79,19 @@ const AnalysisWorkflow = ({ onStepChange }) => {
     setSelectedGroupId('')
   }, [selectedCourseId, selectedTeacherId])
 
+  // Create a browser-local blob URL for instant video preview (no server needed)
+  const [localBlobUrl, setLocalBlobUrl] = useState(null)
+
   const handleUploadAndAnalyze = async () => {
     if (!selectedTeacherId) {
       setError('Lütfen bir eğitmen seçin.')
       return
+    }
+
+    // Create instant local preview URL from selected file
+    if (selectedFile) {
+      if (localBlobUrl) URL.revokeObjectURL(localBlobUrl)
+      setLocalBlobUrl(URL.createObjectURL(selectedFile))
     }
 
     setIsAnalyzing(true)
@@ -122,6 +131,7 @@ const AnalysisWorkflow = ({ onStepChange }) => {
           status: 'PROCESSING',
           draftReport: null,
           videoUrl: uploadRes.videoUrl || null,
+          localVideoUrl: uploadRes.videoUrl?.startsWith('gs://') ? null : uploadRes.videoUrl,
           teacher: teachers.find(t => t.id === selectedTeacherId),
           course: selectedCourse,
           lessonCode: selectedLessonCode,
@@ -550,7 +560,7 @@ const AnalysisWorkflow = ({ onStepChange }) => {
       ? [{ t: 'AI Değerlendirmesi', c: draftReport.feedback_metni }]
       : [{ t: 'Durum', c: draftData?.status === 'PROCESSING' ? 'Analiz devam ediyor. Pipeline tamamlandığında rapor burada görünecektir.' : 'Taslak rapor henüz oluşturulmadı.' }],
     videoUrl: draftData?.videoUrl || null,
-    localVideoUrl: draftData?.localVideoUrl || null,
+    localVideoUrl: localBlobUrl || draftData?.localVideoUrl || null,
     draftReport,
   }
 
