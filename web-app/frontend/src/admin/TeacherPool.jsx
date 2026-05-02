@@ -88,7 +88,7 @@ const TeacherPool = () => {
         ttt: fr.speaking_time_rating || '—',
         duration: fr.actual_duration_min ? `${fr.actual_duration_min}dk` : '—',
         videoUrl: draft.videoUrl || report.videoUrl || null,
-        localVideoUrl: draft.localVideoUrl || null,
+        localVideoUrl: draft.localVideoUrl || report.localVideoUrl || null,
         obs: fr.feedback_metni
           ? [{ t: 'AI Değerlendirmesi', c: fr.feedback_metni }]
           : [{ t: 'Bilgi', c: 'Rapor detayı bulunamadı.' }],

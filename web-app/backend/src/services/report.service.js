@@ -88,7 +88,9 @@ function createReportService(db) {
       const j = rt.report;
       const rpt = j.finalReport || j.draftReport || {};
       return {
-        jobId: j.id, videoUrl: j.lesson?.videoUrl || null, videoFilename: j.lesson?.videoFilename || null,
+        jobId: j.id, videoUrl: j.lesson?.videoUrl || rpt._videoUrl || null,
+        localVideoUrl: rpt._localVideoUrl || null,
+        videoFilename: j.lesson?.videoFilename || null,
         status: j.status, createdAt: j.createdAt,
         courseName: j.lesson?.group?.course?.course || null, moduleSize: j.lesson?.group?.course?.moduleSize || 4,
         lessonNo: j.lesson?.lessonNo || null, groupName: j.lesson?.group?.name || null,
