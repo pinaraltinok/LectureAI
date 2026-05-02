@@ -21,7 +21,9 @@ router.post('/signed-urls', auth, asyncHandler(getBatchSignedUrls));
  * GET /api/gcs/stream?bucket=BUCKET&object=OBJECT_PATH
  * Streams a GCS file directly through the backend (never expires).
  * Supports Range headers for video seeking.
+ * No auth required — browser <video> tags don't send cookies.
+ * Security: bucket whitelist + path validation in controller.
  */
-router.get('/stream', auth, asyncHandler(streamFile));
+router.get('/stream', asyncHandler(streamFile));
 
 module.exports = router;
