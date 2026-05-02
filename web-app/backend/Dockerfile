@@ -2,8 +2,8 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install openssl for Prisma
-RUN apk add --no-cache openssl
+# Install openssl and dos2unix for Prisma and line-ending fixes
+RUN apk add --no-cache openssl dos2unix
 
 # Copy package files
 COPY package*.json ./
@@ -20,8 +20,8 @@ RUN npx prisma generate
 # Expose the API port
 EXPOSE 3001
 
-# Make entrypoint script executable
-RUN chmod +x entrypoint.sh
+# Fix Windows CRLF line endings and make entrypoint executable
+RUN dos2unix entrypoint.sh && chmod +x entrypoint.sh
 
 # Use the entrypoint script
 ENTRYPOINT ["./entrypoint.sh"]
