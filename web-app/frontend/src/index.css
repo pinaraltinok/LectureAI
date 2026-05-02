@@ -1366,3 +1366,587 @@ textarea:focus {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE SIDEBAR TOGGLE BUTTON
+   ═══════════════════════════════════════════════════════════════ */
+.sidebar-toggle {
+  display: none;
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 1100;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(16px);
+  color: #e2e8f0;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+  transition: all 0.3s ease;
+}
+
+.sidebar-toggle:hover {
+  background: rgba(99, 102, 241, 0.25);
+  transform: scale(1.05);
+}
+
+.sidebar-toggle svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* Sidebar overlay (mobile backdrop) */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  z-index: 999;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.sidebar-overlay.active {
+  opacity: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RESPONSIVE: TABLET (≤ 1024px)
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 1024px) {
+  :root {
+    --sidebar-w: 220px;
+  }
+
+  .content {
+    padding: 1.5rem 1.5rem;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Responsive grid classes for inline styles override */
+  .responsive-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  .responsive-chart-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .responsive-form-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .responsive-report-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .responsive-2col-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .responsive-course-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .responsive-lesson-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)) !important;
+  }
+
+  .table-header,
+  .table-row {
+    grid-template-columns: 1.5fr 1fr 1fr;
+    padding: 1rem 1.25rem;
+  }
+
+  .table-header > *:nth-child(4),
+  .table-row > *:nth-child(4) {
+    display: none;
+  }
+
+  .welcome-banner {
+    padding: 2rem;
+  }
+
+  .welcome-banner h2 {
+    font-size: 1.4rem !important;
+  }
+
+  .analysis-form {
+    padding: 1.75rem;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+
+  .premium-chart-card {
+    padding: 1.5rem;
+  }
+
+  .quality-panel {
+    padding: 1.5rem;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RESPONSIVE: MOBILE (≤ 768px)
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* App Shell: full width content, sidebar becomes off-canvas */
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  /* Sidebar: off-canvas drawer */
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 280px;
+    z-index: 1000;
+    transform: translateX(-100%);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow-y: auto;
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  /* Show hamburger button */
+  .sidebar-toggle {
+    display: flex;
+  }
+
+  /* Show overlay when sidebar open */
+  .sidebar-overlay.active {
+    display: block;
+  }
+
+  /* Content area */
+  .content {
+    padding: 1.25rem 1rem;
+    padding-top: 4.5rem; /* Space for hamburger */
+  }
+
+  /* Topbar */
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding-bottom: 0.75rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .topbar h1 {
+    font-size: 1.1rem;
+  }
+
+  .topbar p {
+    font-size: 0.78rem;
+  }
+
+  .user-chip {
+    align-self: flex-end;
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.72rem;
+  }
+
+  .user-chip .avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 0.65rem;
+  }
+
+  /* Stats Grid → 2 columns */
+  .stats-grid,
+  .responsive-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.75rem !important;
+  }
+
+  .premium-stat-card {
+    padding: 1.25rem;
+    border-radius: 16px;
+  }
+
+  .stat-number {
+    font-size: 1.8rem;
+  }
+
+  .stat-icon-bubble {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    font-size: 1.2rem;
+  }
+
+  .stat-trend-badge {
+    font-size: 8px;
+    padding: 3px 8px;
+  }
+
+  /* Chart & Quality: Stack vertically */
+  .responsive-chart-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1.25rem !important;
+  }
+
+  .premium-chart-card {
+    padding: 1.25rem;
+    border-radius: 18px;
+    min-height: auto !important;
+  }
+
+  .quality-panel {
+    padding: 1.25rem;
+    border-radius: 18px;
+  }
+
+  /* Welcome Banner */
+  .welcome-banner {
+    padding: 1.5rem !important;
+    border-radius: 18px;
+  }
+
+  .welcome-banner h2 {
+    font-size: 1.25rem !important;
+    line-height: 1.3 !important;
+  }
+
+  .welcome-banner p {
+    font-size: 0.82rem !important;
+  }
+
+  .banner-icon-box {
+    width: 56px !important;
+    height: 56px !important;
+    border-radius: 14px !important;
+  }
+
+  .banner-icon-box svg {
+    width: 24px !important;
+    height: 24px !important;
+  }
+
+  /* Quick stats strip in welcome banner */
+  .responsive-quick-stats {
+    flex-wrap: wrap !important;
+    gap: 0.75rem !important;
+  }
+
+  .responsive-quick-stats > div {
+    flex: 1 1 auto;
+    min-width: 100px;
+  }
+
+  /* Forms */
+  .form-row,
+  .responsive-form-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+
+  .analysis-form {
+    padding: 1.25rem;
+    border-radius: 16px;
+  }
+
+  .dropzone {
+    padding: 2rem 1.5rem;
+    border-radius: 16px;
+  }
+
+  /* Tables → card layout */
+  .table-card {
+    border-radius: 14px;
+  }
+
+  .table-header {
+    display: none;
+  }
+
+  .table-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem 1.25rem;
+    border-left: 3px solid var(--primary);
+    margin: 0.5rem 0.75rem;
+    border-radius: var(--radius-md);
+    background: var(--bg-glass);
+  }
+
+  .table-row .teacher-cell {
+    margin-bottom: 0.25rem;
+  }
+
+  /* Report grid (Teacher Dashboard) */
+  .responsive-report-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1.25rem !important;
+  }
+
+  /* Two-column layouts → stack */
+  .responsive-2col-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1.25rem !important;
+  }
+
+  /* Course cards */
+  .responsive-course-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1.25rem !important;
+  }
+
+  .premium-course-card {
+    border-radius: 18px;
+  }
+
+  .course-header-gradient {
+    padding: 1.5rem 1.5rem 1.25rem;
+  }
+
+  .course-header-gradient h3 {
+    font-size: 1.1rem !important;
+  }
+
+  /* Lesson mini cards */
+  .responsive-lesson-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  /* Report cards (SharedReport) */
+  .responsive-report-stats {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.75rem !important;
+  }
+
+  .responsive-competency-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Alert banners */
+  .alert-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 1rem 1.25rem;
+    gap: 0.75rem;
+  }
+
+  /* Buttons */
+  .primary-btn {
+    padding: 0.55rem 1rem;
+    font-size: 0.8rem;
+  }
+
+  /* Profile page padding */
+  .responsive-profile-container {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Lesson Player (video + notes layout) */
+  .responsive-player-grid {
+    grid-template-columns: 1fr !important;
+    min-height: auto !important;
+  }
+
+  /* Teacher Attendance / 2-col forms */
+  .responsive-attendance-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1.25rem !important;
+  }
+
+  /* Survey form */
+  .responsive-survey-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Admin Management grids */
+  .responsive-mgmt-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1.25rem !important;
+  }
+
+  .responsive-mgmt-3col {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .responsive-mgmt-4col {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 4px !important;
+  }
+
+  /* Analysis Workflow */
+  .responsive-workflow-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1.5rem !important;
+  }
+
+  /* TeacherPool table-like grids */
+  .responsive-pool-header,
+  .responsive-pool-row {
+    grid-template-columns: 1fr !important;
+    gap: 0.5rem !important;
+    padding: 1rem 1.25rem !important;
+  }
+
+  .responsive-pool-header {
+    display: none !important;
+  }
+
+  .responsive-pool-row {
+    display: flex !important;
+    flex-direction: column !important;
+    border-left: 3px solid var(--primary) !important;
+    margin: 0.5rem 0.75rem !important;
+    border-radius: var(--radius-md) !important;
+  }
+
+  /* Scrollable overflows */
+  .responsive-scroll-x {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RESPONSIVE: SMALL MOBILE (≤ 480px)
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 480px) {
+  .content {
+    padding: 1rem 0.75rem;
+    padding-top: 4rem;
+  }
+
+  .stats-grid,
+  .responsive-stats-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.6rem !important;
+  }
+
+  .premium-stat-card {
+    padding: 1rem;
+    flex-direction: row;
+    align-items: center;
+    gap: 1rem;
+    min-height: auto;
+  }
+
+  .stat-number {
+    font-size: 1.5rem;
+  }
+
+  .stat-icon-bubble {
+    width: 38px;
+    height: 38px;
+  }
+
+  .welcome-banner {
+    padding: 1.25rem !important;
+    border-radius: 14px;
+  }
+
+  .welcome-banner h2 {
+    font-size: 1.1rem !important;
+  }
+
+  .welcome-banner p {
+    font-size: 0.75rem !important;
+  }
+
+  /* Hide banner decorative icon on very small screens */
+  .banner-icon-box {
+    display: none !important;
+  }
+
+  .responsive-quick-stats {
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+  }
+
+  .responsive-quick-stats > div {
+    min-width: 100%;
+  }
+
+  .topbar h1 {
+    font-size: 1rem;
+  }
+
+  .user-chip {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.68rem;
+  }
+
+  .user-chip .avatar {
+    width: 24px;
+    height: 24px;
+    font-size: 0.6rem;
+  }
+
+  .user-chip div strong {
+    font-size: 0.72rem;
+  }
+
+  .user-chip div small {
+    font-size: 0.6rem;
+  }
+
+  .analysis-form {
+    padding: 1rem;
+  }
+
+  .dropzone {
+    padding: 1.5rem 1rem;
+  }
+
+  .premium-chart-card {
+    padding: 1rem;
+  }
+
+  .quality-panel {
+    padding: 1rem;
+  }
+
+  .action-alert {
+    padding: 1rem;
+    border-radius: 12px;
+  }
+
+  .responsive-report-stats {
+    grid-template-columns: 1fr !important;
+  }
+
+  .responsive-competency-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .responsive-mgmt-3col {
+    grid-template-columns: 1fr !important;
+  }
+
+  .brand-name {
+    font-size: 1.4rem;
+  }
+
+  .report-selector-item {
+    padding: 1rem;
+  }
+}

@@ -182,7 +182,7 @@ const StudentLessonPlayer = () => {
       </div>
 
       {/* Split Layout */}
-      <div style={{display:'grid', gridTemplateColumns:'1.4fr 1fr', gap:'1.5rem', minHeight:'520px'}}>
+      <div className="responsive-player-grid" style={{display:'grid', gridTemplateColumns:'1.4fr 1fr', gap:'1.5rem', minHeight:'520px'}}>
 
         {/* LEFT — Video Player */}
         <div style={{

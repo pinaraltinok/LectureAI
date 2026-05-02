@@ -114,7 +114,7 @@ const StudentDashboard = () => {
               {groups.length} aktif kursun var. Derslerini takip et, anketlerini doldur!
             </p>
           </div>
-          <div style={{
+          <div className="banner-icon-box" style={{
             width: '80px', height: '80px', borderRadius: '20px',
             background: 'rgba(99, 102, 241, 0.15)', backdropFilter: 'blur(10px)',
             display: 'grid', placeItems: 'center', fontSize: '2.5rem',
@@ -126,7 +126,7 @@ const StudentDashboard = () => {
         </div>
 
         {/* Quick Stats Strip */}
-        <div style={{
+        <div className="responsive-quick-stats" style={{
           display: 'flex', gap: '1.5rem', marginTop: '1.5rem',
           paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)'
         }}>
@@ -152,7 +152,7 @@ const StudentDashboard = () => {
       </div>
 
       {/* Course Cards Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: groups.length === 1 ? '1fr' : 'repeat(auto-fill, minmax(420px, 1fr))', gap: '1.5rem' }}>
+      <div className="responsive-course-grid" style={{ display: 'grid', gridTemplateColumns: groups.length === 1 ? '1fr' : 'repeat(auto-fill, minmax(420px, 1fr))', gap: '1.5rem' }}>
         {groups.map((group, gIdx) => {
           const theme = getCourseTheme(group.courseName, gIdx)
           return (
@@ -221,7 +221,7 @@ const StudentDashboard = () => {
                     </span>
                   </div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '10px' }}>
+                <div className="responsive-lesson-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '10px' }}>
                   {group.lessons.map((lesson, lIdx) => (
                     <div
                       key={lesson.lessonId}

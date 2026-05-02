@@ -81,7 +81,7 @@ const AdminSummary = () => {
               Eğitmen analizleri, kalite metrikleri ve kurum geneli istatistikler
             </p>
           </div>
-          <div style={{
+          <div className="banner-icon-box" style={{
             width: '80px', height: '80px', borderRadius: '20px',
             background: 'rgba(99, 102, 241, 0.15)', backdropFilter: 'blur(10px)',
             display: 'grid', placeItems: 'center', fontSize: '2.5rem',
@@ -94,7 +94,7 @@ const AdminSummary = () => {
       </div>
 
       {/* 1. Header Stats Grid */}
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.25rem', marginBottom: '2rem' }}>
+      <section className="responsive-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.25rem', marginBottom: '2rem' }}>
         {statCards.map((s, idx) => (
           <div key={idx} className="premium-stat-card" style={{'--card-color': s.color}}>
             <div style={{position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: s.gradient, borderRadius: '20px 20px 0 0', opacity: 0, transition: 'opacity 0.3s ease'}}
@@ -118,7 +118,7 @@ const AdminSummary = () => {
         ))}
       </section>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem' }}>
+      <div className="responsive-chart-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem' }}>
 
         {/* 2. Institutional Performance Graph (Recharts AreaChart) */}
         <div className="premium-chart-card" style={{ minHeight: '400px' }}>

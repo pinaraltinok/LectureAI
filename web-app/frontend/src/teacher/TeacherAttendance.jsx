@@ -84,7 +84,7 @@ const TeacherAttendance = () => {
   const currentGroup = groups.find(g => g.groupId === selectedGroup)
 
   return (
-    <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', animation: 'fadeIn 0.5s ease'}}>
+    <div className="responsive-attendance-grid" style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', animation: 'fadeIn 0.5s ease'}}>
       {/* Left: Send Evaluation */}
       <div className="report-card-internal" style={{padding: '2rem'}}>
         <h3 style={{fontSize:'1rem', fontWeight:800, color:'#0f172a', marginBottom:'1.5rem'}}>📝 Öğrenci Değerlendirmesi</h3>

@@ -314,7 +314,7 @@ const SharedReport = ({ report }) => {
        )}
 
        {/* Meta Info Bar (Gray) */}
-       <div style={{background: '#f8fafc', padding: '1.25rem 2.5rem', borderBottom: '1px solid #cbd5e1', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem'}}>
+       <div className="responsive-report-stats" style={{background: '#f8fafc', padding: '1.25rem 2.5rem', borderBottom: '1px solid #cbd5e1', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem'}}>
           <div>
             <span style={{fontSize:'8px', fontWeight:800, color:'#64748b', display:'block', textTransform:'uppercase'}}>Genel Sonuç</span>
             <span style={{fontSize:'0.9rem', fontWeight:700, color: genelSonuc.includes('üzerinde') ? '#10b981' : genelSonuc.includes('altında') ? '#f43f5e' : '#10b981'}}>{genelSonuc}</span>
@@ -342,7 +342,7 @@ const SharedReport = ({ report }) => {
               <span>ÖĞRETİM YETERLİLİKLERİ</span>
               <span style={{color: '#94a3b8'}}>Toplam {competencies.length} kriter</span>
             </div>
-            <div style={{display:'grid', gridTemplateColumns: `repeat(${Math.min(4, competencies.length)}, 1fr)`, fontSize: '0.85rem'}}>
+            <div className="responsive-competency-grid" style={{display:'grid', gridTemplateColumns: `repeat(${Math.min(4, competencies.length)}, 1fr)`, fontSize: '0.85rem'}}>
               {competencies.map((item, i) => (
                 <div 
                   key={i} 

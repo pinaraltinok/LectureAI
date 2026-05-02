@@ -509,7 +509,7 @@ const TeacherPool = () => {
 
       {/* Table */}
       <div className="report-card-internal" style={{ padding: '0', background: '#fff', border: '1px solid #f1f5f9', overflow: 'hidden' }}>
-        <div style={{
+        <div className="responsive-pool-header" style={{
           display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', padding: '1.5rem 2.5rem',
           background: '#f8fafc', borderBottom: '1px solid #e2e8f0',
           color: '#64748b', fontSize: '11px', fontWeight: 900, letterSpacing: '0.05em'
@@ -523,7 +523,7 @@ const TeacherPool = () => {
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           {filteredRows.length > 0 ? (
             filteredRows.map(r => (
-              <div key={r.id} style={{
+              <div key={r.id} className="responsive-pool-row" style={{
                 display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', alignItems: 'center',
                 padding: '1.75rem 2.5rem', borderBottom: '1px solid #f1f5f9', cursor: 'default'
               }}>

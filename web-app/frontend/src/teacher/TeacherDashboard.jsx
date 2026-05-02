@@ -106,7 +106,7 @@ const TeacherDashboard = () => {
               Performans trendlerinizi takip edin, AI raporlarınızı inceleyin
             </p>
           </div>
-          <div style={{
+          <div className="banner-icon-box" style={{
             width: '80px', height: '80px', borderRadius: '20px',
             background: 'rgba(99, 102, 241, 0.15)', backdropFilter: 'blur(10px)',
             display: 'grid', placeItems: 'center', fontSize: '2.5rem',
@@ -119,7 +119,7 @@ const TeacherDashboard = () => {
       </div>
 
       {/* Stats */}
-      <div style={{display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:'1.25rem', marginBottom:'2rem'}}>
+      <div className="responsive-stats-grid" style={{display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:'1.25rem', marginBottom:'2rem'}}>
         {teacherStats.map((stat, idx) => (
           <div key={idx} className="premium-stat-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
@@ -159,7 +159,7 @@ const TeacherDashboard = () => {
           <p style={{color: '#94a3b8', fontSize: '0.95rem'}}>Size atanan analiz raporları burada görünecektir.</p>
         </div>
       ) : (
-        <div style={{display: 'grid', gridTemplateColumns: '320px 1fr', gap: '2rem'}}>
+        <div className="responsive-report-grid" style={{display: 'grid', gridTemplateColumns: '320px 1fr', gap: '2rem'}}>
           <div style={{display:'flex', flexDirection:'column', gap:'0.75rem', animation: 'cardPopIn 0.5s ease 0.6s both'}}>
             <h3 style={{fontSize:'0.8rem', fontWeight:800, color:'#64748b', display:'flex', alignItems:'center', gap:'8px', marginBottom: '0.5rem'}}>
               <span style={{width:'8px', height:'8px', background: 'linear-gradient(135deg, #10b981, #06b6d4)', borderRadius:'50%', boxShadow: '0 0 8px rgba(16,185,129,0.4)'}}></span>

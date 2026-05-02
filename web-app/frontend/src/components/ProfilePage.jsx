@@ -87,7 +87,7 @@ const ProfilePage = () => {
   }
 
   return (
-    <div style={{ maxWidth: '700px', margin: '0 auto', animation: 'fadeIn 0.5s ease' }}>
+    <div className="responsive-profile-container" style={{ maxWidth: '700px', margin: '0 auto', animation: 'fadeIn 0.5s ease' }}>
       {/* Success Toast */}
       {saved && (
         <div style={{

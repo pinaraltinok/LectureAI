@@ -44,7 +44,7 @@ const TeacherSurveys = () => {
       </div>
 
       {surveyData && (
-        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'2rem'}}>
+        <div className="responsive-2col-grid" style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'2rem'}}>
           {/* Score Card */}
           <div className="report-card-internal" style={{padding:'2.5rem', textAlign:'center', background:'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)', color:'white', border:'none', borderRadius:'24px'}}>
             <div style={{fontSize:'4rem', fontWeight:900, marginBottom:'0.5rem'}}>

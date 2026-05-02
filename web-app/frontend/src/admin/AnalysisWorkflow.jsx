@@ -297,7 +297,7 @@ const AnalysisWorkflow = ({ onStepChange }) => {
           </div>
         )}
 
-        <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3rem', alignItems: 'start'}}>
+        <div className="responsive-workflow-grid" style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3rem', alignItems: 'start'}}>
           {/* Left: Dropzone */}
           <div 
             onClick={() => fileInputRef.current.click()}
@@ -392,7 +392,7 @@ const AnalysisWorkflow = ({ onStepChange }) => {
             {/* 3. Ders Numarası Seçimi */}
             <div>
               <label style={{fontSize: '11px', fontWeight: 800, color: '#64748b', marginBottom: '8px', display: 'block', letterSpacing: '0.05em'}}>DERS NUMARASI (MODÜL / DERS)</label>
-              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px'}}>
+              <div className="responsive-form-grid" style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px'}}>
                 {/* Module selector */}
                 <select
                   value={selectedLessonCode.match(/M(\d+)/)?.[1] || '1'}

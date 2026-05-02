@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { BrowserRouter, Routes, Route, NavLink, useNavigate, Navigate } from 'react-router-dom'
-import { LayoutDashboard, Users, Upload, Settings, BookOpen, MessageSquare, BarChart3, GraduationCap, ClipboardEdit, StickyNote, LogOut, BookOpenCheck } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { BrowserRouter, Routes, Route, NavLink, useNavigate, Navigate, useLocation } from 'react-router-dom'
+import { LayoutDashboard, Users, Upload, Settings, BookOpen, MessageSquare, BarChart3, GraduationCap, ClipboardEdit, StickyNote, LogOut, BookOpenCheck, Menu, X } from 'lucide-react'
 import { AuthProvider, useAuth } from './context/AuthContext.jsx'
 import Login from './Login.jsx'
 
@@ -28,7 +28,14 @@ import ProfilePage from './components/ProfilePage.jsx'
 function AppContent() {
   const { user, loading, logout, isAuthenticated } = useAuth()
   const [workflowStep, setWorkflowStep] = useState('upload')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const navigate = useNavigate()
+  const location = useLocation()
+
+  // Close sidebar on route change (mobile)
+  useEffect(() => {
+    setSidebarOpen(false)
+  }, [location.pathname])
 
   const handleLogout = () => {
     logout()
@@ -66,7 +73,18 @@ function AppContent() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      {/* Mobile hamburger toggle */}
+      <button className="sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)} aria-label="Menüyü Aç/Kapat">
+        {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
+      </button>
+
+      {/* Mobile overlay */}
+      <div
+        className={`sidebar-overlay ${sidebarOpen ? 'active' : ''}`}
+        onClick={() => setSidebarOpen(false)}
+      />
+
+      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="brand" style={{marginBottom: '2.5rem', padding: '0 1.2rem'}}>
           <div style={{display:'flex', alignItems:'center', gap:'1rem'}}>
             <div style={{

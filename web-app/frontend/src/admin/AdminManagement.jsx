@@ -203,10 +203,10 @@ const AdminManagement = () => {
 
       {/* TAB 1: Add User */}
       {activeTab === 'add-user' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+        <div className="responsive-mgmt-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
           <div className="report-card-internal" style={{ padding: '2rem', borderRadius: '16px' }}>
             <h3 style={{ margin: '0 0 2rem', fontSize: '1.1rem', fontWeight: 900, color: '#0f172a' }}>Yeni Kullanıcı Oluştur</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+            <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
               <InputField label="AD SOYAD" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="Adı Soyadı" />
               <InputField label="E-POSTA" value={form.email} onChange={v => setForm(f => ({ ...f, email: v }))} placeholder="email@example.com" />
               <InputField label="ŞİFRE" value={form.password} onChange={v => setForm(f => ({ ...f, password: v }))} placeholder="password123" />
@@ -256,7 +256,7 @@ const AdminManagement = () => {
 
       {/* TAB 2: Student → Group */}
       {activeTab === 'student-group' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+        <div className="responsive-mgmt-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
           <div className="report-card-internal" style={{ padding: '2rem' }}>
             <h3 style={{ margin: '0 0 1.5rem', fontSize: '1.1rem', fontWeight: 900, color: '#0f172a' }}>Öğrenciyi Gruba Ata</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -361,7 +361,7 @@ const AdminManagement = () => {
 
       {/* TAB 4: Create Group */}
       {activeTab === 'create-group' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+        <div className="responsive-mgmt-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
           <div className="report-card-internal" style={{ padding: '2.5rem' }}>
             <h3 style={{ margin: '0 0 2rem', fontSize: '1.1rem', fontWeight: 900, color: '#0f172a' }}>Yeni Grup Oluştur</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -399,7 +399,7 @@ const AdminManagement = () => {
               </div>
               <div>
                 <label style={labelStyle}>PROGRAM</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '4px' }}>
+                <div className="responsive-mgmt-3col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '4px' }}>
                   <select value={groupForm._day || ''} onChange={e => {
                     const day = e.target.value
                     setGroupForm(f => {
@@ -496,13 +496,13 @@ const AdminManagement = () => {
 
       {/* TAB 5: Create Course */}
       {activeTab === 'create-course' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+        <div className="responsive-mgmt-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
           <div className="report-card-internal" style={{ padding: '2.5rem' }}>
             <h3 style={{ margin: '0 0 2rem', fontSize: '1.1rem', fontWeight: 900, color: '#0f172a' }}>Yeni Kurs Ekle</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               <InputField label="KURS ADI" value={courseForm.course} onChange={v => setCourseForm(f => ({ ...f, course: v }))} placeholder="Python Developer" />
               <InputField label="YAŞ GRUBU" value={courseForm.age} onChange={v => setCourseForm(f => ({ ...f, age: v }))} placeholder="10-11" />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+              <div className="responsive-mgmt-3col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
                 <InputField label="DERS SÜRESİ (dk)" value={courseForm.lessonSize} onChange={v => setCourseForm(f => ({ ...f, lessonSize: v }))} type="number" />
                 <InputField label="MODÜL SAYISI" value={courseForm.moduleNum} onChange={v => setCourseForm(f => ({ ...f, moduleNum: v }))} type="number" />
                 <InputField label="MODÜL DERS SAYISI" value={courseForm.moduleSize} onChange={v => setCourseForm(f => ({ ...f, moduleSize: v }))} type="number" />
