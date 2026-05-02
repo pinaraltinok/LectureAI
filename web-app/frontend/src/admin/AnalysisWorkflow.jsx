@@ -576,7 +576,7 @@ const AnalysisWorkflow = ({ onStepChange }) => {
            </strong>
            <p style={{margin: '4px 0 0 0', fontSize: '0.85rem', color: '#64748b'}}>
              {draftData?.status === 'PROCESSING' 
-               ? `${curriculumLabel} — ${lessonCode} analizi devam ediyor. Pipeline tamamlandığında rapor güncellenecektir.`
+               ? `${draftData?.lesson?.course || draftData?.videoFilename || 'Video'} — ${draftData?.lessonCode || 'N/A'} analizi devam ediyor. Pipeline tamamlandığında rapor güncellenecektir.`
                : 'Hocaya iletilmeden önce raporun son halini aşağıdan inceleyebilirsiniz.'
              }
            </p>

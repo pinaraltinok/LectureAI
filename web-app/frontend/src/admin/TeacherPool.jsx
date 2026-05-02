@@ -404,7 +404,7 @@ const TeacherPool = () => {
                     <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px'}}>
                       <span style={{fontSize: '1.05rem', fontWeight: 800, color: '#0f172a'}}>
                         {report.groupName
-                          ? `${report.groupName}${report.age ? ` (${report.age} yaş)` : ''}${report.schedule ? ` — ${report.schedule}` : ''}`
+                          ? `${report.groupName}${report.age ? ` (${report.age} yaş)` : ''}${report.schedule ? ` — ${report.schedule}` : ''}${report.lessonNo ? ` • ${formatLessonLabel(report.lessonNo, report.moduleSize)}` : ''}`
                           : report.lessonNo
                             ? `${formatLessonLabel(report.lessonNo, report.moduleSize)}${report.courseName ? ` — ${report.courseName}` : ''}`
                             : report.courseName || `Rapor #${idx + 1}`
