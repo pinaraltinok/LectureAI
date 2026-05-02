@@ -17,6 +17,18 @@ export default function Login() {
   const [parentPhone, setParentPhone] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
 
+  // Turkish phone number helpers
+  const formatPhone = (value) => {
+    const digits = value.replace(/\D/g, '').slice(0, 11)
+    if (digits.length <= 4) return digits
+    if (digits.length <= 7) return `${digits.slice(0,4)} ${digits.slice(4)}`
+    return `${digits.slice(0,4)} ${digits.slice(4,7)} ${digits.slice(7)}`
+  }
+  const isValidPhone = (val) => {
+    const digits = val.replace(/\D/g, '')
+    return digits.length === 11 && digits.startsWith('05')
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setErrorMsg('')
@@ -42,9 +54,37 @@ export default function Login() {
         setErrorMsg('Sunucuya bağlanılamadı. Lütfen backend sunucusunun çalıştığından emin olun.')
       }
     } else {
-      // Frontend validation
+      // ── Comprehensive Frontend Validation ──
+      // Ad Soyad
+      if (!name.trim()) {
+        return setErrorMsg('Ad Soyad alanı zorunludur.')
+      }
       if (name.trim().length < 2) {
-        return setErrorMsg('Ad en az 2 karakter olmalıdır.')
+        return setErrorMsg('Ad Soyad en az 2 karakter olmalıdır.')
+      }
+      if (/\d/.test(name)) {
+        return setErrorMsg('Ad Soyad rakam içeremez.')
+      }
+
+      // E-posta
+      if (!email.trim()) {
+        return setErrorMsg('E-posta adresi zorunludur.')
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return setErrorMsg('Geçerli bir e-posta adresi giriniz. (örn: ad@mail.com)')
+      }
+
+      // Telefon (zorunlu)
+      if (!phone.trim()) {
+        return setErrorMsg('Telefon numarası zorunludur.')
+      }
+      if (!isValidPhone(phone)) {
+        return setErrorMsg('Telefon numarası 05XX XXX XXXX formatında olmalıdır.')
+      }
+
+      // Şifre
+      if (!password) {
+        return setErrorMsg('Şifre alanı zorunludur.')
       }
       if (password.length < 8) {
         return setErrorMsg('Şifre en az 8 karakter olmalıdır.')
@@ -54,6 +94,34 @@ export default function Login() {
       }
       if (!/[0-9]/.test(password)) {
         return setErrorMsg('Şifre en az bir rakam içermelidir.')
+      }
+      if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+        return setErrorMsg('Şifre en az bir özel karakter içermelidir. (!@#$%^&*)')
+      }
+
+      // Öğrenci-özel validasyonlar
+      if (role === 'student') {
+        if (!age) {
+          return setErrorMsg('Yaş alanı zorunludur.')
+        }
+        if (parseInt(age) < 5 || parseInt(age) > 18) {
+          return setErrorMsg('Yaş 5 ile 18 arasında olmalıdır.')
+        }
+        if (!parentName.trim()) {
+          return setErrorMsg('Veli adı zorunludur.')
+        }
+        if (parentName.trim().length < 2) {
+          return setErrorMsg('Veli adı en az 2 karakter olmalıdır.')
+        }
+        if (/\d/.test(parentName)) {
+          return setErrorMsg('Veli adı rakam içeremez.')
+        }
+        if (!parentPhone.trim()) {
+          return setErrorMsg('Veli telefon numarası zorunludur.')
+        }
+        if (!isValidPhone(parentPhone)) {
+          return setErrorMsg('Veli telefon numarası 05XX XXX XXXX formatında olmalıdır.')
+        }
       }
 
       try {
@@ -117,7 +185,7 @@ export default function Login() {
               </div>
               <div className="input-group">
                 <label>TELEFON</label>
-                <input type="tel" placeholder="05XX XXX XXXX" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                <input type="tel" placeholder="05XX XXX XXXX" value={phone} onChange={(e) => setPhone(formatPhone(e.target.value))} maxLength={13} />
               </div>
             </>
           )}
@@ -143,7 +211,7 @@ export default function Login() {
               </div>
               <div className="input-group">
                 <label>VELİ TELEFONU</label>
-                <input type="tel" placeholder="05XX XXX XXXX" value={parentPhone} onChange={(e) => setParentPhone(e.target.value)} />
+                <input type="tel" placeholder="05XX XXX XXXX" value={parentPhone} onChange={(e) => setParentPhone(formatPhone(e.target.value))} maxLength={13} />
               </div>
             </>
           )}
