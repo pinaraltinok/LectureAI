@@ -125,6 +125,31 @@ async function uploadAnalysis(req, res) {
   return res.status(201).json({ jobId: report.id, status: report.status, videoUrl: resolvedUrl, message: 'Video başarıyla yüklendi.' });
 }
 
+/**
+ * POST /api/admin/analysis/create-from-url
+ * Creates an analysis job from a video already uploaded to GCS via signed URL.
+ * Body: { videoUrl: "gs://bucket/path", videoFilename: "name.mp4", teacherName: "..." }
+ * This endpoint receives only a small JSON payload — no file upload through Cloud Run.
+ */
+async function createFromUrl(req, res) {
+  const { videoUrl, videoFilename, teacherName } = req.body;
+
+  if (!videoUrl) throw new AppError('videoUrl gereklidir.', 400);
+
+  const report = await prisma.report.create({ data: { status: 'PENDING' } });
+
+  await prisma.report.update({
+    where: { id: report.id },
+    data: { draftReport: { _videoUrl: videoUrl, _videoFilename: videoFilename || null, _localVideoUrl: null } },
+  });
+
+  if (videoUrl.startsWith('gs://') || videoUrl.startsWith('https://storage.googleapis.com/')) {
+    triggerVideoAnalysis(report.id, videoUrl, teacherName || '');
+  }
+
+  return res.status(201).json({ jobId: report.id, status: report.status, videoUrl, message: 'Video başarıyla kaydedildi.' });
+}
+
 async function triggerVideoAnalysis(jobId, videoUri, teacherName) {
   const videoId = videoUri.split('/').pop().replace(/\.[^.]+$/, '');
   analysisProgress.set(jobId, { stage: 'queued', message: 'Analiz isteği gönderiliyor...', percent: 5, startedAt: new Date().toISOString(), videoId });
@@ -474,7 +499,7 @@ async function deleteGroup(req, res) {
 
 // ═══════════════════════════════════════════════════════════
 module.exports = {
-  getStats, getTeachers, uploadAnalysis, assignAnalysis, getDraft,
+  getStats, getTeachers, uploadAnalysis, createFromUrl, assignAnalysis, getDraft,
   regenerateAnalysis, finalizeAnalysis, getLessons, getAnalysisJobs,
   getCourses, getGroups, getAnalysisProgress, getTeacherReports, syncGCSReports,
   createUser, getStudents, assignStudentToGroup, removeStudentFromGroup,

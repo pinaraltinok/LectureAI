@@ -104,16 +104,43 @@ const AnalysisWorkflow = ({ onStepChange }) => {
     setError('')
 
     try {
-      // Step 1: Upload
-      const formData = new FormData()
-      if (selectedFile) {
-        formData.append('video', selectedFile)
-      }
-      const uploadRes = await apiUpload('/admin/analysis/upload', formData)
-      const jobId = uploadRes.jobId
-      setCurrentJobId(jobId)  // Set early so progress polling starts
+      let gcsUri = null
+      let videoFilename = null
 
-      // Step 2: Assign with curriculum + lesson code + group + date metadata
+      if (selectedFile) {
+        // Step 1: Get a signed upload URL from backend (small JSON request)
+        setProgress({ stage: 'queued', message: 'Upload bağlantısı oluşturuluyor...', percent: 8 })
+        const signedRes = await apiPost('/gcs/upload-url', {
+          filename: selectedFile.name,
+          contentType: selectedFile.type || 'video/mp4',
+        })
+        gcsUri = signedRes.gcsUri
+        videoFilename = signedRes.filename
+
+        // Step 2: Upload file DIRECTLY to GCS (bypasses Cloud Run + Cloudflare limits)
+        setProgress({ stage: 'downloading', message: 'Video buluta yükleniyor...', percent: 15 })
+        const gcsUploadRes = await fetch(signedRes.uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': selectedFile.type || 'video/mp4' },
+          body: selectedFile,
+        })
+        if (!gcsUploadRes.ok) {
+          throw new Error(`Video yükleme başarısız (HTTP ${gcsUploadRes.status})`)
+        }
+      }
+
+      // Step 3: Create report record with GCS URI (small JSON, no file body)
+      setProgress({ stage: 'processing', message: 'Analiz kaydı oluşturuluyor...', percent: 30 })
+      const teacherName = teachers.find(t => t.id === selectedTeacherId)?.name || ''
+      const uploadRes = await apiPost('/admin/analysis/create-from-url', {
+        videoUrl: gcsUri,
+        videoFilename,
+        teacherName,
+      })
+      const jobId = uploadRes.jobId
+      setCurrentJobId(jobId)
+
+      // Step 4: Assign with curriculum + lesson code + group + date metadata
       await apiPost('/admin/analysis/assign', {
         jobId,
         teacherId: selectedTeacherId,
@@ -123,9 +150,7 @@ const AnalysisWorkflow = ({ onStepChange }) => {
         lessonDate: selectedDate || null,
       })
 
-      setCurrentJobId(jobId)
-
-      // Step 3: Fetch draft
+      // Step 5: Fetch draft
       try {
         const draft = await apiGet(`/admin/analysis/draft/${jobId}`)
         setDraftData(draft)
@@ -134,8 +159,8 @@ const AnalysisWorkflow = ({ onStepChange }) => {
           jobId,
           status: 'PROCESSING',
           draftReport: null,
-          videoUrl: uploadRes.videoUrl || null,
-          localVideoUrl: uploadRes.videoUrl?.startsWith('gs://') ? null : uploadRes.videoUrl,
+          videoUrl: gcsUri || null,
+          localVideoUrl: null,
           teacher: teachers.find(t => t.id === selectedTeacherId),
           course: selectedCourse,
           lessonCode: selectedLessonCode,
@@ -150,6 +175,7 @@ const AnalysisWorkflow = ({ onStepChange }) => {
       setIsAnalyzing(false)
     }
   }
+
 
   const handleRegenerate = async () => {
     if (!currentJobId || !adminNote) return

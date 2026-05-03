@@ -7,7 +7,7 @@ const asyncHandler = require('../middleware/asyncHandler');
 const validate = require('../middleware/validate');
 const { assignAnalysisSchema, createUserSchema, createGroupSchema, createCourseSchema } = require('../schemas/admin.schema');
 const {
-  getStats, getTeachers, uploadAnalysis, assignAnalysis, getDraft,
+  getStats, getTeachers, uploadAnalysis, createFromUrl, assignAnalysis, getDraft,
   regenerateAnalysis, finalizeAnalysis, getLessons, getAnalysisJobs,
   getCourses, getGroups, getAnalysisProgress, getTeacherReports, syncGCSReports,
   createUser, getStudents, assignStudentToGroup, removeStudentFromGroup,
@@ -49,6 +49,7 @@ router.get('/teacher/:teacherId/reports', auth, roleGuard('ADMIN'), asyncHandler
 router.get('/teacher/:teacherId/progress', auth, roleGuard('ADMIN'), asyncHandler(getTeacherProgress));
 
 router.post('/analysis/upload', auth, roleGuard('ADMIN'), upload.single('video'), asyncHandler(uploadAnalysis));
+router.post('/analysis/create-from-url', auth, roleGuard('ADMIN'), asyncHandler(createFromUrl));
 router.post('/analysis/assign', auth, roleGuard('ADMIN'), validate(assignAnalysisSchema), asyncHandler(assignAnalysis));
 router.post('/analysis/regenerate', auth, roleGuard('ADMIN'), asyncHandler(regenerateAnalysis));
 router.post('/analysis/finalize', auth, roleGuard('ADMIN'), asyncHandler(finalizeAnalysis));

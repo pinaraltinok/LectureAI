@@ -197,4 +197,45 @@ async function streamFile(req, res) {
   }
 }
 
-module.exports = { getSignedUrl, getBatchSignedUrls, streamFile };
+/**
+ * POST /api/gcs/upload-url
+ * Generates a signed URL for UPLOADING a file directly to GCS from the browser.
+ * This bypasses Cloud Run (32MB) and Cloudflare (100MB) body size limits.
+ * Body: { filename: "video.mp4", contentType: "video/mp4" }
+ */
+async function getUploadSignedUrl(req, res) {
+  try {
+    const { filename, contentType } = req.body;
+
+    if (!filename) {
+      return res.status(400).json({ error: 'filename parametresi gereklidir.' });
+    }
+
+    const mimeType = contentType || 'video/mp4';
+    const sanitized = filename.replace(/[^a-zA-Z0-9_\-().]/g, '_');
+    const gcsFileName = `Lesson_Records/${Date.now()}_${sanitized}`;
+    const bucket = 'lectureai_full_videos';
+
+    const [url] = await storage
+      .bucket(bucket)
+      .file(gcsFileName)
+      .getSignedUrl({
+        version: 'v4',
+        action: 'write',
+        expires: Date.now() + 60 * 60 * 1000, // 1 hour
+        contentType: mimeType,
+      });
+
+    return res.json({
+      uploadUrl: url,
+      gcsUri: `gs://${bucket}/${gcsFileName}`,
+      filename: sanitized,
+      expiresInMinutes: 60,
+    });
+  } catch (err) {
+    console.error('GetUploadSignedUrl error:', err.message);
+    return res.status(500).json({ error: 'Upload URL oluşturulamadı.' });
+  }
+}
+
+module.exports = { getSignedUrl, getBatchSignedUrls, streamFile, getUploadSignedUrl };
