@@ -1,81 +1,18 @@
-# Environment and secrets (never commit)
 .env
-scripts/.env
-service_account.json
-**/service_account.json
-senior-design-488908-1d5d3e1681ee.json
-*-*-*.json
-tests/service_account/*.json
-
-# Python
-__pycache__/
-*.py[cod]
-*.pyc
-*$py.class
-.Python
-.venv/
-.venv-modal/
-venv/
-ENV/
-
-# Jupyter
-.ipynb_checkpoints/
-
-# Tooling
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-
-# Data and Media
-*.mp4
-*.avi
-*.mov
-*.mkv
-# (removed *.json to avoid ignoring package.json)
-outputs/
-work/
+gcp-key.json
+*.json
+!student_registry.json
 data/
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+core/registry_output/
+__pycache__/
+*.mp3
+*.mp4
+.ipynb_checkpoints/
+.vscode/
 node_modules/
-.env
-uploads/
-coverage/
 dist/
-
-# Local Environment variables
-.env.*
-!.env.example
-
-.eslintcache
-
-# Local scratch / one-off exports (repo root)
-/tmp_modal_secret.json
-/payload.json
-/modal_tail_latest.txt
-/modal_watch_*.txt
-/pdfs_*.pdf
-/test_*.pdf
-
+build/
+.dockerignore
+Dockerfile
+docker-compose.yml
+# Not: Docker dosyalarını isterseniz pushlayabiliriz ama anahtarlar kesinlikle kalmalı.

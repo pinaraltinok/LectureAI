@@ -1,32 +1,14 @@
-# Use Python 3.11, 3.12, or 3.13. Python 3.14 is not supported yet by
-# pydantic-core (PyO3) and other native wheels — see pyproject.toml.
-#
-# ---- Core runtime dependencies (pinned) ----
-pydantic==2.9.2
-pydantic-settings==2.6.1
-
-# ---- External service SDKs ----
-assemblyai==0.35.1
+fastapi
+uvicorn
+pydantic
+modal
 google-genai
-google-cloud-storage==2.18.2
-
-# ---- IO ----
-aiofiles==24.1.0
-ffmpeg-python==0.2.0
-python-dotenv==1.0.1
+assemblyai
+httpx
+markdown
+xhtml2pdf
 reportlab
-
-# ---- Testing ----
-pytest==8.3.3
-pytest-asyncio==0.24.0
-
-# ---- Additional Dependencies (from remote) ----
+python-dotenv
+google-cloud-storage
 opencv-python-headless
-numpy
-pandas
-mediapipe
 easyocr
-torch
-
-# NOTE: `asyncio` is part of the Python standard library (>=3.4)
-# and does not need to be installed separately.
