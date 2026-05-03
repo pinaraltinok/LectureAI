@@ -27,7 +27,7 @@ const multerStorage = multer.diskStorage({
 const ALLOWED_MIMETYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska'];
 const upload = multer({
   storage: multerStorage,
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500 MB max (ders videoları büyük olabilir)
+  limits: { fileSize: 600 * 1024 * 1024 }, // 600 MB max (ders videoları büyük olabilir)
   fileFilter: (req, file, cb) => {
     if (ALLOWED_MIMETYPES.includes(file.mimetype)) {
       cb(null, true);

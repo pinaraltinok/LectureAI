@@ -14,6 +14,9 @@ const path = require('path');
 const app = express();
 app.disable('x-powered-by'); // Prevent Express version fingerprinting
 
+// Trust reverse proxies (Cloud Run / Cloudflare) for correct req.secure and cookies
+app.set('trust proxy', true);
+
 // ─── Security: Helmet (HTTP security headers) ───────────────
 app.use(helmet({
   contentSecurityPolicy: false,        // Disable CSP for SPA compatibility
@@ -64,8 +67,8 @@ app.use('/api/auth/register', authLimiter);
 
 // ─── Body Parsers ────────────────────────────────────────────
 app.use(cookieParser());
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '550mb' }));
+app.use(express.urlencoded({ extended: true, limit: '550mb' }));
 
 // ─── Ensure uploads directory exists ─────────────────────────
 const uploadDir = process.env.UPLOAD_DIR || './uploads';
@@ -138,7 +141,7 @@ app.use((err, req, res, next) => {
   // Handle Multer file upload errors with user-friendly messages
   if (err.name === 'MulterError') {
     const multerMessages = {
-      LIMIT_FILE_SIZE: 'Dosya boyutu çok büyük. Maksimum 500 MB yüklenebilir.',
+      LIMIT_FILE_SIZE: 'Dosya boyutu çok büyük. Maksimum 600 MB yüklenebilir.',
       LIMIT_UNEXPECTED_FILE: 'Beklenmeyen dosya alanı.',
     };
     return res.status(400).json({ error: multerMessages[err.code] || 'Dosya yükleme hatası.' });
