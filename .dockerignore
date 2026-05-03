@@ -1,0 +1,30 @@
+# Python caches and local environments
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# IDE/system noise
+.vscode/
+.idea/
+.git/
+.gitignore
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local logs/artifacts not needed in images
+*.log
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Keep large runtime assets out unless explicitly copied
+pdfs/
+tmp/

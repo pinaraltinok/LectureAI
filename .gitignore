@@ -14,6 +14,7 @@ __pycache__/
 *$py.class
 .Python
 .venv/
+.venv-modal/
 venv/
 ENV/
 
@@ -69,4 +70,11 @@ dist/
 !.env.example
 
 .eslintcache
+
+# Local scratch / one-off exports (repo root)
+/tmp_modal_secret.json
+/payload.json
+/modal_tail_latest.txt
+/modal_watch_*.txt
+/pdfs_*.pdf
 

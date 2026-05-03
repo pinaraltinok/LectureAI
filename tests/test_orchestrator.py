@@ -1,7 +1,8 @@
 """Unit tests for ``src.orchestrator.gemini_client``.
 
 External I/O (GCS + Gemini) is mocked. We verify:
-  1. ``generate_report`` loads CV from lectureai_processed/results/,
+  1. ``generate_report`` loads CV (preferring
+     ``results/{id}/lecture_report.json``, then legacy ``results/{id}.json``),
      drives chunk analysis, merges, builds a ``QAReport`` and
      uploads it to lectureai_processed/reports/.
   2. ``_parse_gemini_json`` strips markdown fences and raises
@@ -11,11 +12,27 @@ External I/O (GCS + Gemini) is mocked. We verify:
 from __future__ import annotations
 
 import json
+import sys
+import types
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+# ``vertexai`` is optional in some dev venvs; stub before importing the orchestrator.
+if "vertexai" not in sys.modules:
+    _vertexai_mod = types.ModuleType("vertexai")
+    _vertexai_mod.init = MagicMock()
+    _gen_mod = types.ModuleType("vertexai.generative_models")
+
+    def _fake_generative_model(*_a: object, **_kw: object) -> MagicMock:
+        return MagicMock()
+
+    _gen_mod.GenerativeModel = _fake_generative_model
+    _vertexai_mod.generative_models = _gen_mod
+    sys.modules["vertexai"] = _vertexai_mod
+    sys.modules["vertexai.generative_models"] = _gen_mod
 
 with patch("google.cloud.storage.Client"), patch(
     "google.genai.Client"
@@ -232,8 +249,14 @@ def _make_orchestrator() -> ReportOrchestrator:
         mock_client_cls.return_value = MagicMock()
         orch = ReportOrchestrator(
             gemini_api_key="fake-gemini",
+            groq_api_key=None,
+            groq_extra_api_key=None,
             buckets=_bucket_config(),
-            chunk_minutes=30,
+            google_cloud_project=None,
+            gemini_provider="aistudio",
+            provider_order=("aistudio",),
+            # Two chunks from ~120s of audio so merge LLM runs (503 retry test).
+            chunk_minutes=1,
         )
     return orch
 
@@ -269,14 +292,20 @@ async def test_generate_report_uses_processed_bucket_paths():
     orch = _make_orchestrator()
     buckets, blobs = _install_bucket_router(orch)
 
-    # CV JSON is downloaded from lectureai_processed/results/{vid}.json
+    # Prefer nested lecture_report.json first; flat JSON used when nested absent.
+    nested_key = ("lectureai_processed", "results/vid-1/lecture_report.json")
+    blobs[nested_key] = MagicMock()
+    blobs[nested_key].exists.return_value = False
+
     cv_blob_key = ("lectureai_processed", "results/vid-1.json")
     blobs[cv_blob_key] = MagicMock()
+    blobs[cv_blob_key].exists.return_value = True
     blobs[cv_blob_key].download_as_text = MagicMock(return_value=_cv_json())
 
     # Gemini responses: 1 chunk then merge
-    orch._genai_client = MagicMock()
-    orch._genai_client.models.generate_content.side_effect = [
+    orch._aistudio_client = MagicMock()
+    orch._aistudio_client.models.generate_content.side_effect = [
+        SimpleNamespace(text=_chunk_response_json()),
         SimpleNamespace(text=_chunk_response_json()),
         SimpleNamespace(text=_merge_response_json()),
     ]
@@ -314,18 +343,19 @@ async def test_generate_report_uses_processed_bucket_paths():
     # Only the processed bucket was touched (no videos/transcripts/audio)
     assert set(buckets.keys()) == {"lectureai_processed"}
 
-    # Exactly 1 chunk + 1 merge call
-    assert orch._genai_client.models.generate_content.call_count == 2
+    # Two chunk windows + merge
+    assert orch._aistudio_client.models.generate_content.call_count == 3
 
 
 @pytest.mark.asyncio
-async def test_generate_report_falls_back_to_nested_lecture_report_path():
+async def test_generate_report_prefers_nested_lecture_report_over_flat_cv():
     orch = _make_orchestrator()
     _buckets, blobs = _install_bucket_router(orch)
 
     primary_cv_blob = ("lectureai_processed", "results/vid-1.json")
     blobs[primary_cv_blob] = MagicMock()
-    blobs[primary_cv_blob].exists.return_value = False
+    blobs[primary_cv_blob].exists.return_value = True
+    blobs[primary_cv_blob].download_as_text = MagicMock(return_value="{}")
 
     nested_cv_blob = (
         "lectureai_processed",
@@ -335,8 +365,9 @@ async def test_generate_report_falls_back_to_nested_lecture_report_path():
     blobs[nested_cv_blob].exists.return_value = True
     blobs[nested_cv_blob].download_as_text = MagicMock(return_value=_cv_json())
 
-    orch._genai_client = MagicMock()
-    orch._genai_client.models.generate_content.side_effect = [
+    orch._aistudio_client = MagicMock()
+    orch._aistudio_client.models.generate_content.side_effect = [
+        SimpleNamespace(text=_chunk_response_json()),
         SimpleNamespace(text=_chunk_response_json()),
         SimpleNamespace(text=_merge_response_json()),
     ]
@@ -344,8 +375,91 @@ async def test_generate_report_falls_back_to_nested_lecture_report_path():
     report = await orch.generate_report("vid-1", _audio_result())
 
     assert report.video_id == "vid-1"
-    blobs[primary_cv_blob].exists.assert_called_once()
     blobs[nested_cv_blob].download_as_text.assert_called_once()
+    blobs[primary_cv_blob].download_as_text.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_generate_report_skips_empty_nested_json_uses_flat_cv():
+    """Stub ``lecture_report.json`` must not hide a filled flat ``results/{id}.json``."""
+    orch = _make_orchestrator()
+    _buckets, blobs = _install_bucket_router(orch)
+
+    nested_cv_blob = (
+        "lectureai_processed",
+        "results/vid-1/lecture_report.json",
+    )
+    blobs[nested_cv_blob] = MagicMock()
+    blobs[nested_cv_blob].exists.return_value = True
+    blobs[nested_cv_blob].download_as_text = MagicMock(return_value="{}")
+
+    flat_cv_blob = ("lectureai_processed", "results/vid-1.json")
+    blobs[flat_cv_blob] = MagicMock()
+    blobs[flat_cv_blob].exists.return_value = True
+    blobs[flat_cv_blob].download_as_text = MagicMock(return_value=_cv_json())
+
+    orch._aistudio_client = MagicMock()
+    orch._aistudio_client.models.generate_content.side_effect = [
+        SimpleNamespace(text=_chunk_response_json()),
+        SimpleNamespace(text=_chunk_response_json()),
+        SimpleNamespace(text=_merge_response_json()),
+    ]
+
+    report = await orch.generate_report("vid-1", _audio_result())
+
+    assert report.video_id == "vid-1"
+    blobs[nested_cv_blob].download_as_text.assert_called_once()
+    blobs[flat_cv_blob].download_as_text.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_generate_report_metadata_overrides_merge_header():
+    """``metadata/{video_id}.json`` fills QAReport header; wins over merge JSON."""
+    orch = _make_orchestrator()
+    _buckets, blobs = _install_bucket_router(orch)
+
+    nested_key = ("lectureai_processed", "results/vid-1/lecture_report.json")
+    blobs[nested_key] = MagicMock()
+    blobs[nested_key].exists.return_value = False
+
+    cv_blob_key = ("lectureai_processed", "results/vid-1.json")
+    blobs[cv_blob_key] = MagicMock()
+    blobs[cv_blob_key].exists.return_value = True
+    blobs[cv_blob_key].download_as_text = MagicMock(return_value=_cv_json())
+
+    meta_key = ("lectureai_processed", "metadata/vid-1.json")
+    blobs[meta_key] = MagicMock()
+    blobs[meta_key].exists.return_value = True
+    blobs[meta_key].download_as_text = MagicMock(
+        return_value=json.dumps(
+            {
+                "instructor_name": "Meta Hoca",
+                "course": "Python 101",
+                "group": "A-12",
+                "lesson_date": "2026-05-01",
+                "module": 2,
+                "lesson": 5,
+                "expected_duration_min": 90,
+            }
+        )
+    )
+
+    orch._aistudio_client = MagicMock()
+    orch._aistudio_client.models.generate_content.side_effect = [
+        SimpleNamespace(text=_chunk_response_json()),
+        SimpleNamespace(text=_chunk_response_json()),
+        SimpleNamespace(text=_merge_response_json()),
+    ]
+
+    report = await orch.generate_report("vid-1", _audio_result())
+
+    assert report.instructor_name == "Meta Hoca"
+    assert report.course == "Python 101"
+    assert report.group == "A-12"
+    assert report.lesson_date == "2026-05-01"
+    assert report.module == 2
+    assert report.lesson_number == 5
+    assert report.expected_duration_min == 90
 
 
 @pytest.mark.asyncio
@@ -356,12 +470,18 @@ async def test_merge_retries_on_503_then_succeeds():
     orch = _make_orchestrator()
     _buckets, blobs = _install_bucket_router(orch)
 
+    nested_key = ("lectureai_processed", "results/vid-1/lecture_report.json")
+    blobs[nested_key] = MagicMock()
+    blobs[nested_key].exists.return_value = False
+
     cv_blob_key = ("lectureai_processed", "results/vid-1.json")
     blobs[cv_blob_key] = MagicMock()
+    blobs[cv_blob_key].exists.return_value = True
     blobs[cv_blob_key].download_as_text = MagicMock(return_value=_cv_json())
 
-    orch._genai_client = MagicMock()
-    orch._genai_client.models.generate_content.side_effect = [
+    orch._aistudio_client = MagicMock()
+    orch._aistudio_client.models.generate_content.side_effect = [
+        SimpleNamespace(text=_chunk_response_json()),
         SimpleNamespace(text=_chunk_response_json()),
         ServerError(
             503,
@@ -383,8 +503,9 @@ async def test_merge_retries_on_503_then_succeeds():
         report = await orch.generate_report("vid-1", _audio_result())
 
     assert report.video_id == "vid-1"
-    assert orch._genai_client.models.generate_content.call_count == 3
-    mock_sleep.assert_awaited_once_with(10.0)
+    assert orch._aistudio_client.models.generate_content.call_count == 4
+    slept_values = [call.args[0] for call in mock_sleep.await_args_list if call.args]
+    assert 12.0 in slept_values
 
 
 # --------------------------------------------------------------------------- #

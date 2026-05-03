@@ -189,7 +189,7 @@ async def test_analyze_happy_path_mp3_pipeline():
     assert txt_blob.upload_from_string.called
     uploaded_txt = txt_blob.upload_from_string.call_args.args[0]
     assert "[00:00:00]" in uploaded_txt
-    assert "Speaker A:" in uploaded_txt
+    assert "Konuşmacı A:" in uploaded_txt
     assert "sentiment: POSITIVE" in uploaded_txt
 
     mock_transcript_cls.get_by_id.assert_called_once_with("tx-1")
