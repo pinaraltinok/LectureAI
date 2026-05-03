@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["https://lectureai.online", "https://lectureai-679435321951.europe-west4.run.app", "http://localhost:5173"],
+    "method": ["PUT", "GET", "HEAD"],
+    "responseHeader": ["Content-Type"],
+    "maxAgeSeconds": 3600
+  }
+]

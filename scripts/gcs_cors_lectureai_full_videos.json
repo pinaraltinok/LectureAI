@@ -1,0 +1,13 @@
+[
+  {
+    "origin": [
+      "https://lectureai.online",
+      "https://www.lectureai.online",
+      "http://localhost:5173",
+      "http://localhost:5174"
+    ],
+    "method": ["GET", "PUT", "POST", "HEAD", "OPTIONS"],
+    "responseHeader": ["Content-Type"],
+    "maxAgeSeconds": 3600
+  }
+]

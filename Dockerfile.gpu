@@ -1,0 +1,28 @@
+# LectureAI Video Analysis Pipeline - GPU Container
+FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
+
+WORKDIR /app
+
+# System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python dependencies
+RUN pip install --no-cache-dir \
+    "numpy<2" \
+    "mediapipe==0.10.21" \
+    "easyocr==1.7.2" \
+    "google-cloud-storage>=2.16.0" \
+    "opencv-python-headless<4.10.0" \
+    "pandas<2.2.0" \
+    matplotlib
+
+# Copy pipeline code
+COPY video/ /app/video/
+COPY scripts/run_video_analysis.py /app/scripts/run_video_analysis.py
+
+ENV PYTHONIOENCODING=utf-8
+ENV PYTHONUNBUFFERED=1
+
+ENTRYPOINT ["python", "scripts/run_video_analysis.py"]

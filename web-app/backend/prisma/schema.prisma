@@ -1,0 +1,268 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum ReportStatus {
+  PENDING
+  PROCESSING
+  DRAFT
+  FINALIZED
+}
+
+// ─── User (Base Entity) ─────────────────────────────────────
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String?
+  email     String   @unique
+  password  String
+  role      Role
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One-to-one profile relations
+  admin   Admin?
+  teacher Teacher?
+  student Student?
+
+  @@map("users")
+}
+
+// ─── Admin ──────────────────────────────────────────────────
+
+model Admin {
+  id   String @id // Same as userId
+  user User   @relation(fields: [id], references: [id], onDelete: Cascade)
+
+  reports Report[]
+
+  @@map("admins")
+}
+
+// ─── Student ────────────────────────────────────────────────
+
+model Student {
+  id          String  @id // Same as userId
+  age         Int?
+  parent      String?
+  parentPhone String?
+  user        User    @relation(fields: [id], references: [id], onDelete: Cascade)
+
+  studentGroups  StudentGroup[]
+  evaluations    StudentEvaluation[] @relation("StudentEvals")
+  surveys        Survey[]
+  reportStudents ReportStudent[]
+  studentNotes   StudentNote[]
+
+  @@map("students")
+}
+
+// ─── Teacher ────────────────────────────────────────────────
+
+model Teacher {
+  id          String    @id // Same as userId
+  startOfDate DateTime? @default(now())
+  user        User      @relation(fields: [id], references: [id], onDelete: Cascade)
+
+  teacherCourses TeacherCourse[]
+  groups         Group[]
+  lessons        Lesson[]
+  reportTeachers ReportTeacher[]
+  evaluations    StudentEvaluation[] @relation("TeacherEvals")
+
+  @@map("teachers")
+}
+
+// ─── Course ─────────────────────────────────────────────────
+
+model Course {
+  id         String @id @default(cuid())
+  course     String // Course name (e.g. "Roblox Game Developer")
+  age        String // Target age range (e.g. "8-9")
+  lessonSize Int    // Lesson duration in minutes
+  moduleNum  Int    // Number of modules
+  moduleSize Int    // Lessons per module
+
+  teacherCourses TeacherCourse[]
+  groups         Group[]
+
+  @@map("courses")
+}
+
+// ─── Teacher_Course (Junction) ──────────────────────────────
+
+model TeacherCourse {
+  teacherId String
+  courseId   String
+  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  course    Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@id([teacherId, courseId])
+  @@map("teacher_courses")
+}
+
+// ─── Group ──────────────────────────────────────────────────
+
+model Group {
+  id        String  @id @default(uuid())
+  name       String?
+  courseId   String
+  teacherId  String
+  schedule   String?
+
+  course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  studentGroups StudentGroup[]
+  lessons       Lesson[]
+
+  @@map("groups")
+}
+
+// ─── Student_Group (Junction) ───────────────────────────────
+
+model StudentGroup {
+  studentId String
+  groupId   String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  group     Group   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([studentId, groupId])
+  @@map("student_groups")
+}
+
+// ─── Lesson ─────────────────────────────────────────────────
+
+model Lesson {
+  id            String   @id @default(uuid())
+  groupId       String
+  teacherId     String
+  dateTime      DateTime @default(now())
+  lessonNo      Int
+  videoUrl      String?
+  videoFilename String?
+
+  group   Group   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  reports Report[]
+  surveys Survey[]
+  studentNotes StudentNote[]
+
+  @@map("lessons")
+}
+
+// ─── Report ─────────────────────────────────────────────────
+
+model Report {
+  id            String       @id @default(uuid())
+  adminId       String?
+  lessonId      String?
+  status        ReportStatus @default(PENDING)
+  draftReport   Json?
+  finalReport   Json?
+  adminFeedback String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  admin  Admin?  @relation(fields: [adminId], references: [id])
+  lesson Lesson? @relation(fields: [lessonId], references: [id])
+
+  reportTeachers ReportTeacher[]
+  reportStudents ReportStudent[]
+
+  @@map("reports")
+}
+
+// ─── Report_Teacher ─────────────────────────────────────────
+
+model ReportTeacher {
+  id        String @id @default(uuid())
+  reportId  String
+  teacherId String
+  score     Float?
+
+  report  Report  @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, teacherId])
+  @@map("report_teachers")
+}
+
+// ─── Report_Student (Junction) ──────────────────────────────
+
+model ReportStudent {
+  reportId  String
+  studentId String
+  report    Report  @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@id([reportId, studentId])
+  @@map("report_students")
+}
+
+// ─── Student_Evaluation ─────────────────────────────────────
+
+model StudentEvaluation {
+  id        String   @id @default(uuid())
+  teacherId String
+  studentId String
+  note      String
+  createdAt DateTime @default(now())
+
+  teacher Teacher @relation("TeacherEvals", fields: [teacherId], references: [id], onDelete: Cascade)
+  student Student @relation("StudentEvals", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("student_evaluations")
+}
+
+// ─── Survey ─────────────────────────────────────────────────
+
+model Survey {
+  id        String   @id @default(uuid())
+  lessonId  String
+  studentId String
+  rating    Int      // 1-5
+  note      String?
+  createdAt DateTime @default(now())
+
+  lesson  Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, lessonId])
+  @@map("surveys")
+}
+
+// ─── Student_Note (Timestamped notes on lesson videos) ──────
+
+model StudentNote {
+  id        String   @id @default(uuid())
+  studentId String
+  lessonId  String
+  timestamp Int      // Seconds into the video
+  note      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lesson  Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@map("student_notes")
+}

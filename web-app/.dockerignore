@@ -1,0 +1,17 @@
+node_modules
+npm-debug.log
+.env
+.env.*
+!.env.example
+uploads
+*.md
+.git
+.gitignore
+tests
+frontend/node_modules
+backend/node_modules
+backend/tests
+backend/uploads
+backend/.env
+backend/.env.*
+!backend/.env.example
