@@ -263,12 +263,19 @@ async function getDraft(req, res) {
   const report = await reportService.getDraft(req.params.jobId);
   const teacher = report.reportTeachers[0];
   const dr = (typeof report.draftReport === 'object' && report.draftReport) || {};
+
+  // Extract quality metrics from GCS report JSON (pipeline writes these)
+  const qualityScore = dr.quality_score ?? dr.qualityScore ?? null;
+  const qualityPassed = dr.quality_passed ?? dr.qualityPassed ?? (qualityScore != null ? qualityScore >= 60 : null);
+
   return res.json({
     jobId: report.id, status: report.status,
     videoUrl: report.lesson?.videoUrl || dr._videoUrl || null,
     localVideoUrl: dr._localVideoUrl || null,
     videoFilename: report.lesson?.videoFilename || dr._videoFilename || null,
     draftReport: report.draftReport, finalReport: report.finalReport,
+    quality_score: qualityScore,
+    quality_passed: qualityPassed,
     teacher: teacher ? { id: teacher.teacherId, name: teacher.teacher.user.name } : null,
     lesson: report.lesson ? { id: report.lesson.id, lessonNo: report.lesson.lessonNo, course: report.lesson.group?.course?.course } : null,
     createdAt: report.createdAt,
@@ -283,6 +290,78 @@ async function regenerateAnalysis(req, res) {
 async function finalizeAnalysis(req, res) {
   const updated = await reportService.finalize(req.body.jobId, req.user.userId);
   return res.json({ jobId: updated.id, status: updated.status, message: 'Rapor onaylandı ve yayınlandı.' });
+}
+
+/**
+ * POST /api/admin/analysis/retry
+ * Retries the analysis pipeline for a report with low quality score.
+ * 1. Reads pipeline_state from GCS
+ * 2. If report_done=true but quality_passed=false: deletes report + pdf
+ * 3. Resets pipeline_state flags
+ * 4. Publishes to lecture-cv-completed topic to re-trigger orchestrator
+ */
+async function retryAnalysis(req, res) {
+  const { jobId } = req.body;
+  if (!jobId) throw new AppError('jobId gereklidir.', 400);
+  if (!gcsStorage) throw new AppError('GCS client başlatılamadı.', 500);
+  if (!pubsub) throw new AppError('PubSub client başlatılamadı.', 500);
+
+  const report = await prisma.report.findUnique({ where: { id: jobId }, select: { draftReport: true } });
+  if (!report) throw new AppError('Rapor bulunamadı.', 404);
+
+  const dr = (typeof report.draftReport === 'object' && report.draftReport) || {};
+  const videoUrl = dr._videoUrl || '';
+  const videoId = videoUrl.split('/').pop()?.replace(/\.[^.]+$/, '') || '';
+  if (!videoId) throw new AppError('Video ID belirlenemedi.', 400);
+
+  const bucket = gcsStorage.bucket(PROCESSED_BUCKET);
+
+  // 1. Read pipeline_state
+  const stateFile = bucket.file(`pipeline_state/${videoId}.json`);
+  let pipelineState = {};
+  try {
+    const [stateExists] = await stateFile.exists();
+    if (stateExists) {
+      const [content] = await stateFile.download();
+      pipelineState = JSON.parse(content.toString());
+    }
+  } catch (e) { console.warn('[Retry] pipeline_state read error:', e.message); }
+
+  // 2. Delete existing report + PDF
+  try {
+    const reportFile = bucket.file(`reports/${videoId}.json`);
+    const [reportExists] = await reportFile.exists();
+    if (reportExists) await reportFile.delete();
+    console.log(`[Retry] Deleted reports/${videoId}.json`);
+  } catch (e) { console.warn('[Retry] Report delete error:', e.message); }
+
+  try {
+    const pdfFile = bucket.file(`pdfs/${videoId}.pdf`);
+    const [pdfExists] = await pdfFile.exists();
+    if (pdfExists) await pdfFile.delete();
+    console.log(`[Retry] Deleted pdfs/${videoId}.pdf`);
+  } catch (e) { console.warn('[Retry] PDF delete error:', e.message); }
+
+  // 3. Reset pipeline_state flags
+  pipelineState.report_done = false;
+  pipelineState.report_pdf_exists = false;
+  try {
+    await stateFile.save(JSON.stringify(pipelineState, null, 2), { contentType: 'application/json' });
+    console.log(`[Retry] pipeline_state reset for ${videoId}`);
+  } catch (e) { console.warn('[Retry] pipeline_state write error:', e.message); }
+
+  // 4. Publish to lecture-cv-completed topic (triggers orchestrator)
+  const retryTopic = pubsub.topic('lecture-cv-completed');
+  const payload = JSON.stringify({ video_id: videoId });
+  const messageId = await retryTopic.publishMessage({ data: Buffer.from(payload) });
+  console.log(`[Retry] Published to lecture-cv-completed: messageId=${messageId}, videoId=${videoId}`);
+
+  // 5. Update report status back to PROCESSING
+  await prisma.report.update({ where: { id: jobId }, data: { status: 'PROCESSING' } });
+  analysisProgress.set(jobId, { stage: 'queued', message: 'Rapor yeniden oluşturuluyor...', percent: 5, startedAt: new Date().toISOString(), videoId });
+  pollGCSForReport(jobId, videoId);
+
+  return res.status(202).json({ jobId, status: 'PROCESSING', message: 'Yeniden analiz başlatıldı.', videoId });
 }
 
 async function getTeacherReports(req, res) {
@@ -500,7 +579,7 @@ async function deleteGroup(req, res) {
 // ═══════════════════════════════════════════════════════════
 module.exports = {
   getStats, getTeachers, uploadAnalysis, createFromUrl, assignAnalysis, getDraft,
-  regenerateAnalysis, finalizeAnalysis, getLessons, getAnalysisJobs,
+  regenerateAnalysis, retryAnalysis, finalizeAnalysis, getLessons, getAnalysisJobs,
   getCourses, getGroups, getAnalysisProgress, getTeacherReports, syncGCSReports,
   createUser, getStudents, assignStudentToGroup, removeStudentFromGroup,
   setTeacherCourses, getTeacherCourses, createGroup, createCourse,

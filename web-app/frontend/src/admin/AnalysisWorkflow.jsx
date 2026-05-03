@@ -594,6 +594,24 @@ const AnalysisWorkflow = ({ onStepChange }) => {
     draftReport,
   }
 
+  // Quality score from pipeline
+  const qualityScore = draftData?.quality_score ?? null
+  const qualityPassed = draftData?.quality_passed ?? (qualityScore != null ? qualityScore >= 60 : null)
+
+  const handleRetry = async () => {
+    if (!currentJobId) return
+    setIsAnalyzing(true)
+    setIsRegenerating(true)
+    setError('')
+    try {
+      await apiPost('/admin/analysis/retry', { jobId: currentJobId })
+    } catch (err) {
+      setError(err.message)
+      setIsAnalyzing(false)
+      setIsRegenerating(false)
+    }
+  }
+
   return (
     <div className="workflow-container" style={{animation: 'fadeIn 0.5s ease'}}>
       <div className="alert-banner" style={{background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: '16px', padding: '1.5rem', marginBottom: '2rem', display: 'flex', gap: '1.25rem', alignItems: 'center'}}>
@@ -612,6 +630,55 @@ const AnalysisWorkflow = ({ onStepChange }) => {
            </p>
         </div>
       </div>
+
+      {/* Quality Score Banner */}
+      {qualityScore != null && (
+        <div style={{
+          background: qualityPassed ? '#f0fdf4' : '#fef2f2',
+          border: `1.5px solid ${qualityPassed ? '#bbf7d0' : '#fecaca'}`,
+          borderRadius: '16px', padding: '1.25rem 1.5rem', marginBottom: '1.5rem',
+          display: 'flex', alignItems: 'center', gap: '1.25rem',
+        }}>
+          <div style={{
+            width: '56px', height: '56px', borderRadius: '50%', display: 'grid', placeItems: 'center',
+            fontSize: '1.2rem', fontWeight: 900, color: '#fff', flexShrink: 0,
+            background: qualityPassed
+              ? 'linear-gradient(135deg, #10b981, #059669)'
+              : qualityScore >= 40
+                ? 'linear-gradient(135deg, #f59e0b, #d97706)'
+                : 'linear-gradient(135deg, #ef4444, #dc2626)',
+            boxShadow: qualityPassed
+              ? '0 4px 12px rgba(16,185,129,0.3)'
+              : '0 4px 12px rgba(239,68,68,0.3)',
+          }}>
+            {qualityScore}
+          </div>
+          <div style={{flex: 1}}>
+            <strong style={{fontSize: '0.95rem', color: qualityPassed ? '#065f46' : '#991b1b'}}>
+              {qualityPassed ? '✓ Rapor Kalitesi Yeterli' : '⚠ Rapor Kalitesi Düşük'}
+            </strong>
+            <p style={{margin: '4px 0 0', fontSize: '0.82rem', color: qualityPassed ? '#047857' : '#b91c1c', fontWeight: 600}}>
+              {qualityPassed
+                ? `Kalite puanı: ${qualityScore}/100 — Rapor onaya hazır.`
+                : `Kalite puanı: ${qualityScore}/100 — Pipeline yeniden çalıştırılarak iyileştirilebilir.`
+              }
+            </p>
+          </div>
+          {!qualityPassed && (
+            <button
+              className="outline-btn"
+              onClick={handleRetry}
+              style={{
+                padding: '0.75rem 1.5rem', borderRadius: '14px', flexShrink: 0,
+                background: '#fef2f2', border: '1.5px solid #fca5a5', color: '#dc2626',
+                fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer',
+              }}
+            >
+              🔄 Yeniden Üret
+            </button>
+          )}
+        </div>
+      )}
 
       {error && (
         <div style={{color: '#f43f5e', background: '#ffe4e6', padding: '0.75rem 1.5rem', borderRadius: '12px', fontSize: '0.9rem', marginBottom: '1.5rem', fontWeight: 600}}>
