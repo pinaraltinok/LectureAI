@@ -241,6 +241,11 @@ async def main() -> None:
         gemini_api_key=os.environ.get("GEMINI_API_KEY"),
         groq_api_key=os.environ.get("GROQ_API_KEY"),
         groq_extra_api_key=os.environ.get("GROQ_EKSTRA"),
+        openrouter_api_key=(os.environ.get("OPENROUTER_API_KEY") or "").strip()
+        or None,
+        openrouter_model=(os.environ.get("OPENROUTER_MODEL") or "").strip() or None,
+        quality_agent_model=(os.environ.get("QUALITY_AGENT_MODEL") or "").strip()
+        or None,
         buckets=buckets,
         google_cloud_project=os.environ.get("GOOGLE_CLOUD_PROJECT"),
         gemini_provider=os.environ.get("GEMINI_PROVIDER", "vertex"),

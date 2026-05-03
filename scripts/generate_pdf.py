@@ -498,23 +498,40 @@ def render_qa_report_pdf(report: QAReport) -> bytes:
     story.append(_lesson_structure_table(report, styles))
     story.append(Spacer(1, 5 * mm))
 
-    bottom_bar = Table(
-        [
-            [
-                Paragraph("Beklenen süre", styles["small_bold"]),
-                Paragraph("Gerçekleşen süre", styles["small_bold"]),
-                Paragraph("Eğitmenin konuşma süresi", styles["small_bold"]),
-            ],
-            [
-                Paragraph(f"{report.expected_duration_min} dk", styles["small"]),
-                Paragraph(f"{report.actual_duration_min} dk", styles["small"]),
-                Paragraph(
-                    _safe_text(_speaking_time_label(report.speaking_time_rating)),
-                    styles["small"],
+    bottom_labels = [
+        Paragraph("Beklenen süre", styles["small_bold"]),
+        Paragraph("Gerçekleşen süre", styles["small_bold"]),
+        Paragraph("Eğitmenin konuşma süresi", styles["small_bold"]),
+    ]
+    bottom_values = [
+        Paragraph(f"{report.expected_duration_min} dk", styles["small"]),
+        Paragraph(f"{report.actual_duration_min} dk", styles["small"]),
+        Paragraph(
+            _safe_text(_speaking_time_label(report.speaking_time_rating)),
+            styles["small"],
+        ),
+    ]
+    bottom_widths = [55 * mm, 55 * mm, 65 * mm]
+    qs = getattr(report, "quality_score", None)
+    if qs is not None:
+        bottom_labels.append(Paragraph("Kalite skoru", styles["small_bold"]))
+        qp = bool(getattr(report, "quality_passed", False))
+        qc = colors.HexColor("#2E7D32") if qp else colors.HexColor("#E65100")
+        bottom_values.append(
+            Paragraph(
+                f"Rapor kalitesi: {qs}/100",
+                ParagraphStyle(
+                    "quality_score_cell",
+                    parent=styles["small"],
+                    textColor=qc,
                 ),
-            ],
-        ],
-        colWidths=[55 * mm, 55 * mm, 65 * mm],
+            )
+        )
+        bottom_widths.append(45 * mm)
+
+    bottom_bar = Table(
+        [bottom_labels, bottom_values],
+        colWidths=bottom_widths,
     )
     bottom_bar.setStyle(
         TableStyle(

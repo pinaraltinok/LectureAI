@@ -5,10 +5,11 @@ Deploy sonrası push subscription endpoint'lerini otomatik ayarlar.
 
 from __future__ import annotations
 
-import os
+import json
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 def _gcloud_exe() -> str:
@@ -39,9 +40,10 @@ def _parse_env(path: Path) -> dict[str, str]:
     return out
 
 
-def _build_env_vars_string(env_dict: dict[str, str]) -> str:
-    """Comma-separated KEY=VALUE string for --set-env-vars."""
-    return ",".join(f"{k}={v}" for k, v in env_dict.items())
+def _write_env_vars_yaml(env_dict: dict[str, str], path: Path) -> None:
+    """YAML for ``gcloud run deploy --env-vars-file`` (comma-safe values)."""
+    lines = [f"{k}: {json.dumps(str(v))}" for k, v in env_dict.items()]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 # ── Push subscription config ─────────────────────────────────────────────
@@ -126,6 +128,9 @@ def main() -> None:
         "GEMINI_API_KEY",
         "GROQ_API_KEY",
         "GROQ_EKSTRA",
+        "OPENROUTER_API_KEY",
+        "OPENROUTER_MODEL",
+        "QUALITY_AGENT_MODEL",
         "GEMINI_MODEL",
         "GROQ_MODEL",
         "ORCHESTRATOR_PROVIDER_ORDER",
@@ -162,36 +167,38 @@ def main() -> None:
 
     for name, image, env_dict, timeout in services:
         print(f"Deploying {name} ...", flush=True)
-        env_str = _build_env_vars_string(env_dict)
-        subprocess.run(
-            [
-                gcloud,
-                "run",
-                "deploy",
-                name,
-                "--image",
-                image,
-                "--region",
-                REGION,
-                "--platform",
-                "managed",
-                "--service-account",
-                RUNTIME_SA,
-                "--no-allow-unauthenticated",
-                "--timeout",
-                timeout,
-                "--memory",
-                "2Gi",
-                "--cpu",
-                "2",
-                "--max-instances",
-                "5",
-                "--set-env-vars",
-                env_str,
-                "--quiet",
-            ],
-            check=True,
-        )
+        with tempfile.TemporaryDirectory() as td:
+            env_path = Path(td) / "env.yaml"
+            _write_env_vars_yaml(env_dict, env_path)
+            subprocess.run(
+                [
+                    gcloud,
+                    "run",
+                    "deploy",
+                    name,
+                    "--image",
+                    image,
+                    "--region",
+                    REGION,
+                    "--platform",
+                    "managed",
+                    "--service-account",
+                    RUNTIME_SA,
+                    "--no-allow-unauthenticated",
+                    "--timeout",
+                    timeout,
+                    "--memory",
+                    "2Gi",
+                    "--cpu",
+                    "2",
+                    "--max-instances",
+                    "5",
+                    "--env-vars-file",
+                    str(env_path),
+                    "--quiet",
+                ],
+                check=True,
+            )
 
     # Fetch service URLs
     print("\nFetching service URLs ...", flush=True)

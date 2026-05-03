@@ -35,6 +35,7 @@ from src.common.worker_utils import (
 from src.config import BucketConfig
 from src.env_bootstrap import load_dotenv_files
 from src.orchestrator.gemini_client import ReportOrchestrator
+from src.orchestrator.report_schema import QAReport
 
 load_dotenv_files(ROOT)
 # Cloud Run uses ADC via service account; ignore local key-file hints.
@@ -83,6 +84,7 @@ def _default_state() -> Dict[str, Any]:
         "report_json_exists": False,
         "report_pdf_exists": False,
         "report_done": False,
+        "report_quality_passed": None,
         "last_signal": "",
         "updated_at": _utc_now(),
     }
@@ -94,7 +96,8 @@ def _read_state(video_id: str) -> Dict[str, Any]:
     if not blob.exists(storage_client):
         return _default_state()
     try:
-        raw = json.loads(blob.download_as_text())
+        text = blob.download_as_bytes().decode("utf-8-sig")
+        raw = json.loads(text)
         if not isinstance(raw, dict):
             return _default_state()
         out = _default_state()
@@ -145,7 +148,7 @@ def _load_audio_result(video_id: str) -> AudioAnalysisResult:
     return AudioAnalysisResult.model_validate_json(payload)
 
 
-async def _run_orchestrator(video_id: str) -> None:
+async def _run_orchestrator(video_id: str) -> QAReport:
     storage_client = get_storage_client()
     raw_order = settings.orchestrator_provider_order.strip()
     if raw_order:
@@ -172,6 +175,7 @@ async def _run_orchestrator(video_id: str) -> None:
         groq_extra_api_key=settings.groq_extra.strip() or None,
         openrouter_api_key=settings.openrouter_api_key.strip() or None,
         openrouter_model=settings.openrouter_model.strip() or None,
+        quality_agent_model=settings.quality_agent_model.strip() or None,
         buckets=_bucket_config(),
         google_cloud_project=PROJECT_ID,
         gemini_provider=settings.gemini_provider,
@@ -197,6 +201,7 @@ async def _run_orchestrator(video_id: str) -> None:
         report=report,
     )
     notify_backend("orchestrator", "pdf_generation_completed", video_id)
+    return report
 
 
 def _signal_key(subscription: str | None) -> str:
@@ -339,12 +344,15 @@ async def run(request: Request) -> dict:
 
         if state.get("cv_done") and state.get("audio_done"):
             notify_backend("orchestrator", "started", video_id, "audio+cv ready; running report orchestration")
-            await _run_orchestrator(video_id)
+            report = await _run_orchestrator(video_id)
             post_flags = await asyncio.to_thread(_artifact_flags, video_id)
             state.update(post_flags)
             state["report_done"] = bool(
                 state.get("report_json_exists") and state.get("report_pdf_exists")
             )
+            qp = getattr(report, "quality_passed", None)
+            if qp is not None:
+                state["report_quality_passed"] = qp
             if state.get("report_done"):
                 state.pop("report_error", None)
                 state.pop("report_needs_review", None)

@@ -5,12 +5,11 @@ from .exceptions import (
     JSONParseError,
 )
 from .report_schema import (
-    Rating,
-    MetricResult,
     LessonStructureItem,
+    MetricResult,
     QAReport,
+    Rating,
 )
-from .gemini_client import ReportOrchestrator
 
 __all__ = [
     "OrchestratorError",
@@ -23,3 +22,11 @@ __all__ = [
     "QAReport",
     "ReportOrchestrator",
 ]
+
+
+def __getattr__(name: str) -> object:
+    if name == "ReportOrchestrator":
+        from .gemini_client import ReportOrchestrator as _ReportOrchestrator
+
+        return _ReportOrchestrator
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

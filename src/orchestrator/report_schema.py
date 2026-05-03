@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -109,5 +109,10 @@ class QAReport(BaseModel):
         default="",
         description="Turkish 3-4 paragraph feedback, warm professional tone.",
     )
+
+    # ----- Independent quality review (OpenRouter, optional) ------------
+    quality_score: Optional[int] = None
+    quality_passed: Optional[bool] = None
+    quality_issues: Optional[List[str]] = None
 
     generated_at: datetime

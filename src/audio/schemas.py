@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Literal
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -182,6 +182,13 @@ class AudioAnalysisResult(BaseModel):
     full_transcript: str
     segments: List[TranscriptSegment]
     highlights: List[str]
+    duration_ms: Optional[int] = Field(
+        default=None,
+        description=(
+            "Total media duration in ms when known (e.g. from ffmpeg). "
+            "Used for report duration when last segment end is not reliable."
+        ),
+    )
     speaking_pace_wpm: float = Field(
         ..., description="Words per minute across the entire lecture."
     )

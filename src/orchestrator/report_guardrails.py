@@ -173,7 +173,9 @@ def _rating_string_is_na(raw: Any) -> bool:
     )
 
 
-def _fix_inconsistent_ratings(metric: Dict[str, Any]) -> Dict[str, Any]:
+def _fix_inconsistent_ratings(
+    metric: Dict[str, Any], *, metric_key: str | None = None
+) -> Dict[str, Any]:
     """
     If observation sounds positive but rating is N/A, upgrade rating.
 
@@ -184,6 +186,14 @@ def _fix_inconsistent_ratings(metric: Dict[str, Any]) -> Dict[str, Any]:
     """
     rating = metric.get("rating", "")
     observation = str(metric.get("observation", "")).lower()
+
+    if metric_key == "gorsel_bilesenler":
+        obs_l = str(metric.get("observation", "")).lower()
+        if "görüntülenemedi" in obs_l or "tespit edilemedi" in obs_l:
+            r = unicodedata.normalize("NFC", str(rating).strip())
+            if r == "İyi" or _rating_string_is_na(rating):
+                metric["rating"] = "Geliştirilmeli"
+            return metric
 
     if not _rating_string_is_na(rating):
         return metric
@@ -259,10 +269,10 @@ def _apply_rating_fixes_to_metric_sections(data: MutableMapping[str, Any]) -> No
         for key in keys:
             cell = sec.get(key)
             if isinstance(cell, dict):
-                _fix_inconsistent_ratings(cell)
+                _fix_inconsistent_ratings(cell, metric_key=key)
 
 
-def fix_metric_result_ratings(metric: Any) -> None:
+def fix_metric_result_ratings(metric: Any, *, metric_key: str | None = None) -> None:
     """Apply :func:`_fix_inconsistent_ratings` to a ``MetricResult`` model (mutates)."""
     if not isinstance(metric, MetricResult):
         return
@@ -271,7 +281,7 @@ def fix_metric_result_ratings(metric: Any) -> None:
         "observation": metric.observation,
         "improvement_tip": metric.improvement_tip,
     }
-    _fix_inconsistent_ratings(d)
+    _fix_inconsistent_ratings(d, metric_key=metric_key)
     new_key = str(d.get("rating", "")).strip()
     mapped = _TURKISH_RATING_EXACT.get(new_key)
     if mapped is not None:

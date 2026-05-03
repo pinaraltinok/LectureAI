@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 import time
 import unicodedata
@@ -585,6 +586,7 @@ class ReportOrchestrator:
         degraded_fallback: bool = False,
         llm_spacing_sec: float = 0.0,
         status_callback: Optional[Callable[[str, str], None]] = None,
+        quality_agent_model: str | None = None,
     ) -> None:
         gemini_provider = (gemini_provider or "vertex").strip().lower()
         if gemini_provider not in {"vertex", "aistudio"}:
@@ -655,6 +657,24 @@ class ReportOrchestrator:
             raise ValueError("provider_order has no enabled providers")
 
         self._storage_client: storage.Client = storage.Client()
+
+        self.quality_agent: Optional["QualityAgent"] = None
+        q_model = (
+            (quality_agent_model or "").strip()
+            or os.environ.get(
+                "QUALITY_AGENT_MODEL", "meta-llama/llama-3.3-70b-instruct"
+            ).strip()
+        )
+        if self._openrouter_api_key:
+            from .quality_agent import QualityAgent as _QualityAgent
+
+            self.quality_agent = _QualityAgent(
+                api_key=self._openrouter_api_key,
+                model=q_model,
+            )
+            logger.info("QualityAgent enabled: %s", q_model)
+        else:
+            logger.warning("QualityAgent disabled: OPENROUTER_API_KEY missing")
 
     def _emit_status(self, event: str, detail: str = "") -> None:
         callback = self._status_callback
@@ -1300,6 +1320,117 @@ class ReportOrchestrator:
             return "satisfactory"
         return "satisfactory"
 
+    MAX_QUALITY_RETRIES = 2
+
+    async def _regenerate_after_critique(
+        self,
+        video_id: str,
+        *,
+        cv_data: Dict[str, Any],
+        audio_result: AudioAnalysisResult,
+        duration_min: int,
+        chunk_analyses: List[Dict[str, Any]],
+        merged: Dict[str, Any],
+        issues: List[str],
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        """Re-run merge (multi-chunk) or chunk analysis (single chunk) with critique."""
+        if not issues:
+            return chunk_analyses, merged
+        if len(chunk_analyses) == 1:
+            chunks = self._build_chunks(audio_result, cv_data)
+            new_analyses = await self._analyze_all_chunks(
+                video_id, chunks, extra_critique_context=issues
+            )
+            if not new_analyses:
+                logger.warning(
+                    "[%s] critique chunk re-analysis empty; keeping prior output",
+                    video_id,
+                )
+                return chunk_analyses, merged
+            return new_analyses, new_analyses[0]
+        new_merged = await self._merge_chunks(
+            video_id,
+            chunk_analyses,
+            audio_result,
+            duration_min,
+            extra_critique_context=issues,
+        )
+        return chunk_analyses, new_merged
+
+    async def _build_report_with_quality(
+        self,
+        video_id: str,
+        merged: Dict[str, Any],
+        chunk_analyses: List[Dict[str, Any]],
+        cv_data: Dict[str, Any],
+        audio_result: AudioAnalysisResult,
+        duration_min: int,
+        metadata: Optional[Dict[str, Any]],
+    ) -> QAReport:
+        if not self.quality_agent:
+            return self._build_final_report(
+                video_id, merged, duration_min, metadata=metadata
+            )
+
+        extra_critique: Optional[List[str]] = None
+        cur_merged = merged
+        cur_chunks = chunk_analyses
+        final_report: Optional[QAReport] = None
+
+        for attempt in range(self.MAX_QUALITY_RETRIES + 1):
+            if attempt > 0 and extra_critique:
+                if cur_chunks:
+                    cur_chunks, cur_merged = await self._regenerate_after_critique(
+                        video_id,
+                        cv_data=cv_data,
+                        audio_result=audio_result,
+                        duration_min=duration_min,
+                        chunk_analyses=cur_chunks,
+                        merged=cur_merged,
+                        issues=extra_critique,
+                    )
+                else:
+                    logger.warning(
+                        "[%s] quality retry %d skipped (no chunk analyses to refine)",
+                        video_id,
+                        attempt,
+                    )
+                    break
+
+            report = self._build_final_report(
+                video_id, cur_merged, duration_min, metadata=metadata
+            )
+            critique = await self.quality_agent.evaluate(
+                report.model_dump(mode="json"),
+                video_id,
+            )
+            report.quality_score = critique.total_score
+            report.quality_passed = critique.passed
+            report.quality_issues = critique.issues
+            final_report = report
+            if critique.passed:
+                logger.info(
+                    "[%s] Quality passed: %s/100", video_id, critique.total_score
+                )
+                break
+            logger.warning(
+                "[%s] Quality failed: %s/100 (attempt %d/%d)",
+                video_id,
+                critique.total_score,
+                attempt + 1,
+                self.MAX_QUALITY_RETRIES + 1,
+            )
+            if attempt >= self.MAX_QUALITY_RETRIES:
+                break
+            extra_critique = (
+                list(critique.issues)
+                if critique.issues
+                else ["Kalite skoru eşik altında"]
+            )
+
+        assert final_report is not None
+        return final_report
+
     # ------------------------------------------------------------------ #
     #  Public API
     # ------------------------------------------------------------------ #
@@ -1340,8 +1471,14 @@ class ReportOrchestrator:
                 merged = self._merged_dict_from_cv_audio_only(
                     video_id, cv_data, audio_result, duration_min
                 )
-                report = self._build_final_report(
-                    video_id, merged, duration_min, metadata=metadata
+                report = await self._build_report_with_quality(
+                    video_id,
+                    merged,
+                    [],
+                    cv_data,
+                    audio_result,
+                    duration_min,
+                    metadata,
                 )
                 await self._save_report(video_id, report)
                 logger.info(
@@ -1385,9 +1522,15 @@ class ReportOrchestrator:
                 else:
                     raise
 
-        # STEP 5 - build final model + save -------------------------------
-        report = self._build_final_report(
-            video_id, merged, duration_min, metadata=metadata
+        # STEP 5 - build final model + quality gate + save ---------------
+        report = await self._build_report_with_quality(
+            video_id,
+            merged,
+            chunk_analyses,
+            cv_data,
+            audio_result,
+            duration_min,
+            metadata,
         )
         await self._save_report(video_id, report)
 
@@ -1476,8 +1619,9 @@ class ReportOrchestrator:
                     exists = await asyncio.to_thread(blob.exists)
                     if not exists:
                         continue
-                    payload = await asyncio.to_thread(blob.download_as_text)
-                    data = json.loads(payload)
+                    raw_bytes = await asyncio.to_thread(blob.download_as_bytes)
+                    text = raw_bytes.decode("utf-8-sig")
+                    data = json.loads(text)
                     if isinstance(data, dict):
                         logger.info(
                             "[%s] loaded metadata from gs://%s/%s",
@@ -1628,14 +1772,22 @@ class ReportOrchestrator:
     #  Step 3 - chunk analysis
     # ------------------------------------------------------------------ #
     async def _analyze_all_chunks(
-        self, video_id: str, chunks: List[Dict[str, Any]]
+        self,
+        video_id: str,
+        chunks: List[Dict[str, Any]],
+        extra_critique_context: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
         total = len(chunks)
         semaphore = asyncio.Semaphore(_CHUNK_CONCURRENCY)
 
         async def _guarded(chunk: Dict[str, Any]) -> Dict[str, Any]:
             async with semaphore:
-                return await self._analyze_single_chunk(video_id, chunk, total)
+                return await self._analyze_single_chunk(
+                    video_id,
+                    chunk,
+                    total,
+                    extra_critique_context=extra_critique_context,
+                )
 
         tasks = [_guarded(c) for c in chunks]
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -1658,11 +1810,16 @@ class ReportOrchestrator:
         video_id: str,
         chunk: Dict[str, Any],
         total_chunks: int,
+        extra_critique_context: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         idx = chunk["chunk_index"]
         with self._stage(video_id, f"chunk_{idx}"):
             try:
-                prompt = self._build_chunk_prompt(chunk, total_chunks)
+                prompt = self._build_chunk_prompt(
+                    chunk,
+                    total_chunks,
+                    extra_critique_context=extra_critique_context,
+                )
                 text = await self._generate_text_with_fallback(
                     video_id=video_id,
                     purpose=f"chunk_{idx}",
@@ -1683,7 +1840,10 @@ class ReportOrchestrator:
                 ) from exc
 
     def _build_chunk_prompt(
-        self, chunk: Dict[str, Any], total_chunks: int
+        self,
+        chunk: Dict[str, Any],
+        total_chunks: int,
+        extra_critique_context: Optional[List[str]] = None,
     ) -> str:
         idx = chunk["chunk_index"]
         start_min = chunk["start_sec"] // 60
@@ -1897,7 +2057,14 @@ Respond with this exact JSON schema:
   "issues": ["..."]
 }}
 """
-        return f"{system_block}\n\n{user_block}"
+        suffix = ""
+        if extra_critique_context:
+            suffix = (
+                "\n\nÖNCEKİ RAPORDA TESPİT EDİLEN SORUNLAR:\n"
+                + "\n".join(f"- {issue}" for issue in extra_critique_context)
+                + "\nBu sorunları bu raporda kesinlikle düzelt."
+            )
+        return f"{system_block}\n\n{user_block}{suffix}"
 
     # ------------------------------------------------------------------ #
     #  Step 4 - merge
@@ -1908,11 +2075,15 @@ Respond with this exact JSON schema:
         chunk_analyses: List[Dict[str, Any]],
         audio_result: AudioAnalysisResult,
         duration_min: int,
+        extra_critique_context: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         with self._stage(video_id, "merge"):
             try:
                 prompt = self._build_merge_prompt(
-                    chunk_analyses, audio_result, duration_min
+                    chunk_analyses,
+                    audio_result,
+                    duration_min,
+                    extra_critique_context=extra_critique_context,
                 )
                 text = await self._generate_text_with_fallback(
                     video_id=video_id,
@@ -1946,6 +2117,7 @@ Respond with this exact JSON schema:
         chunk_analyses: List[Dict[str, Any]],
         audio_result: AudioAnalysisResult,
         duration_min: int,
+        extra_critique_context: Optional[List[str]] = None,
     ) -> str:
         chunks_json = _truncate_text(
             json.dumps(chunk_analyses, ensure_ascii=False, default=str),
@@ -2092,7 +2264,14 @@ Respond with this exact QAReport JSON schema:
   "feedback_metni": "Merhaba Hocam, ..."
 }}
 """
-        return f"{system_block}\n\n{user_block}"
+        suffix = ""
+        if extra_critique_context:
+            suffix = (
+                "\n\nÖNCEKİ RAPORDA TESPİT EDİLEN SORUNLAR:\n"
+                + "\n".join(f"- {issue}" for issue in extra_critique_context)
+                + "\nBu sorunları bu raporda kesinlikle düzelt."
+            )
+        return f"{system_block}\n\n{user_block}{suffix}"
 
     # ------------------------------------------------------------------ #
     #  Step 5 - build final model + save
@@ -2222,7 +2401,7 @@ Respond with this exact QAReport JSON schema:
         ):
             section_label = section_labels[section_name]
             for metric_key, metric in section.items():
-                fix_metric_result_ratings(metric)
+                fix_metric_result_ratings(metric, metric_key=metric_key)
                 sanitize_metric(metric, f"{section_label}/{metric_key}")
 
         feedback = (report.feedback_metni or "").strip()

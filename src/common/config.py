@@ -49,6 +49,14 @@ class OrchestratorWorkerSettings(BaseSettings):
     vertex_location: str = Field(default="us-central1", alias="VERTEX_LOCATION")
     gemini_model: str = Field(default="gemini-1.5-flash", alias="GEMINI_MODEL")
     groq_model: str = Field(default="llama-3.3-70b-versatile", alias="GROQ_MODEL")
+    openrouter_api_key: str = Field(default="", alias="OPENROUTER_API_KEY")
+    openrouter_model: str = Field(
+        default="google/gemini-2.0-flash-001", alias="OPENROUTER_MODEL"
+    )
+    quality_agent_model: str = Field(
+        default="meta-llama/llama-3.3-70b-instruct",
+        alias="QUALITY_AGENT_MODEL",
+    )
     chunk_minutes: int = Field(default=60, alias="CHUNK_MINUTES")
     orchestrator_degraded_fallback: str = Field(default="", alias="ORCHESTRATOR_DEGRADED_FALLBACK")
     orchestrator_llm_spacing_sec: str = Field(default="", alias="ORCHESTRATOR_LLM_SPACING_SEC")

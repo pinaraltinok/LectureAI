@@ -430,18 +430,20 @@ async def test_generate_report_metadata_overrides_merge_header():
     meta_key = ("lectureai_processed", "metadata/vid-1.json")
     blobs[meta_key] = MagicMock()
     blobs[meta_key].exists.return_value = True
-    blobs[meta_key].download_as_text = MagicMock(
-        return_value=json.dumps(
-            {
-                "instructor_name": "Meta Hoca",
-                "course": "Python 101",
-                "group": "A-12",
-                "lesson_date": "2026-05-01",
-                "module": 2,
-                "lesson": 5,
-                "expected_duration_min": 90,
-            }
-        )
+    _meta_raw = json.dumps(
+        {
+            "instructor_name": "Meta Hoca",
+            "course": "Python 101",
+            "group": "A-12",
+            "lesson_date": "2026-05-01",
+            "module": 2,
+            "lesson": 5,
+            "expected_duration_min": 90,
+        },
+        ensure_ascii=False,
+    )
+    blobs[meta_key].download_as_bytes = MagicMock(
+        return_value=("\ufeff" + _meta_raw).encode("utf-8")
     )
 
     orch._aistudio_client = MagicMock()
