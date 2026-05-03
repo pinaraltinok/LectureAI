@@ -14,8 +14,8 @@ const path = require('path');
 const app = express();
 app.disable('x-powered-by'); // Prevent Express version fingerprinting
 
-// Trust reverse proxies (Cloud Run / Cloudflare) for correct req.secure and cookies
-app.set('trust proxy', true);
+// Trust first reverse proxy hop (Cloud Run) for correct req.secure and cookies
+app.set('trust proxy', 1);
 
 // ─── Security: Helmet (HTTP security headers) ───────────────
 app.use(helmet({
@@ -51,6 +51,7 @@ const apiLimiter = rateLimit({
   message: { error: 'Çok fazla istek gönderildi. Lütfen 15 dakika bekleyin.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false },    // We handle trust proxy at Express level
 });
 app.use('/api', apiLimiter);
 
@@ -61,6 +62,7 @@ const authLimiter = rateLimit({
   message: { error: 'Çok fazla giriş denemesi. Lütfen 15 dakika bekleyin.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false },
 });
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
