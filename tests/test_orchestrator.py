@@ -413,6 +413,56 @@ async def test_generate_report_skips_empty_nested_json_uses_flat_cv():
 
 
 @pytest.mark.asyncio
+async def test_generate_report_metadata_overrides_merge_header():
+    """``metadata/{video_id}.json`` fills QAReport header; wins over merge JSON."""
+    orch = _make_orchestrator()
+    _buckets, blobs = _install_bucket_router(orch)
+
+    nested_key = ("lectureai_processed", "results/vid-1/lecture_report.json")
+    blobs[nested_key] = MagicMock()
+    blobs[nested_key].exists.return_value = False
+
+    cv_blob_key = ("lectureai_processed", "results/vid-1.json")
+    blobs[cv_blob_key] = MagicMock()
+    blobs[cv_blob_key].exists.return_value = True
+    blobs[cv_blob_key].download_as_text = MagicMock(return_value=_cv_json())
+
+    meta_key = ("lectureai_processed", "metadata/vid-1.json")
+    blobs[meta_key] = MagicMock()
+    blobs[meta_key].exists.return_value = True
+    blobs[meta_key].download_as_text = MagicMock(
+        return_value=json.dumps(
+            {
+                "instructor_name": "Meta Hoca",
+                "course": "Python 101",
+                "group": "A-12",
+                "lesson_date": "2026-05-01",
+                "module": 2,
+                "lesson": 5,
+                "expected_duration_min": 90,
+            }
+        )
+    )
+
+    orch._aistudio_client = MagicMock()
+    orch._aistudio_client.models.generate_content.side_effect = [
+        SimpleNamespace(text=_chunk_response_json()),
+        SimpleNamespace(text=_chunk_response_json()),
+        SimpleNamespace(text=_merge_response_json()),
+    ]
+
+    report = await orch.generate_report("vid-1", _audio_result())
+
+    assert report.instructor_name == "Meta Hoca"
+    assert report.course == "Python 101"
+    assert report.group == "A-12"
+    assert report.lesson_date == "2026-05-01"
+    assert report.module == 2
+    assert report.lesson_number == 5
+    assert report.expected_duration_min == 90
+
+
+@pytest.mark.asyncio
 async def test_merge_retries_on_503_then_succeeds():
     """503 on merge is retried once (10s backoff); chunk call unchanged."""
     from google.genai.errors import ServerError

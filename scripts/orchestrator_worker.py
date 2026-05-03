@@ -170,6 +170,8 @@ async def _run_orchestrator(video_id: str) -> None:
         gemini_api_key=settings.gemini_api_key.strip() or None,
         groq_api_key=settings.groq_api_key.strip() or None,
         groq_extra_api_key=settings.groq_extra.strip() or None,
+        openrouter_api_key=settings.openrouter_api_key.strip() or None,
+        openrouter_model=settings.openrouter_model.strip() or None,
         buckets=_bucket_config(),
         google_cloud_project=PROJECT_ID,
         gemini_provider=settings.gemini_provider,
@@ -286,8 +288,11 @@ async def run(request: Request) -> dict:
             state["audio_done"] = True
         if state.get("cv_artifact_exists"):
             state["cv_done"] = True
-        if state.get("report_json_exists") and state.get("report_pdf_exists"):
-            state["report_done"] = True
+        # Always derive from GCS artifacts so stale persisted report_done cannot
+        # skip PDF generation when JSON exists but PDF is missing.
+        state["report_done"] = bool(
+            state.get("report_json_exists") and state.get("report_pdf_exists")
+        )
         _write_state(video_id, state)
         logger.info("state updated video_id=%s state=%s", video_id, state)
         notify_backend("orchestrator", "state_updated", video_id, json.dumps(state, ensure_ascii=False))
@@ -340,6 +345,9 @@ async def run(request: Request) -> dict:
             state["report_done"] = bool(
                 state.get("report_json_exists") and state.get("report_pdf_exists")
             )
+            if state.get("report_done"):
+                state.pop("report_error", None)
+                state.pop("report_needs_review", None)
             _write_state(video_id, state)
             publisher = get_pubsub_publisher()
             report_topic_path = publisher.topic_path(PROJECT_ID, TOPIC_REPORT_DONE)

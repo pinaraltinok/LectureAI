@@ -10,7 +10,7 @@ Pipeline:
     5. Upload the QAReport JSON to
        ``gs://{bucket}/data/reports/{video_id}.json`` and return it.
 
-Providers (``ORCHESTRATOR_PROVIDER_ORDER``): ``aistudio``, ``vertex``, ``groq``.
+Providers (``ORCHESTRATOR_PROVIDER_ORDER``): ``openrouter``, ``aistudio``, ``vertex``, ``groq``.
 Legacy token ``gemini`` expands from ``GEMINI_PROVIDER`` (vertex vs AI Studio).
 Optional ``ORCHESTRATOR_DEGRADED_FALLBACK`` emits a CV+audio template report
 when all chunk LLMs fail or merge fails after chunks succeeded.
@@ -25,19 +25,19 @@ import json
 import logging
 import re
 import time
+import unicodedata
 from collections import Counter
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
+import httpx
 from google import genai
 from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable, TooManyRequests
 from google.cloud import storage
 from google.genai.errors import APIError
 from groq import APIStatusError as GroqAPIStatusError
 from groq import Groq
-import vertexai
-from vertexai.generative_models import GenerativeModel
 
 from src.audio.schemas import AudioAnalysisResult, TranscriptSegment
 from src.audio.transcript_format import speaker_display
@@ -51,12 +51,69 @@ from .exceptions import (
     MergeError,
     OrchestratorError,
 )
+from .report_guardrails import fix_metric_result_ratings
 from .report_schema import (
     LessonStructureItem,
     MetricResult,
     QAReport,
     Rating,
 )
+
+def _meta_str_first(
+    meta: Dict[str, Any], merged: Dict[str, Any], key: str
+) -> str:
+    for d in (meta, merged):
+        v = d.get(key) if isinstance(d, dict) else None
+        if v is not None and str(v).strip():
+            return str(v).strip()
+    return "-"
+
+
+def _meta_int_first(
+    meta: Dict[str, Any], merged: Dict[str, Any], key: str
+) -> int:
+    for d in (meta, merged):
+        if not isinstance(d, dict):
+            continue
+        v = d.get(key)
+        if v is None:
+            continue
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            continue
+    return 0
+
+
+def _meta_lesson_number(meta: Dict[str, Any], merged: Dict[str, Any]) -> int:
+    for k in ("lesson", "lesson_number"):
+        v = meta.get(k) if isinstance(meta, dict) else None
+        if v is None:
+            continue
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            continue
+    return _meta_int_first(meta, merged, "lesson_number")
+
+
+def _meta_expected_duration_min(
+    meta: Dict[str, Any], merged: Dict[str, Any], duration_min: int
+) -> int:
+    for d in (meta, merged):
+        if not isinstance(d, dict):
+            continue
+        v = d.get("expected_duration_min")
+        if v is None:
+            continue
+        try:
+            n = int(v)
+            if n > 0:
+                return n
+        except (TypeError, ValueError):
+            continue
+    return max(1, int(duration_min))
+
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +135,18 @@ _CHUNK_CONCURRENCY = 1
 # Audio context: structured summary + representative transcript lines (not full text).
 _MAX_AUDIO_SUMMARY_JSON_CHARS = 1_800
 _MAX_TRANSCRIPT_SEGMENT_LINES = 16
+_MAX_DERS_YAPISI_KEYWORD_SEGMENTS = 10
+_DERS_YAPISI_TRANSCRIPT_KEYWORDS = (
+    "geçen",
+    "ödev",
+    "bugün",
+    "özet",
+    "görüşürüz",
+    "hoşça",
+    "hedef",
+    "amaç",
+    "hatırlıyor",
+)
 _MAX_SEGMENT_TEXT_CHARS = 96
 _MAX_HIGHLIGHTS_IN_CHUNK = 5
 
@@ -174,6 +243,14 @@ def _is_retryable_gemini_error(exc: BaseException) -> bool:
 def _is_retryable_groq_error(exc: BaseException) -> bool:
     """True for HTTP 429 / 503 from the Groq SDK."""
     return isinstance(exc, GroqAPIStatusError) and exc.status_code in (429, 503)
+
+
+def _is_retryable_openrouter_error(exc: BaseException) -> bool:
+    """True for HTTP 429 / 503 from OpenRouter (httpx)."""
+    return isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in (
+        429,
+        503,
+    )
 
 
 def _extract_retry_after_seconds(exc: BaseException) -> float | None:
@@ -331,6 +408,37 @@ def _build_chunk_audio_summary(
     }
 
 
+def _fold_text_for_keyword_match(text: str) -> str:
+    return unicodedata.normalize("NFC", text or "").casefold()
+
+
+def _segments_matching_ders_yapisi_keywords(
+    segments: List[TranscriptSegment],
+    *,
+    max_pick: int,
+) -> List[TranscriptSegment]:
+    """Pick segments whose text matches Turkish lesson-structure cues (for chunk prompts)."""
+    if not segments or max_pick <= 0:
+        return []
+    keywords_cf = tuple(
+        _fold_text_for_keyword_match(k) for k in _DERS_YAPISI_TRANSCRIPT_KEYWORDS
+    )
+    ordered = sorted(segments, key=lambda s: s.start_ms)
+    out: List[TranscriptSegment] = []
+    seen_ms: set[int] = set()
+    for seg in ordered:
+        if len(out) >= max_pick:
+            break
+        blob = _fold_text_for_keyword_match(seg.text)
+        if not any(k in blob for k in keywords_cf):
+            continue
+        if seg.start_ms in seen_ms:
+            continue
+        seen_ms.add(seg.start_ms)
+        out.append(seg)
+    return out
+
+
 def _score_segment_notability(seg: TranscriptSegment) -> float:
     lab = (seg.sentiment or "NEUTRAL").upper()
     c = float(seg.sentiment_confidence)
@@ -387,15 +495,31 @@ def _segment_compact_line(seg: TranscriptSegment) -> str:
 
 
 def _build_compact_transcript_sample(segments: List[TranscriptSegment]) -> str:
-    picked = _select_representative_segments(
+    if not segments:
+        return ""
+    kw_picked = _segments_matching_ders_yapisi_keywords(
+        segments, max_pick=_MAX_DERS_YAPISI_KEYWORD_SEGMENTS
+    )
+    seen_ms = {s.start_ms for s in kw_picked}
+    base_picked = _select_representative_segments(
         segments, _MAX_TRANSCRIPT_SEGMENT_LINES
     )
-    if not picked:
-        return ""
-    lines = [_segment_compact_line(s) for s in picked]
+    merged: List[TranscriptSegment] = list(kw_picked)
+    for s in sorted(base_picked, key=lambda x: x.start_ms):
+        if s.start_ms in seen_ms:
+            continue
+        merged.append(s)
+        seen_ms.add(s.start_ms)
+    merged.sort(key=lambda s: s.start_ms)
+    cap = _MAX_TRANSCRIPT_SEGMENT_LINES + _MAX_DERS_YAPISI_KEYWORD_SEGMENTS
+    if len(merged) > cap:
+        merged = merged[:cap]
+    lines = [_segment_compact_line(s) for s in merged]
     note = (
-        "Representative sample of transcript lines for this time window "
-        "(not every utterance is shown)."
+        "Representative sample plus up to "
+        f"{_MAX_DERS_YAPISI_KEYWORD_SEGMENTS} keyword-boosted lines "
+        "(ders yapısı ipuçları: geçen, ödev, bugün, …). "
+        "Not every utterance is shown."
     )
     return note + "\n" + "\n".join(lines)
 
@@ -449,6 +573,8 @@ class ReportOrchestrator:
         groq_api_key: str | None,
         groq_extra_api_key: str | None,
         buckets: BucketConfig,
+        openrouter_api_key: str | None = None,
+        openrouter_model: str | None = None,
         google_cloud_project: str | None = None,
         gemini_provider: str = "vertex",
         vertex_location: str = "us-central1",
@@ -475,6 +601,11 @@ class ReportOrchestrator:
         self.gemini_provider = gemini_provider
         self.gemini_model_name = gemini_model
         self.groq_model_name = groq_model
+        key = (openrouter_api_key or "").strip()
+        self._openrouter_api_key: str | None = key if key else None
+        self._openrouter_model_name = (
+            (openrouter_model or "").strip() or "google/gemini-2.0-flash-001"
+        )
         self._degraded_fallback = degraded_fallback
         self._llm_spacing_sec = float(llm_spacing_sec)
         self._status_callback = status_callback
@@ -488,7 +619,7 @@ class ReportOrchestrator:
             if (gemini_api_key and want_aistudio)
             else None
         )
-        self._vertex_model: GenerativeModel | None = None
+        self._vertex_model: Any = None
         self._vertex_fallback_models: list[str] = [
             "gemini-1.5-flash",
             "gemini-flash-latest",
@@ -500,6 +631,9 @@ class ReportOrchestrator:
                     "google_cloud_project is missing; Vertex will be skipped"
                 )
             else:
+                import vertexai
+                from vertexai.generative_models import GenerativeModel
+
                 vertexai.init(
                     project=google_cloud_project, location=vertex_location
                 )
@@ -511,6 +645,7 @@ class ReportOrchestrator:
         )
 
         available: Dict[str, bool] = {
+            "openrouter": self._openrouter_api_key is not None,
             "aistudio": self._aistudio_client is not None,
             "vertex": self._vertex_model is not None,
             "groq": self._groq_client is not None,
@@ -594,6 +729,8 @@ class ReportOrchestrator:
             raise RuntimeError("Vertex model is not configured")
 
         def _call_vertex() -> Any:
+            from vertexai.generative_models import GenerativeModel as VertexModel
+
             try:
                 return self._vertex_model.generate_content(contents)
             except Exception as exc:
@@ -609,7 +746,7 @@ class ReportOrchestrator:
                             self.gemini_model_name,
                             fallback_model,
                         )
-                        return GenerativeModel(fallback_model).generate_content(
+                        return VertexModel(fallback_model).generate_content(
                             contents
                         )
                     except Exception:
@@ -719,11 +856,92 @@ class ReportOrchestrator:
         assert last_exc is not None
         raise last_exc
 
+    async def _generate_openrouter_with_retry(
+        self,
+        *,
+        video_id: str,
+        purpose: str,
+        contents: str,
+    ) -> str:
+        """OpenRouter Chat Completions (OpenAI-compatible)."""
+        if not self._openrouter_api_key:
+            raise RuntimeError("OpenRouter is not configured")
+
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self._openrouter_api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self._openrouter_model_name,
+            "messages": [{"role": "user", "content": contents}],
+            "temperature": 0.0,
+        }
+        timeout = httpx.Timeout(300.0)
+        max_attempts = len(_GROQ_RETRY_BACKOFF_SEC) + 1
+        last_exc: Optional[BaseException] = None
+        for attempt in range(max_attempts):
+            try:
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.post(url, headers=headers, json=payload)
+                    response.raise_for_status()
+                    data = response.json()
+                choices = data.get("choices")
+                if not isinstance(choices, list) or not choices:
+                    raise ValueError(
+                        f"OpenRouter missing choices in response keys={list(data.keys())}"
+                    )
+                msg = choices[0].get("message") if isinstance(choices[0], dict) else {}
+                text = str((msg or {}).get("content") or "")
+                if not text.strip():
+                    raise ValueError("OpenRouter returned empty content")
+                return text
+            except (ValueError, json.JSONDecodeError):
+                raise
+            except httpx.HTTPStatusError as exc:
+                last_exc = exc
+                if (
+                    not _is_retryable_openrouter_error(exc)
+                    or attempt >= max_attempts - 1
+                ):
+                    raise
+                delay = _GROQ_RETRY_BACKOFF_SEC[attempt]
+                ra = exc.response.headers.get("retry-after")
+                if ra:
+                    try:
+                        delay = min(300.0, max(delay, float(ra)))
+                    except ValueError:
+                        pass
+                hinted = _extract_retry_after_seconds(exc)
+                if hinted is not None:
+                    delay = min(300.0, max(delay, hinted))
+                logger.warning(
+                    "[%s] OpenRouter %s failed (attempt %d/%d): %s; "
+                    "sleeping %.0fs before retry",
+                    video_id,
+                    purpose,
+                    attempt + 1,
+                    max_attempts,
+                    exc,
+                    delay,
+                )
+                self._emit_status(
+                    "llm_retry_wait",
+                    f"provider=openrouter purpose={purpose} "
+                    f"attempt={attempt + 1}/{max_attempts} delay_sec={delay:.0f} err={exc}",
+                )
+                await asyncio.sleep(delay)
+        assert last_exc is not None
+        raise last_exc
+
     async def _spacing_after_successful_llm(self) -> None:
         """Optional pause between successful LLM calls to stay under RPM limits."""
         spacing = self._llm_spacing_sec
         # Gemini free / low tiers can return 429 on bursty sequential calls.
-        if spacing <= 0 and any(p in {"aistudio", "vertex"} for p in self._provider_order):
+        if spacing <= 0 and any(
+            p in {"aistudio", "vertex", "openrouter"}
+            for p in self._provider_order
+        ):
             spacing = 1.0
         if spacing <= 0:
             return
@@ -785,6 +1003,32 @@ class ReportOrchestrator:
                     self._emit_status("llm_provider_ok", f"provider=vertex purpose={purpose}")
                     await self._spacing_after_successful_llm()
                     return out
+                if provider == "openrouter":
+                    self._emit_status(
+                        "llm_provider_try", f"provider=openrouter purpose={purpose}"
+                    )
+                    logger.info(
+                        "[%s] LLM_PROVIDER_TRY provider=openrouter model=%s purpose=%s",
+                        video_id,
+                        self._openrouter_model_name,
+                        purpose,
+                    )
+                    text = await self._generate_openrouter_with_retry(
+                        video_id=video_id,
+                        purpose=purpose,
+                        contents=contents,
+                    )
+                    logger.info(
+                        "[%s] LLM_PROVIDER_OK provider=openrouter model=%s purpose=%s",
+                        video_id,
+                        self._openrouter_model_name,
+                        purpose,
+                    )
+                    self._emit_status(
+                        "llm_provider_ok", f"provider=openrouter purpose={purpose}"
+                    )
+                    await self._spacing_after_successful_llm()
+                    return text
                 if provider == "groq":
                     self._emit_status("llm_provider_try", f"provider=groq purpose={purpose}")
                     logger.info(
@@ -1069,6 +1313,7 @@ class ReportOrchestrator:
 
         # STEP 1 - load CV ------------------------------------------------
         cv_data = await self._load_cv_data(video_id)
+        metadata = await self._load_metadata(video_id)
 
         # STEP 2 - chunk --------------------------------------------------
         chunks = self._build_chunks(audio_result, cv_data)
@@ -1095,7 +1340,9 @@ class ReportOrchestrator:
                 merged = self._merged_dict_from_cv_audio_only(
                     video_id, cv_data, audio_result, duration_min
                 )
-                report = self._build_final_report(video_id, merged, duration_min)
+                report = self._build_final_report(
+                    video_id, merged, duration_min, metadata=metadata
+                )
                 await self._save_report(video_id, report)
                 logger.info(
                     "[%s] ReportOrchestrator.generate_report done in %.2fs "
@@ -1139,7 +1386,9 @@ class ReportOrchestrator:
                     raise
 
         # STEP 5 - build final model + save -------------------------------
-        report = self._build_final_report(video_id, merged, duration_min)
+        report = self._build_final_report(
+            video_id, merged, duration_min, metadata=metadata
+        )
         await self._save_report(video_id, report)
 
         logger.info(
@@ -1209,6 +1458,43 @@ class ReportOrchestrator:
                 f"failed to load CV JSON; no object found at any known path: {tried}",
                 video_id=video_id,
             )
+
+    async def _load_metadata(self, video_id: str) -> Dict[str, Any]:
+        """Load lesson metadata written by FastAPI at trigger time."""
+        with self._stage(video_id, "load_metadata"):
+            bucket = self._storage_client.bucket(self.buckets.processed)
+            raw = (video_id or "").strip()
+            variants = _dedupe_preserve_order(
+                [normalize_cv_video_id(raw), raw]
+            )
+            for vid in variants:
+                if not vid:
+                    continue
+                blob_path = f"metadata/{vid}.json"
+                try:
+                    blob = bucket.blob(blob_path)
+                    exists = await asyncio.to_thread(blob.exists)
+                    if not exists:
+                        continue
+                    payload = await asyncio.to_thread(blob.download_as_text)
+                    data = json.loads(payload)
+                    if isinstance(data, dict):
+                        logger.info(
+                            "[%s] loaded metadata from gs://%s/%s",
+                            video_id,
+                            self.buckets.processed,
+                            blob_path,
+                        )
+                        return data
+                except Exception as e:
+                    logger.warning(
+                        "[%s] metadata load failed for gs://%s/%s: %s",
+                        video_id,
+                        self.buckets.processed,
+                        blob_path,
+                        e,
+                    )
+            return {}
 
     def _candidate_cv_paths(self, video_id: str) -> List[str]:
         """Ordered CV JSON lookup paths for backward compatibility.
@@ -1285,6 +1571,9 @@ class ReportOrchestrator:
         for seg in audio_result.segments:
             if seg.end_ms > end_ms:
                 end_ms = seg.end_ms
+        dur_ms = getattr(audio_result, "duration_ms", None)
+        if isinstance(dur_ms, (int, float)) and dur_ms > 0:
+            end_ms = max(end_ms, int(dur_ms))
 
         cv_end_sec = 0
         frames = cv_data.get("motion_frames") or []
@@ -1463,12 +1752,42 @@ class ReportOrchestrator:
 Speaker breakdown: {json.dumps(speaker_stats, ensure_ascii=False)}
 Sentiment distribution: {json.dumps(sentiment_counts, ensure_ascii=False)}
 
+RATING KURALLARI — ÇOK ÖNEMLİ:
+- "Değerlendirilemedi" / "N/A" SADECE şu durumda kullan:
+  organizasyon/gorsel_bilesenler → bu segmentte tahta/slayt sinyali yoksa
+    (aşağıdaki görsel kurallara uy; ASLA "CV verilerine göre" yazma)
+  organizasyon/teknik_bilesen → teknik sorun gözlemlenmemişse
+
+Görsel bileşen değerlendirmesi için:
+- board_usage_ratio = 0 veya yok ise: observation'da
+  'Ders kaydında tahta kullanımı görüntülenemedi.' kullan.
+- slide_segments = 0 veya yok ise: observation'da
+  'Ders kaydında slayt gösterimi görüntülenemedi.' kullan.
+- İkisi de yoksa observation:
+  'Ders kaydında tahta veya slayt kullanımı görüntülenemedi.
+  Görsel materyal kullanımı tespit edilemedi.'
+- ASLA "CV verilerine göre" yazma.
+
+- Diğer TÜM metrikler için mutlaka İyi / Geliştirilmeli / Yetersiz ver.
+  Transkriptte doğrudan kanıt olmasa bile:
+  - Olumsuz kanıt yoksa → İyi ver
+  - Eksiklik varsa → Geliştirilmeli ver
+  - Hiç yapılmamışsa → Yetersiz ver
+
+- "Bu zaman aralığında gözlem yapılamadı" veya
+  "veri bulunmamaktadır" YAZMA. Her metriğe rating ver.
+
 Observe the following metrics for this lecture segment and note specific
 timestamps as evidence. For each metric provide:
   - rating: "İyi" | "Geliştirilmeli" | "Yetersiz" | "Değerlendirilemedi"
+    (Değerlendirilemedi yalnızca yukarıdaki iki organizasyon özelinde.)
   - observation: concrete observation with timestamps if available
     (e.g. "(00:13:37) Eğitmen öğrenci çalışmasını takdir etti.")
-  - improvement_tip: rating "İyi" ise boş string, diğerlerinde somut öneri
+  - improvement_tip: rating "İyi" ise boş string.
+    "Geliştirilmeli" veya "Yetersiz" ise somut, uygulanabilir öneri.
+    improvement_tip için:
+    - Veri yoksa → boş string "" bırak
+    - ASLA "veri olmadığı için öneri yapılamıyor" yazma
 
 Metrics to evaluate:
   ILETISIM: ders_dinamikleri, mod_tutum, saygi_sinirlar, tesvik_motivasyon,
@@ -1480,40 +1799,78 @@ Metrics to evaluate:
     isinma, onceki_ders_gozden, onceki_odev, hedefler,
     ozet, gelecek_odev, kapanis
 
-DERS YAPISI DETECTION RULES — read the transcript carefully:
-- Isınma: completed=true if there is small talk, warm-up activity, or greeting exchange at the start (first 10 minutes)
-- Önceki dersin gözden geçirilmesi: completed=true if instructor asks about or reviews what was done in previous lesson
-- Önceki ödevin tartışılması: completed=true if homework is mentioned or discussed
-- Hedefler ve beklenen sonuç: completed=true if instructor states what will be learned today
-- Özet: completed=true if instructor summarizes what was covered
-- Gelecek ödevin tartışılması: completed=true if next homework or next lesson is mentioned
-- Kapanış: completed=true if there is a farewell or closing
-- IMPORTANT: Base these on TRANSCRIPT EVIDENCE. If the transcript sample shows any of these, mark completed=true.
-- Look for Turkish phrases like:
-  Isınma: 'Merhaba', 'Nasılsın', 'kameranı aç', ilk 5 dakika selamlama
-  Hedefler: 'bugün ... yapacağız', 'bu derste öğreneceğiz'
-  Özet: 'bugün ... yaptık', 'öğrendiklerimiz'
-  Kapanış: 'görüşürüz', 'iyi dersler', 'hoşça kal'
+DERS YAPISI TESPİT KURALLARI — her madde için transcript'te
+BU TÜRKÇE İFADELERİ ara:
 
-OBSERVATION WRITING RULES:
-1. Every observation MUST cite at least one timestamp in format (SS:DD:SS)
-2. Observations must be specific and evidence-based
-3. Minimum 2 sentences per observation
-4. For "İyi": explain what was done well with evidence
-5. For "Geliştirilmeli": explain what exists + what is missing
-6. For "Yetersiz": explain the gap with specific evidence
-BAD: 'Açık uçlu sorular sorulmamıştır'
-GOOD: 'Ders boyunca öğrencilere yöneltilen sorular kapalı uçluydu. (00:14:18) anında öğrenciye doğrudan cevap beklenen bir soru sorulmuş, ancak öğrencinin kendi düşüncesini ifade etmesine alan açılmamıştır.'
+Isınma (completed=true):
+  'merhaba', 'nasılsın', 'hoş geldin', 'kameranı aç',
+  dersin ilk 10 dakikasında selamlama varsa
+
+Önceki dersin gözden geçirilmesi (completed=true):
+  'geçen hafta', 'geçen ders', 'geçen derste', 'önceki ders',
+  'hatırlıyor musun', 'geçen sefer', 'daha önce yaptık'
+
+Önceki ödevin tartışılması (completed=true):
+  'ödev', 'ödevi', 'ödeviniz', 'ödevini', 'ödevler',
+  'gönderdiniz mi', 'yaptınız mı', 'geçen haftanın ödevi'
+
+Hedefler ve beklenen sonuç (completed=true):
+  'bugün', 'bu derste', 'hedefimiz', 'amacımız',
+  'öğreneceğiz', 'yapacağız', 'işleyeceğiz', 'bugünün dersi'
+
+Özet (completed=true):
+  'bugün yaptık', 'öğrendik', 'işledik', 'bitirmeden önce',
+  'tekrar edelim', 'özet', 'özetleyelim', 'hatırlatalım'
+
+Gelecek ödevin tartışılması (completed=true):
+  'ödev', 'ödeviniz', 'gelecek hafta', 'bir sonraki ders',
+  'yapmanızı istiyorum', 'gönderin', 'teslim'
+
+Kapanış (completed=true):
+  'görüşürüz', 'hoşça kal', 'iyi dersler', 'bay bay',
+  'haftaya görüşürüz', 'güle güle', 'dersi bitir'
+
+ÖNEMLİ: Bu kelimeleri TÜM transcript'te ara, sadece
+son 5 dakikada değil. 'ödev' kelimesi dersin herhangi
+bir yerinde geçiyorsa Önceki ödevin tartışılması=true
+VE Gelecek ödevin tartışılması=true olarak işaretle.
+
+GÖZLEM KALİTESİ KURALLARI:
+- Her observation minimum 2 cümle olmalı
+- Her cümle somut ve o derse özgü olmalı
+- En az 1 timestamp içermeli: (SS:DD:SS) formatında
+- Övgü cümlesi + ne yapılabilirdi cümlesi dengeli olmalı
+- ASLA şablon cümle kullanma ("daha tutarlı uygulama için...")
+
+ÖRNEK observation (Geliştirilmeli):
+"Ders boyunca öğrencilere yöneltilen sorular çoğunlukla
+kapalı uçluydu. (00:14:18) anında 'Bunu hatırlıyor musun?'
+sorusu öğrenciye evet/hayır cevabı verdirdi; oysa 'Bu
+konuyu nasıl açıklardın?' gibi bir soru daha derin
+düşünmeyi tetiklerdi."
+
+ÖRNEK improvement_tip:
+"Ders planına 2-3 'öğrenci açıklar' momenti eklenebilir;
+yeni kavram öncesi 'Siz olsaydınız nasıl yapardınız?'
+sorusu sorulabilir."
 
 GÖRSEL BİLEŞENLER DEĞERLENDİRMESİ:
-CV verisinden gelen bilgiler:
+Sayılar (üstteki CV DATA JSON’undan):
 - board_usage_ratio: {board_usage_ratio}
 - slide_segments sayısı: {len(slide_segments)}
 - OCR ile tespit edilen yazı var mı: {bool(board_samples)}
-Bu verilere göre görsel bileşenleri değerlendir:
-- board_usage_ratio > 0.3 ise tahta aktif kullanılmış → İyi
-- slide_segments > 0 ise slayt kullanılmış → İyi
-- İkisi de 0 ise → Geliştirilmeli
+
+Metin kuralları (gözlem metni; ASLA "CV verilerine göre" yazma):
+- board_usage_ratio = 0 veya yok ise: 'Ders kaydında tahta kullanımı görüntülenemedi.'
+- slide_segments = 0 veya yok ise: 'Ders kaydında slayt gösterimi görüntülenemedi.'
+- İkisi de yoksa: 'Ders kaydında tahta veya slayt kullanımı görüntülenemedi.
+  Görsel materyal kullanımı tespit edilemedi.'
+
+Eşikler (rating ile birlikte kullan):
+- board_usage_ratio > 0.3 ise tahta aktif kullanılmış say → İyi (somut gözlemle)
+- slide_segments > 0 ise slayt kullanılmış say → İyi (somut gözlemle)
+- İkisi de belirgin şekilde 0/yok ise → Geliştirilmeli veya yukarıdaki
+  "Değerlendirilemedi" kuralına uy
 
 Respond with this exact JSON schema:
 {{
@@ -1622,15 +1979,6 @@ Rules:
     satisfactory = pace 120-160 wpm, silence_ratio < 0.2
     too_much = silence_ratio > 0.35
     too_little = pace > 180 wpm
-- feedback_metni yazım kuralları:
-  - "Merhaba Hocam," ile başla
-  - Paragraf 1 (2-3 cümle): dersin genel atmosferi ve eğitmenin güçlü yönleri hakkında somut gözlem; CV verisindeki gülümseme oranı, konuşma hızı veya ders yapısını referans al
-  - Paragraf 2 (3-4 cümle): en az 3 spesifik güçlü an, timestamp ile
-  - Paragraf 3 (2-3 cümle): gelişim alanı, nazik ve somut öneri; en düşük skorlu 1-2 metriği referans al
-  - Paragraf 4 (1 cümle): kapanış teşekkür
-  - Toplam uzunluk: 150-250 kelime
-  - Ton: Samimi, profesyonel, destekleyici
-  - Dil: Tamamen Türkçe
 - genel_sonuc: one of
     "Beklentilere uygundu." | "Beklentilerin altında." |
     "Beklentilerin üzerinde."
@@ -1639,9 +1987,68 @@ Rules:
 - observation, improvement_tip and feedback_metni must be Turkish.
 - do not use English words in free-text fields.
 
+ÖRNEK RAPOR (bu kalitede yaz; stil ve somutluk seviyesini taklit et, metni aynen kopyalama):
+
+feedback_metni örneği:
+"Merhaba Hocam,
+
+Ders boyunca öğrencilerle kurduğunuz samimi bağ ve
+pozitif enerji dikkat çekiciydi. Yüz ifadesi özetine göre
+%99 gülümseme oranıyla dersin tamamında olumlu bir
+atmosfer yarattınız. (00:07:45) anında teknik sorun
+yaşanmasına rağmen sakinliğinizi korumanız ve dersi
+kesintisiz sürdürmeniz profesyonelliğinizin göstergesiydi.
+
+Dersin güçlü anları arasında (00:14:01) anında Mete'nin
+önceki çalışmasını fark edip takdir etmeniz öne çıkıyor.
+Bu tür bireysel geri bildirimler öğrenci motivasyonunu
+doğrudan etkiliyor. (00:27:01) anında Mila'nın kamera
+kontrolündeki zorluğunu görsel anlatımla aşmanız ise
+farklı öğrenme stillerine duyarlılığınızı gösteriyor.
+
+Geliştirilebilecek tek alan açık uçlu soru kullanımı.
+(00:14:18) anındaki soru öğrencinin düşüncesini
+derinleştirme fırsatı yaratabilirdi. 'Bu tasarımı neden
+böyle yaptın?' gibi sorular öğrencinin analitik
+düşünmesini tetikler.
+
+Emeğiniz ve öğrencilere olan bağlılığınız için teşekkür
+eder, başarılarınızın devamını dilerim."
+
+observation örneği (İyi için):
+"Eğitmen (00:13:37) anında 'Gayet güzel açıkladığın
+aşamaları' diyerek öğrencinin başarısını somut olarak
+takdir etmiştir. Bu tür spesifik övgüler, genel
+'aferin'lerden çok daha etkili bir pekiştirme sağlar."
+
+observation örneği (Geliştirilmeli için):
+"Ders boyunca sorular çoğunlukla kapalı uçlu yapıda
+sorulmuştur. (00:14:18) anında 'Bunu hatırlıyor musun?'
+şeklinde sorulan soru, öğrenciye evet/hayır cevabı
+verdirmiştir. Oysa 'Bu konuyu nasıl açıklardın?' gibi
+bir soru öğrencinin kendi cümleleriyle düşünmesini
+sağlayabilirdi."
+
+improvement_tip örneği:
+"Açık uçlu sorular sormak için ders planına 2-3
+'öğrenci açıklar' momenti eklenebilir. Örneğin
+yeni bir kavram tanıtılmadan önce 'Bu kavramı daha
+önce nerede gördünüz?' sorusu sorulabilir."
+
+KURALLAR (feedback_metni, gözlemler ve öneriler):
+- feedback_metni en az 200 kelime olmalı; "Merhaba Hocam," ile başla
+- Her paragrafta somut en az bir timestamp (ör. (00:14:01)) kullan
+- Övgü ve eleştiri dengeli olmalı (kabaca 2:1 — övgü ağırlıklı)
+- Ton samimi ve destekleyici; öğretmeni meslektaş gibi muhatap al
+- ASLA robotik, şablon veya bu örnekteki cümleleri birebir tekrar etme
+- Her gözlem ve paragraf bu derse özgü olmalı; genel klise yazma
+- Paragraf 4: kısa kapanış teşekkürü
+
 Respond with this exact QAReport JSON schema:
 {{
   "instructor_name": "",
+  "course": "",
+  "group": "",
   "lesson_date": "",
   "module": 0,
   "lesson_number": 0,
@@ -1691,9 +2098,14 @@ Respond with this exact QAReport JSON schema:
     #  Step 5 - build final model + save
     # ------------------------------------------------------------------ #
     def _build_final_report(
-        self, video_id: str, merged: Dict[str, Any], duration_min: int
+        self,
+        video_id: str,
+        merged: Dict[str, Any],
+        duration_min: int,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> QAReport:
         try:
+            meta = metadata if isinstance(metadata, dict) else {}
             iletisim = self._coerce_metric_dict(
                 merged.get("iletisim"), ILETISIM_KEYS
             )
@@ -1704,18 +2116,19 @@ Respond with this exact QAReport JSON schema:
                 merged.get("organizasyon"), ORGANIZASYON_KEYS
             )
             ders_yapisi = self._coerce_ders_yapisi(merged.get("ders_yapisi"))
+            exp_min = _meta_expected_duration_min(meta, merged, duration_min)
 
             report = QAReport(
                 video_id=video_id,
-                instructor_name=str(merged.get("instructor_name", "")),
-                course=str(merged.get("course", "")),
-                group=str(merged.get("group", "")),
-                lesson_date=str(merged.get("lesson_date", "")),
-                module=int(merged.get("module") or 0),
-                lesson_number=int(merged.get("lesson_number") or 0),
-                expected_duration_min=int(
-                    merged.get("expected_duration_min") or duration_min
+                instructor_name=_meta_str_first(
+                    meta, merged, "instructor_name"
                 ),
+                course=_meta_str_first(meta, merged, "course"),
+                group=_meta_str_first(meta, merged, "group"),
+                lesson_date=_meta_str_first(meta, merged, "lesson_date"),
+                module=_meta_int_first(meta, merged, "module"),
+                lesson_number=_meta_lesson_number(meta, merged),
+                expected_duration_min=exp_min,
                 actual_duration_min=int(
                     merged.get("actual_duration_min") or duration_min
                 ),
@@ -1762,6 +2175,13 @@ Respond with this exact QAReport JSON schema:
 
     @staticmethod
     def _apply_text_quality_fallbacks(report: QAReport) -> None:
+        def _improvement_tip_is_template_junk(tip: str) -> bool:
+            u = tip.casefold()
+            return (
+                "mikro geri bildirimler" in u
+                or "daha tutarlı uygulama" in u
+            )
+
         def sanitize_metric(metric: MetricResult, label: str) -> None:
             obs = (metric.observation or "").strip()
             tip = (metric.improvement_tip or "").strip()
@@ -1771,13 +2191,24 @@ Respond with this exact QAReport JSON schema:
                     f"{label} için ders boyunca sınırlı kanıt gözlemlendi; "
                     "değerlendirme mevcut veriye göre yapıldı."
                 )
+
             if metric.rating == Rating.good:
                 metric.improvement_tip = ""
-            elif not tip or _looks_english(tip):
-                metric.improvement_tip = (
-                    f"{label} alanında daha tutarlı uygulama için derste kısa ve düzenli "
-                    "mikro geri bildirimler planlanabilir."
-                )
+                return
+
+            if not tip:
+                metric.improvement_tip = ""
+                return
+
+            if _improvement_tip_is_template_junk(tip) or _looks_english(tip):
+                metric.improvement_tip = ""
+                return
+
+            if len(tip) <= 30:
+                metric.improvement_tip = ""
+                return
+
+            metric.improvement_tip = tip
 
         section_labels = {
             "iletisim": "İletişim",
@@ -1791,6 +2222,7 @@ Respond with this exact QAReport JSON schema:
         ):
             section_label = section_labels[section_name]
             for metric_key, metric in section.items():
+                fix_metric_result_ratings(metric)
                 sanitize_metric(metric, f"{section_label}/{metric_key}")
 
         feedback = (report.feedback_metni or "").strip()
@@ -1799,11 +2231,19 @@ Respond with this exact QAReport JSON schema:
 
     @staticmethod
     def _derive_duration_min(audio_result: AudioAnalysisResult) -> int:
+        """Wall-clock lecture length for reports (minutes).
+
+        Prefer explicit ``duration_ms`` when present; otherwise infer from the
+        latest transcript segment end (not segment count).
+        """
         duration_ms = getattr(audio_result, "duration_ms", None)
-        if duration_ms:
+        if isinstance(duration_ms, (int, float)) and duration_ms > 0:
             return max(1, int(duration_ms / 60000))
-        if getattr(audio_result, "segments", None):
-            return max(1, int(len(audio_result.segments) * 0.5))
+        segs = getattr(audio_result, "segments", None) or []
+        if segs:
+            end_ms = max(int(s.end_ms) for s in segs)
+            if end_ms > 0:
+                return max(1, end_ms // 60000)
         return 1
 
     @staticmethod

@@ -4,6 +4,7 @@ import argparse
 import io
 import json
 import logging
+import re
 import sys
 from pathlib import Path
 from typing import Dict, Iterable, Optional, Tuple
@@ -107,6 +108,8 @@ def _register_fonts() -> Tuple[str, str]:
 
 FONT_REGULAR, FONT_BOLD = _register_fonts()
 
+_CV_VERILERINE_RE = re.compile(r"(?i)cv\s+verilerine\s+göre")
+
 
 def _rating_color(value: str) -> colors.Color:
     if value == Rating.good.value:
@@ -136,6 +139,7 @@ def _rating_label(value: object) -> str:
 
 def _safe_text(value: object) -> str:
     text = str(value or "-")
+    text = _CV_VERILERINE_RE.sub("Ders kaydında görüntülenemedi.", text)
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
