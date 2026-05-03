@@ -195,6 +195,32 @@ def _fix_inconsistent_ratings(
                 metric["rating"] = "Geliştirilmeli"
             return metric
 
+    obs_lower = observation
+
+    if metric_key == "teknik_bilesen":
+        no_issue_phrases = [
+            "herhangi bir teknik sorun yaşanmadı",
+            "herhangi bir teknik sorun yaşanmıyor",
+            "teknik sorun yaşanmamıştır",
+            "sorunsuz bir şekilde çalışıyor",
+            "ses ve görüntü kalitesi iyi",
+        ]
+        if any(p in obs_lower for p in no_issue_phrases):
+            metric["rating"] = "İyi"
+            return metric
+
+    if metric_key == "hatalar":
+        positive_hatalar = [
+            "yapıcı bir yaklaşım",
+            "olumlu bir yaklaşım",
+            "motivasyonunu düşürmemeye",
+            "destekliyor",
+            "yardımcı oluyor",
+        ]
+        if any(p in obs_lower for p in positive_hatalar):
+            metric["rating"] = "İyi"
+            return metric
+
     if not _rating_string_is_na(rating):
         return metric
 
@@ -229,11 +255,18 @@ def _fix_inconsistent_ratings(
         "hızlı",
         "uyumlu",
         "verimli",
+        "sorunsuz",
+        "etkilemiyor",
+        "iyi durumda",
+        "özen gösteriliyor",
+        "destekliyor",
+        "öğrenme ortamı",
+        "motivasyonunu düşürmemeye",
+        "yapıcı bir",
     ]
     negative_words = [
         "yetersiz",
         "eksik",
-        "sorun",
         "problem",
         "hata",
         "aksama",

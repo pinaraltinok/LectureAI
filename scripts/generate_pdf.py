@@ -512,22 +512,6 @@ def render_qa_report_pdf(report: QAReport) -> bytes:
         ),
     ]
     bottom_widths = [55 * mm, 55 * mm, 65 * mm]
-    qs = getattr(report, "quality_score", None)
-    if qs is not None:
-        bottom_labels.append(Paragraph("Kalite skoru", styles["small_bold"]))
-        qp = bool(getattr(report, "quality_passed", False))
-        qc = colors.HexColor("#2E7D32") if qp else colors.HexColor("#E65100")
-        bottom_values.append(
-            Paragraph(
-                f"Rapor kalitesi: {qs}/100",
-                ParagraphStyle(
-                    "quality_score_cell",
-                    parent=styles["small"],
-                    textColor=qc,
-                ),
-            )
-        )
-        bottom_widths.append(45 * mm)
 
     bottom_bar = Table(
         [bottom_labels, bottom_values],

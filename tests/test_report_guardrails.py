@@ -51,3 +51,31 @@ def test_gorsel_phrase_without_key_does_not_change_iyi() -> None:
     )
     fix_metric_result_ratings(m, metric_key="saygi_sinirlar")
     assert m.rating == Rating.good
+
+
+def test_teknik_bilesen_forces_iyi_when_no_issue_phrase() -> None:
+    obs = (
+        "(05:00) Ders boyunca herhangi bir teknik sorun yaşanmadı; "
+        "ses ve görüntü akışı sorunsuzdu. " + "x" * 20
+    )
+    m = MetricResult(
+        rating=Rating.na,
+        observation=obs,
+        improvement_tip="",
+    )
+    fix_metric_result_ratings(m, metric_key="teknik_bilesen")
+    assert m.rating == Rating.good
+
+
+def test_hatalar_forces_iyi_when_positive_phrase() -> None:
+    obs = (
+        "(12:00) Öğrenci hatalarına karşı yapıcı bir yaklaşım sergilendi; "
+        "motivasyonunu düşürmemeye özen gösterildi. " + "x" * 10
+    )
+    m = MetricResult(
+        rating=Rating.na,
+        observation=obs,
+        improvement_tip="",
+    )
+    fix_metric_result_ratings(m, metric_key="hatalar")
+    assert m.rating == Rating.good

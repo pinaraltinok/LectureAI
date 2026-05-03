@@ -219,6 +219,62 @@ def _cv_dict_is_substantive(data: Dict[str, Any]) -> bool:
     return False
 
 
+def _extract_cv_visual_summary(cv_data: Dict[str, Any]) -> str:
+    """Extract smile/camera/board/motion metrics from CV JSON for chunk prompts."""
+    lines: List[str] = []
+    eng = cv_data.get("engagement")
+    engagement = eng if isinstance(eng, dict) else {}
+
+    def _norm_pct(val: Any) -> Optional[int]:
+        if val is None:
+            return None
+        try:
+            f = float(val)
+        except (TypeError, ValueError):
+            return None
+        return round(f * 100) if f <= 1.0 else round(f)
+
+    smile = (
+        engagement.get("smile_ratio")
+        or engagement.get("smile_percentage")
+        or cv_data.get("smile_frame_ratio")
+    )
+    sp = _norm_pct(smile)
+    if sp is not None:
+        lines.append(f"- Gülümseme oranı: %{sp}")
+
+    camera = (
+        engagement.get("camera_on_ratio")
+        or engagement.get("face_visible_ratio")
+        or cv_data.get("camera_open_ratio_total")
+        or cv_data.get("camera_open_ratio_among_located")
+        or cv_data.get("face_visible_ratio")
+    )
+    cp = _norm_pct(camera)
+    if cp is not None:
+        lines.append(f"- Kamera açık / yüz görünür oranı: %{cp}")
+
+    board = engagement.get("board_usage_ratio") or cv_data.get("board_usage_ratio")
+    bp = _norm_pct(board)
+    if bp is not None:
+        lines.append(f"- Tahta kullanım oranı: %{bp}")
+
+    motion = engagement.get("avg_motion_per_minute") or cv_data.get(
+        "movement_energy_avg"
+    )
+    if motion is not None:
+        try:
+            lines.append(f"- Ortalama hareket enerjisi: {float(motion):.1f}")
+        except (TypeError, ValueError):
+            pass
+
+    return (
+        "\n".join(lines)
+        if lines
+        else "- Görsel metrik verisi bu özette yok (tam sayılar için üstteki CV DATA JSON’una bakın)."
+    )
+
+
 _ENGLISH_MARKERS = {
     "good",
     "acceptable",
@@ -1889,6 +1945,7 @@ class ReportOrchestrator:
         board_samples = cv_data.get("board_samples")
         if not isinstance(board_samples, list):
             board_samples = []
+        cv_visual_summary = _extract_cv_visual_summary(cv_data)
 
         system_block = (
             "SYSTEM:\n"
@@ -1955,6 +2012,7 @@ Metrics to evaluate:
   HAZIRLIK: ders_akisi_tempo, konu_bilgisi, aciklama_netligi, rasyonel_ipucu
   ORGANIZASYON: gorsel_bilesenler, konusma_ses_tonu, teknik_bilesen,
                 zamanlama
+  (mod_tutum: aşağıdaki gülümseme özetini gözlemde sayı ile kullan)
   DERS_YAPISI (boolean - was it observed in this segment?):
     isinma, onceki_ders_gozden, onceki_odev, hedefler,
     ozet, gelecek_odev, kapanis
@@ -2014,17 +2072,33 @@ düşünmeyi tetiklerdi."
 yeni kavram öncesi 'Siz olsaydınız nasıl yapardınız?'
 sorusu sorulabilir."
 
+CV GÖRSEL METRİK ÖZETİ (tahta/slayt + yüz/gülümseme; üstteki JSON ile tutarlı ol):
+{cv_visual_summary}
+
+MOD & TUTUM (iletişim → mod_tutum) — GÜLÜMSEME:
+Özette gülümseme oranı varsa, Mod & Tutum gözleminde bu yüzdeyi açıkça yaz
+(ör. "Ders kaydında ölçülen gülümseme oranı %XX olup pozitif/nötr bir sınıf
+atmosferi yansıtılmıştır."). ASLA "CV verilerine göre" ifadesini kullanma.
+
 GÖRSEL BİLEŞENLER DEĞERLENDİRMESİ:
-Sayılar (üstteki CV DATA JSON’undan):
+CV verisinden gelen görsel metrikler (özet + JSON):
 - board_usage_ratio: {board_usage_ratio}
 - slide_segments sayısı: {len(slide_segments)}
 - OCR ile tespit edilen yazı var mı: {bool(board_samples)}
+
+Bu verilere göre değerlendir:
+- Gülümseme oranı > %80 → Mod & Tutum için pozitif kanıt
+- Gülümseme oranı < %50 → Geliştirilmeli sinyali
+- Kamera açık / yüz görünür oranı < %30 → olası teknik/etkileşim sorunu
+- Tahta kullanımı (board_usage_ratio) > 0 → tahta/görsel materyal var
+- Tahta = 0 ve slayt yok → Görsel bileşenler sınırlı
 
 Metin kuralları (gözlem metni; ASLA "CV verilerine göre" yazma):
 - board_usage_ratio = 0 veya yok ise: 'Ders kaydında tahta kullanımı görüntülenemedi.'
 - slide_segments = 0 veya yok ise: 'Ders kaydında slayt gösterimi görüntülenemedi.'
 - İkisi de yoksa: 'Ders kaydında tahta veya slayt kullanımı görüntülenemedi.
   Görsel materyal kullanımı tespit edilemedi.'
+Gözlemde mümkünse özetteki gülümseme oranını sayı olarak belirt.
 
 Eşikler (rating ile birlikte kullan):
 - board_usage_ratio > 0.3 ise tahta aktif kullanılmış say → İyi (somut gözlemle)
