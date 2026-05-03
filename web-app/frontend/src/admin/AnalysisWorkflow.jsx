@@ -150,25 +150,10 @@ const AnalysisWorkflow = ({ onStepChange }) => {
         lessonDate: selectedDate || null,
       })
 
-      // Step 5: Fetch draft
-      try {
-        const draft = await apiGet(`/admin/analysis/draft/${jobId}`)
-        setDraftData(draft)
-      } catch {
-        setDraftData({
-          jobId,
-          status: 'PROCESSING',
-          draftReport: null,
-          videoUrl: gcsUri || null,
-          localVideoUrl: null,
-          teacher: teachers.find(t => t.id === selectedTeacherId),
-          course: selectedCourse,
-          lessonCode: selectedLessonCode,
-        })
-      }
-
-      setStep('preview')
-      onStepChange('preview')
+      // Step 5: Show submitted message and redirect back to upload
+      setIsAnalyzing(false)
+      setStep('submitted')
+      onStepChange('upload')
     } catch (err) {
       setError(err.message)
     } finally {
@@ -317,6 +302,88 @@ const AnalysisWorkflow = ({ onStepChange }) => {
         <style>{`
           @keyframes spin { 100% { transform: rotate(360deg); } }
           @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.5); } }
+        `}</style>
+      </div>
+    )
+  }
+
+  // ─── Submitted step: analysis is queued, redirect user ──────
+  if (step === 'submitted') {
+    const assignedTeacher = teachers.find(t => t.id === selectedTeacherId)
+    return (
+      <div style={{display:'grid', placeItems:'center', minHeight:'500px', textAlign:'center', animation: 'fadeIn 0.5s ease'}}>
+        <div style={{maxWidth: '480px'}}>
+          {/* Animated checkmark */}
+          <div style={{
+            width: '90px', height: '90px', borderRadius: '50%',
+            background: 'linear-gradient(135deg, #6366f1, #a855f7)', color: '#fff',
+            margin: '0 auto 2rem', display: 'grid', placeItems: 'center', fontSize: '2.5rem',
+            boxShadow: '0 20px 40px -10px rgba(99, 102, 241, 0.4)',
+            animation: 'scaleIn 0.5s ease',
+          }}>🚀</div>
+
+          <h2 style={{fontSize:'2rem', fontWeight:950, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: '0.75rem'}}>
+            Analiz Başlatıldı!
+          </h2>
+          <p style={{color:'#64748b', fontWeight:600, lineHeight: 1.7, marginBottom: '1rem', fontSize: '1rem'}}>
+            Video başarıyla yüklendi ve analiz süreci arka planda devam ediyor.
+          </p>
+
+          {/* Info card */}
+          <div style={{
+            background: '#f5f3ff', border: '1.5px solid #ddd6fe', borderRadius: '20px',
+            padding: '1.5rem 2rem', marginBottom: '2rem', textAlign: 'left',
+          }}>
+            <div style={{display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px'}}>
+              <div style={{
+                width: '36px', height: '36px', borderRadius: '10px',
+                background: 'linear-gradient(135deg, #6366f1, #a855f7)', color: '#fff',
+                display: 'grid', placeItems: 'center', fontSize: '1rem', flexShrink: 0,
+              }}>📊</div>
+              <div>
+                <strong style={{fontSize: '0.9rem', color: '#4f46e5'}}>Rapor durumunu takip edin</strong>
+                <p style={{margin: '2px 0 0', fontSize: '0.82rem', color: '#6366f1', fontWeight: 600}}>
+                  Eğitmenler & Raporlar sayfasından raporun durumunu takip edebilirsiniz.
+                </p>
+              </div>
+            </div>
+            {assignedTeacher && (
+              <div style={{display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px'}}>
+                <span style={{fontSize: '10px', fontWeight: 800, color: '#6366f1', background: '#ede9fe', padding: '4px 10px', borderRadius: '6px'}}>
+                  👤 {assignedTeacher.name}
+                </span>
+                <span style={{fontSize: '10px', fontWeight: 800, color: '#10b981', background: '#f0fdf4', padding: '4px 10px', borderRadius: '6px'}}>
+                  📖 {selectedCourse?.course || 'Kurs'} — {selectedLessonCode}
+                </span>
+                <span style={{fontSize: '10px', fontWeight: 800, color: '#f59e0b', background: '#fffbeb', padding: '4px 10px', borderRadius: '6px'}}>
+                  ⏳ İşleniyor
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div style={{display: 'flex', flexDirection: 'column', gap: '1rem'}}>
+            <button
+              className="primary-btn"
+              style={{padding: '1.1rem', borderRadius: '16px', boxShadow: '0 20px 25px -5px rgba(99, 102, 241, 0.4)'}}
+              onClick={() => {
+                setSelectedFile(null); setCurrentJobId(null); setDraftData(null);
+                setStep('upload'); onStepChange('upload');
+              }}
+            >
+              Yeni Bir Analiz Ataması Yap
+            </button>
+            <button
+              className="outline-btn"
+              style={{padding: '1.1rem', borderRadius: '16px'}}
+              onClick={() => navigate('/admin/egitmen-havuzu')}
+            >
+              Eğitmenler & Raporlar Sayfasına Git
+            </button>
+          </div>
+        </div>
+        <style>{`
+          @keyframes scaleIn { 0% { transform: scale(0); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
         `}</style>
       </div>
     )
