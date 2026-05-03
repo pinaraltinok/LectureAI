@@ -109,27 +109,34 @@ const AnalysisWorkflow = ({ onStepChange }) => {
 
       if (selectedFile) {
         // Step 1: Get a signed upload URL from backend (small JSON request)
+        console.log('[AnalysisWorkflow] Step 1: Getting signed URL...')
         setProgress({ stage: 'queued', message: 'Upload bağlantısı oluşturuluyor...', percent: 8 })
         const signedRes = await apiPost('/gcs/upload-url', {
           filename: selectedFile.name,
           contentType: selectedFile.type || 'video/mp4',
         })
+        console.log('[AnalysisWorkflow] Step 1 done:', signedRes)
         gcsUri = signedRes.gcsUri
         videoFilename = signedRes.filename
 
         // Step 2: Upload file DIRECTLY to GCS (bypasses Cloud Run + Cloudflare limits)
+        console.log('[AnalysisWorkflow] Step 2: Uploading to GCS...')
         setProgress({ stage: 'downloading', message: 'Video buluta yükleniyor...', percent: 15 })
         const gcsUploadRes = await fetch(signedRes.uploadUrl, {
           method: 'PUT',
           headers: { 'Content-Type': selectedFile.type || 'video/mp4' },
           body: selectedFile,
         })
+        console.log('[AnalysisWorkflow] Step 2 done, status:', gcsUploadRes.status)
         if (!gcsUploadRes.ok) {
           throw new Error(`Video yükleme başarısız (HTTP ${gcsUploadRes.status})`)
         }
+      } else {
+        console.log('[AnalysisWorkflow] No file selected, skipping GCS upload')
       }
 
       // Step 3: Create report record with GCS URI (small JSON, no file body)
+      console.log('[AnalysisWorkflow] Step 3: Creating report record...')
       setProgress({ stage: 'processing', message: 'Analiz kaydı oluşturuluyor...', percent: 30 })
       const teacherName = teachers.find(t => t.id === selectedTeacherId)?.name || ''
       const uploadRes = await apiPost('/admin/analysis/create-from-url', {
@@ -137,10 +144,13 @@ const AnalysisWorkflow = ({ onStepChange }) => {
         videoFilename,
         teacherName,
       })
+      console.log('[AnalysisWorkflow] Step 3 done:', uploadRes)
       const jobId = uploadRes.jobId
       setCurrentJobId(jobId)
 
       // Step 4: Assign with curriculum + lesson code + group + date metadata
+      console.log('[AnalysisWorkflow] Step 4: Assigning analysis...')
+      setProgress({ stage: 'processing', message: 'Analiz atanıyor...', percent: 50 })
       await apiPost('/admin/analysis/assign', {
         jobId,
         teacherId: selectedTeacherId,
@@ -149,15 +159,19 @@ const AnalysisWorkflow = ({ onStepChange }) => {
         lessonCode: selectedLessonCode,
         lessonDate: selectedDate || null,
       })
+      console.log('[AnalysisWorkflow] Step 4 done. Analysis assigned successfully.')
 
       // Step 5: Show submitted message and redirect back to upload
+      console.log('[AnalysisWorkflow] Step 5: Showing submitted page...')
       setIsAnalyzing(false)
       setStep('submitted')
       onStepChange('upload')
     } catch (err) {
-      setError(err.message)
-    } finally {
+      console.error('[AnalysisWorkflow] Error:', err)
+      setError(err.message || 'Bilinmeyen bir hata oluştu')
       setIsAnalyzing(false)
+      setStep('upload')
+      onStepChange('upload')
     }
   }
 
@@ -298,6 +312,33 @@ const AnalysisWorkflow = ({ onStepChange }) => {
               )
             })}
           </div>
+
+          {/* Error display during analysis */}
+          {error && (
+            <div style={{
+              marginTop: '1.5rem', padding: '1rem 1.5rem', borderRadius: '14px',
+              background: '#fef2f2', border: '1.5px solid #fecaca',
+              color: '#dc2626', fontSize: '0.88rem', fontWeight: 700,
+              textAlign: 'left',
+            }}>
+              ⚠ {error}
+            </div>
+          )}
+
+          {/* Cancel / back button */}
+          <button
+            onClick={() => { setIsAnalyzing(false); setStep('upload'); onStepChange('upload'); }}
+            style={{
+              marginTop: '1.5rem', padding: '0.8rem 2rem', borderRadius: '14px',
+              background: 'transparent', border: '1.5px solid #e2e8f0',
+              color: '#94a3b8', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#f43f5e'; e.currentTarget.style.color = '#f43f5e'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.color = '#94a3b8'; }}
+          >
+            ✕ İptal Et
+          </button>
         </div>
         <style>{`
           @keyframes spin { 100% { transform: rotate(360deg); } }
