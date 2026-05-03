@@ -1,0 +1,18 @@
+.env
+gcp-key.json
+*.json
+!student_registry.json
+data/
+core/registry_output/
+__pycache__/
+*.mp3
+*.mp4
+.ipynb_checkpoints/
+.vscode/
+node_modules/
+dist/
+build/
+.dockerignore
+Dockerfile
+docker-compose.yml
+# Not: Docker dosyalarını isterseniz pushlayabiliriz ama anahtarlar kesinlikle kalmalı.
