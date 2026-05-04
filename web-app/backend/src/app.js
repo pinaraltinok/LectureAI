@@ -52,6 +52,10 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   validate: { trustProxy: false },    // We handle trust proxy at Express level
+  skip: (req) => {
+    // Exempt pipeline worker webhooks (server-to-server, PubSub-triggered)
+    return req.path.startsWith('/api/pipeline/');
+  },
 });
 app.use('/api', apiLimiter);
 

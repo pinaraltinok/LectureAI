@@ -55,12 +55,21 @@ def emit_progress(video_id, stage, detail=""):
     }
     headers = {"Content-Type": "application/json"}
     if PIPELINE_WEBHOOK_SECRET:
-        headers["x-pipeline-secret"] = PIPELINE_WEBHOOK_SECRET
-    try:
-        resp = httpx.post(url, json=payload, headers=headers, timeout=10)
-        print(f"[WEBHOOK] {stage} → {resp.status_code}")
-    except Exception as e:
-        print(f"[WEBHOOK] Failed to send {stage}: {e}")
+        headers["Authorization"] = f"Bearer {PIPELINE_WEBHOOK_SECRET}"
+
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            resp = httpx.post(url, json=payload, headers=headers, timeout=10)
+            print(f"[WEBHOOK] {stage} → {resp.status_code}")
+            if resp.status_code == 429 and attempt < max_retries - 1:
+                import time as _time
+                _time.sleep(2 ** attempt)  # exponential backoff
+                continue
+            return
+        except Exception as e:
+            print(f"[WEBHOOK] Failed to send {stage}: {e}")
+            return
 
 
 def run_student_pipeline(video_id, student_name, video_blob, reference_audio_blob):
@@ -129,6 +138,7 @@ def run_student_pipeline(video_id, student_name, video_blob, reference_audio_blo
     # ── Stage 2: Biometric Speaker Matching ─────────────────
     emit_progress(video_id, "student:biometric_started", "Ses eşleştirme başlıyor...")
     speaker_id = None
+    match_result = None
 
     # Check registry first
     if REGISTRY_PATH.exists():
@@ -141,6 +151,8 @@ def run_student_pipeline(video_id, student_name, video_blob, reference_audio_blo
 
     if speaker_id:
         print(f"[OK] Konuşmacı ID zaten kayıtlı: Speaker {speaker_id}")
+        # Build a synthetic match_result from cached registry entry
+        match_result = {"best_speaker": speaker_id, "score": 0, "all_scores": {}}
         emit_progress(video_id, "student:biometric_completed", f"Mevcut eşleşme: Speaker {speaker_id}")
     else:
         emit_progress(video_id, "student:biometric_matching", "CPU tabanlı ses eşleştirme yapılıyor...")
@@ -232,7 +244,12 @@ def run_student_pipeline(video_id, student_name, video_blob, reference_audio_blo
         env = os.environ.copy()
         env["PYTHONIOENCODING"] = "utf-8"
         cmd = [sys.executable, "core/generate_student_report.py", student_name, str(transcript_path)]
+        print(f"[CMD] {' '.join(cmd)}")
         result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
+
+        print(f"[REPORT-STDOUT] {result.stdout[:500]}")
+        if result.stderr:
+            print(f"[REPORT-STDERR] {result.stderr[:500]}")
 
         if result.returncode != 0:
             emit_progress(video_id, "student:failed", f"Rapor hatası: {result.stderr[:200]}")

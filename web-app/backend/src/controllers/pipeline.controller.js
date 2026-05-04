@@ -89,8 +89,7 @@ async function postWorkerPipelineEvent(req, res) {
   console.log(`[Pipeline] Event: video_id=${video_id}, stage=${stage}, status=${status}`);
 
   // ── Update analysisProgress for backward compat ──
-  const progressKey = `${stage}:${status}`;
-  const mapped = STAGE_PROGRESS_MAP[progressKey];
+  const mapped = STAGE_PROGRESS_MAP[stage];
 
   if (mapped) {
     // Find the jobId that corresponds to this video_id
@@ -111,6 +110,39 @@ async function postWorkerPipelineEvent(req, res) {
         percent: mapped.percent,
       });
       console.log(`[Pipeline] Progress updated for jobId=${targetJobId}: ${mapped.stage} ${mapped.percent}%`);
+    }
+  }
+
+  // ── Update student voice analysis Report record on terminal events ──
+  if (stage === 'student:completed' || stage === 'student:failed') {
+    try {
+      const { PrismaClient } = require('@prisma/client');
+      const prisma = new PrismaClient();
+      const newStatus = stage === 'student:completed' ? 'DRAFT' : 'FAILED';
+
+      // Find PROCESSING student voice analysis reports
+      const records = await prisma.report.findMany({
+        where: {
+          status: 'PROCESSING',
+          draftReport: { path: ['_analysisType'], equals: 'student_voice' },
+        },
+      });
+
+      for (const record of records) {
+        const dr = (typeof record.draftReport === 'object' && record.draftReport) || {};
+        const recordVideoId = dr._videoId || '';
+        if (recordVideoId && video_id.includes(recordVideoId)) {
+          await prisma.report.update({
+            where: { id: record.id },
+            data: { status: newStatus, updatedAt: new Date() },
+          });
+          console.log(`[Pipeline] Report ${record.id} → ${newStatus}`);
+          break;
+        }
+      }
+      await prisma.$disconnect();
+    } catch (dbErr) {
+      console.error('[Pipeline] DB update failed for student analysis:', dbErr.message);
     }
   }
 
