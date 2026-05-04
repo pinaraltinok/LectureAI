@@ -351,8 +351,28 @@ try:
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.pdfbase import pdfmetrics
 
-    pdfmetrics.registerFont(TTFont('times', 'C:/Windows/Fonts/times.ttf'))
-    pdfmetrics.registerFont(TTFont('times-bold', 'C:/Windows/Fonts/timesbd.ttf'))
+    # Cross-platform font registration
+    import platform
+    _font_registered = False
+    if platform.system() == 'Windows':
+        win_font = 'C:/Windows/Fonts/times.ttf'
+        win_bold = 'C:/Windows/Fonts/timesbd.ttf'
+        if os.path.exists(win_font):
+            pdfmetrics.registerFont(TTFont('times', win_font))
+            pdfmetrics.registerFont(TTFont('times-bold', win_bold))
+            _font_registered = True
+
+    if not _font_registered:
+        # Linux: use DejaVuSans (available on most distros)
+        import glob
+        dejavu_paths = glob.glob('/usr/share/fonts/**/DejaVuSans.ttf', recursive=True)
+        dejavu_bold = glob.glob('/usr/share/fonts/**/DejaVuSans-Bold.ttf', recursive=True)
+        if dejavu_paths:
+            pdfmetrics.registerFont(TTFont('times', dejavu_paths[0]))
+            pdfmetrics.registerFont(TTFont('times-bold', dejavu_bold[0] if dejavu_bold else dejavu_paths[0]))
+        else:
+            # Absolute fallback: use reportlab's built-in Helvetica
+            print("[WARN] No TTF fonts found, PDF will use built-in fonts")
 
     html_body = markdown.markdown(report_text, extensions=["tables"])
     

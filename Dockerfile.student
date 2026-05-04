@@ -6,9 +6,14 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# System deps for audio processing (pydub/ffmpeg)
+# System deps for audio processing (pydub/ffmpeg), PDF fonts, and pycairo build
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    fonts-dejavu-core \
+    gcc \
+    python3-dev \
+    libcairo2-dev \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 # Python deps

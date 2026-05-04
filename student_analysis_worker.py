@@ -297,6 +297,17 @@ def run_student_pipeline(video_id, student_name, video_blob, reference_audio_blo
         )
         print(f"[OK] JSON rapor yüklendi: gs://{PROCESSED_BUCKET}/{json_blob_path}")
 
+        # Upload PDF if generated
+        import glob
+        pdf_files = glob.glob(f"data/*{get_safe_name(student_name)}*.pdf")
+        if pdf_files:
+            pdf_path = pdf_files[0]
+            pdf_blob_path = f"{STUDENT_REPORTS_PREFIX}/{safe_name}/{video_id}.pdf"
+            pdf_blob = bucket.blob(pdf_blob_path)
+            pdf_blob.upload_from_filename(pdf_path, content_type="application/pdf")
+            print(f"[OK] PDF rapor yüklendi: gs://{PROCESSED_BUCKET}/{pdf_blob_path}")
+            report_json["_pdfPath"] = f"gs://{PROCESSED_BUCKET}/{pdf_blob_path}"
+
         emit_progress(video_id, "student:completed", "Öğrenci ses analizi tamamlandı!")
         return json_blob_path
 
