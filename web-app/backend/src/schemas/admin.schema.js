@@ -45,7 +45,12 @@ const submitSurveySchema = z.object({
   note: z.string().optional(),
 });
 
+const createStudentAnalysisSchema = z.object({
+  studentId: z.string().min(1, 'studentId gereklidir.'),
+  lessonId: z.string().min(1, 'lessonId gereklidir.'),
+});
+
 module.exports = {
   assignAnalysisSchema, createUserSchema, createGroupSchema,
-  createCourseSchema, submitSurveySchema,
+  createCourseSchema, submitSurveySchema, createStudentAnalysisSchema,
 };

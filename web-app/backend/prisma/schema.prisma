@@ -59,11 +59,12 @@ model Admin {
 // ─── Student ────────────────────────────────────────────────
 
 model Student {
-  id          String  @id // Same as userId
-  age         Int?
-  parent      String?
-  parentPhone String?
-  user        User    @relation(fields: [id], references: [id], onDelete: Cascade)
+  id                String  @id // Same as userId
+  age               Int?
+  parent            String?
+  parentPhone       String?
+  referenceAudioUrl String? // GCS blob path for voice biometric matching (e.g. "yaman.mp3")
+  user              User    @relation(fields: [id], references: [id], onDelete: Cascade)
 
   studentGroups  StudentGroup[]
   evaluations    StudentEvaluation[] @relation("StudentEvals")

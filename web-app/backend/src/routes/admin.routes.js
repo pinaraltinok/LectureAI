@@ -5,7 +5,7 @@ const auth = require('../middleware/auth');
 const roleGuard = require('../middleware/roleGuard');
 const asyncHandler = require('../middleware/asyncHandler');
 const validate = require('../middleware/validate');
-const { assignAnalysisSchema, createUserSchema, createGroupSchema, createCourseSchema } = require('../schemas/admin.schema');
+const { assignAnalysisSchema, createUserSchema, createGroupSchema, createCourseSchema, createStudentAnalysisSchema } = require('../schemas/admin.schema');
 const {
   getStats, getTeachers, uploadAnalysis, createFromUrl, assignAnalysis, getDraft,
   regenerateAnalysis, retryAnalysis, finalizeAnalysis, getLessons, getAnalysisJobs,
@@ -14,6 +14,7 @@ const {
   setTeacherCourses, getTeacherCourses, createGroup, createCourse,
   updateGroup, deleteGroup, updateUser, deleteUser, updateCourse, deleteCourse,
   getTeacherProgress,
+  uploadReferenceAudio, createStudentAnalysis, getStudentAnalysisJobs,
 } = require('../controllers/admin.controller');
 
 // Multer configuration with security limits
@@ -33,6 +34,20 @@ const upload = multer({
       cb(null, true);
     } else {
       cb(new Error('Sadece video dosyaları (mp4, webm, mov, avi, mkv) yüklenebilir.'), false);
+    }
+  },
+});
+
+// Audio multer for student reference voice uploads
+const ALLOWED_AUDIO_MIMETYPES = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/ogg', 'audio/webm', 'audio/mp4', 'audio/x-m4a'];
+const audioUpload = multer({
+  storage: multerStorage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB max for audio
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_AUDIO_MIMETYPES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Sadece ses dosyaları (mp3, wav, ogg, webm, m4a) yüklenebilir.'), false);
     }
   },
 });
@@ -71,5 +86,10 @@ router.put('/users/:id', auth, roleGuard('ADMIN'), asyncHandler(updateUser));
 router.delete('/users/:id', auth, roleGuard('ADMIN'), asyncHandler(deleteUser));
 router.put('/courses/:id', auth, roleGuard('ADMIN'), asyncHandler(updateCourse));
 router.delete('/courses/:id', auth, roleGuard('ADMIN'), asyncHandler(deleteCourse));
+
+// Student Voice Analysis
+router.post('/students/:studentId/reference-audio', auth, roleGuard('ADMIN'), audioUpload.single('audio'), asyncHandler(uploadReferenceAudio));
+router.post('/student-analysis/create', auth, roleGuard('ADMIN'), validate(createStudentAnalysisSchema), asyncHandler(createStudentAnalysis));
+router.get('/student-analysis/jobs', auth, roleGuard('ADMIN'), asyncHandler(getStudentAnalysisJobs));
 
 module.exports = router;

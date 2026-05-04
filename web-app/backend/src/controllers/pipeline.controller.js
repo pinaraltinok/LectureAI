@@ -36,6 +36,17 @@ const STAGE_PROGRESS_MAP = {
   'orchestrator:completed':           { stage: 'completed',  message: 'Analiz tamamlandı!',              percent: 100 },
   'orchestrator:failed':              { stage: 'failed',     message: 'Analiz başarısız oldu.',           percent: 0 },
   'orchestrator:skipped_report_exists': { stage: 'completed', message: 'Rapor zaten mevcut.',             percent: 100 },
+
+  // ── Student Voice Analysis Pipeline stages ────────────────
+  'student:transcript_started':       { stage: 'processing', message: 'Öğrenci transkripti oluşturuluyor...',       percent: 10 },
+  'student:transcript_completed':     { stage: 'processing', message: 'Transkript tamamlandı.',                     percent: 25 },
+  'student:biometric_started':        { stage: 'processing', message: 'Biyometrik ses eşleştirme başladı...',       percent: 30 },
+  'student:biometric_matching':       { stage: 'processing', message: 'Konuşmacı eşleştirme yapılıyor...',          percent: 45 },
+  'student:biometric_completed':      { stage: 'processing', message: 'Ses eşleştirme tamamlandı.',                 percent: 55 },
+  'student:report_generating':        { stage: 'reporting',  message: 'Pedagojik rapor oluşturuluyor...',            percent: 70 },
+  'student:report_uploading':         { stage: 'uploading',  message: 'Rapor yükleniyor...',                         percent: 85 },
+  'student:completed':                { stage: 'completed',  message: 'Öğrenci ses analizi tamamlandı!',            percent: 100 },
+  'student:failed':                   { stage: 'failed',     message: 'Öğrenci ses analizi başarısız oldu.',         percent: 0 },
 };
 
 /**

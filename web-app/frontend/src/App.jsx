@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, useNavigate, Navigate, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Users, Upload, Settings, BookOpen, MessageSquare, BarChart3, GraduationCap, ClipboardEdit, StickyNote, LogOut, BookOpenCheck, Menu, X } from 'lucide-react'
+import { LayoutDashboard, Users, Upload, Settings, BookOpen, MessageSquare, BarChart3, GraduationCap, ClipboardEdit, StickyNote, LogOut, BookOpenCheck, Menu, X, Mic } from 'lucide-react'
 import { AuthProvider, useAuth } from './context/AuthContext.jsx'
 import Login from './Login.jsx'
 
@@ -23,6 +23,7 @@ import StudentDashboard from './student/StudentDashboard.jsx'
 import StudentSurvey from './student/StudentSurvey.jsx'
 import StudentNotes from './student/StudentNotes.jsx'
 import StudentLessonPlayer from './student/StudentLessonPlayer.jsx'
+import StudentReportView from './student/StudentReportView.jsx'
 import ProfilePage from './components/ProfilePage.jsx'
 
 function AppContent() {
@@ -162,6 +163,10 @@ function AppContent() {
                 <StickyNote size={18} style={{marginRight:'12px', opacity: 0.8, flexShrink: 0}} />
                 Hocamın Notları
               </NavLink>
+              <NavLink to="/student/raporlarim" className={({isActive})=>isActive?"menu-link active":"menu-link"}>
+                <Mic size={18} style={{marginRight:'12px', opacity: 0.8, flexShrink: 0}} />
+                Ses Raporlarım
+              </NavLink>
             </>
           )}
         </nav>
@@ -214,6 +219,7 @@ function AppContent() {
                 <Route path="ders-kaydi" element={<div><h1>Ders Kaydı</h1><p>Ders kaydını izleyin ve not alın</p></div>} />
                 <Route path="anket" element={<div><h1>Ders Anketi</h1><p>Anonim ders değerlendirmesi</p></div>} />
                 <Route path="notlar" element={<div><h1>Hocamın Notları</h1><p>Eğitmenlerinizden gelen geri bildirimler</p></div>} />
+                <Route path="raporlarim" element={<div><h1>Ses Analiz Raporlarım</h1><p>Ders performansınıza dair pedagojik raporlar</p></div>} />
               </Routes>
             } />
 
@@ -248,6 +254,7 @@ function AppContent() {
           <Route path="/student/ders-kaydi" element={<StudentLessonPlayer />} />
           <Route path="/student/anket" element={<StudentSurvey />} />
           <Route path="/student/notlar" element={<StudentNotes />} />
+          <Route path="/student/raporlarim" element={<StudentReportView />} />
 
           <Route path="/profil" element={<ProfilePage />} />
 

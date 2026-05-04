@@ -20,6 +20,7 @@ const AppError = require('../utils/AppError');
 const {
   GCP_PROJECT_ID, PUBSUB_TOPIC, PROCESSED_BUCKET,
   VIDEO_BUCKET, VIDEO_PREFIX, GCS_POLL_INTERVAL, GCS_MAX_POLLS,
+  STUDENT_AUDIO_BUCKET, STUDENT_PUBSUB_TOPIC, STUDENT_REPORTS_PREFIX,
 } = require('../config/constants');
 
 // ─── Service Layer Imports (via Composition Root — DIP) ─────
@@ -246,6 +247,62 @@ async function assignAnalysis(req, res) {
       data: { groupId, teacherId, lessonNo, videoUrl, videoFilename, dateTime },
     });
     resolvedLessonId = lesson.id;
+
+    // ── Auto-trigger student voice analysis for all students in the group ──
+    // who have a referenceAudioUrl registered in the database.
+    if (videoUrl && resolvedLessonId) {
+      try {
+        const studentsInGroup = await prisma.studentGroup.findMany({
+          where: { groupId },
+          include: {
+            student: {
+              include: { user: { select: { name: true } } },
+            },
+          },
+        });
+
+        const eligibleStudents = studentsInGroup.filter(
+          sg => sg.student.referenceAudioUrl
+        );
+
+        console.log(`[AssignAnalysis] Group ${groupId}: ${studentsInGroup.length} students, ${eligibleStudents.length} with reference audio`);
+
+        for (const sg of eligibleStudents) {
+          try {
+            const studentReport = await prisma.report.create({
+              data: {
+                status: 'PENDING',
+                lessonId: resolvedLessonId,
+                draftReport: {
+                  _analysisType: 'student_voice',
+                  _studentId: sg.student.id,
+                  _studentName: sg.student.user.name,
+                  _videoUrl: videoUrl,
+                  _referenceAudioBlob: sg.student.referenceAudioUrl,
+                },
+              },
+            });
+
+            await prisma.reportStudent.create({
+              data: { reportId: studentReport.id, studentId: sg.student.id },
+            });
+
+            triggerStudentAnalysis(
+              studentReport.id,
+              videoUrl,
+              sg.student.user.name,
+              sg.student.referenceAudioUrl,
+            );
+
+            console.log(`[AssignAnalysis] Student analysis triggered: ${sg.student.user.name} (jobId=${studentReport.id})`);
+          } catch (studentErr) {
+            console.error(`[AssignAnalysis] Failed to trigger analysis for student ${sg.student.user.name}:`, studentErr.message);
+          }
+        }
+      } catch (groupErr) {
+        console.error('[AssignAnalysis] Failed to query group students:', groupErr.message);
+      }
+    }
   }
 
   const updated = await prisma.report.update({
@@ -253,7 +310,27 @@ async function assignAnalysis(req, res) {
     data: { lessonId: resolvedLessonId, status: 'PROCESSING' },
   });
 
-  return res.json({ jobId: updated.id, status: updated.status, lessonId: resolvedLessonId, message: 'Analiz başarıyla atandı.' });
+  // Count triggered student analyses for response
+  let studentAnalysisCount = 0;
+  if (groupId) {
+    studentAnalysisCount = await prisma.report.count({
+      where: {
+        lessonId: resolvedLessonId,
+        draftReport: { path: ['_analysisType'], equals: 'student_voice' },
+        status: { in: ['PENDING', 'PROCESSING'] },
+      },
+    }).catch(() => 0);
+  }
+
+  return res.json({
+    jobId: updated.id,
+    status: updated.status,
+    lessonId: resolvedLessonId,
+    studentAnalysisTriggered: studentAnalysisCount,
+    message: studentAnalysisCount > 0
+      ? `Analiz başarıyla atandı. ${studentAnalysisCount} öğrenci için ses analizi başlatıldı.`
+      : 'Analiz başarıyla atandı.',
+  });
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -577,6 +654,325 @@ async function deleteGroup(req, res) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// STUDENT VOICE ANALYSIS
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * POST /api/admin/students/:studentId/reference-audio
+ * Uploads a reference audio file for voice biometric matching.
+ * Body (multipart): audio file. Stored in GCS lectureai_student_audios bucket.
+ */
+async function uploadReferenceAudio(req, res) {
+  const { studentId } = req.params;
+  const file = req.file;
+
+  if (!file) throw new AppError('Ses dosyası gereklidir.', 400);
+
+  const student = await prisma.student.findUnique({ where: { id: studentId } });
+  if (!student) throw new AppError('Öğrenci bulunamadı.', 404);
+
+  if (!gcsStorage) throw new AppError('GCS client başlatılamadı.', 500);
+
+  // Upload to GCS: lectureai_student_audios/{studentId}_{timestamp}_{filename}
+  const sanitized = file.originalname.replace(/[^a-zA-Z0-9_\-().]/g, '_');
+  const gcsFileName = `${studentId}_${Date.now()}_${sanitized}`;
+  const localFilePath = path.resolve(file.destination, file.filename);
+
+  try {
+    await gcsStorage.bucket(STUDENT_AUDIO_BUCKET).upload(localFilePath, {
+      destination: gcsFileName,
+      metadata: {
+        contentType: file.mimetype || 'audio/mpeg',
+        metadata: { originalName: file.originalname, studentId },
+      },
+    });
+  } catch (err) {
+    console.error('[StudentAudio] GCS upload failed:', err.message);
+    throw new AppError('Ses dosyası yüklenemedi: ' + err.message, 500);
+  }
+
+  // Update student record with reference audio blob path
+  await prisma.student.update({
+    where: { id: studentId },
+    data: { referenceAudioUrl: gcsFileName },
+  });
+
+  console.log(`[StudentAudio] Reference audio uploaded: gs://${STUDENT_AUDIO_BUCKET}/${gcsFileName}`);
+
+  return res.json({
+    studentId,
+    referenceAudioUrl: gcsFileName,
+    gcsUri: `gs://${STUDENT_AUDIO_BUCKET}/${gcsFileName}`,
+    message: 'Referans ses dosyası başarıyla yüklendi.',
+  });
+}
+
+/**
+ * POST /api/admin/student-analysis/create
+ * Creates a student voice analysis job.
+ * Body: { studentId, lessonId }
+ * Requires: student must have a referenceAudioUrl and the lesson must have a videoUrl.
+ */
+async function createStudentAnalysis(req, res) {
+  const { studentId, lessonId } = req.body;
+
+  if (!studentId) throw new AppError('studentId gereklidir.', 400);
+  if (!lessonId) throw new AppError('lessonId gereklidir.', 400);
+
+  // Verify student exists and has reference audio
+  const student = await prisma.student.findUnique({
+    where: { id: studentId },
+    include: { user: { select: { name: true } } },
+  });
+  if (!student) throw new AppError('Öğrenci bulunamadı.', 404);
+  if (!student.referenceAudioUrl) {
+    throw new AppError('Bu öğrencinin referans ses kaydı yok. Önce ses yükleyin.', 400);
+  }
+
+  // Verify lesson exists and has a video
+  const lesson = await prisma.lesson.findUnique({
+    where: { id: lessonId },
+    include: { group: { include: { course: true } } },
+  });
+  if (!lesson) throw new AppError('Ders bulunamadı.', 404);
+  if (!lesson.videoUrl) throw new AppError('Bu dersin video kaydı yok.', 400);
+
+  // Create report record
+  const report = await prisma.report.create({
+    data: {
+      status: 'PENDING',
+      lessonId,
+      draftReport: {
+        _analysisType: 'student_voice',
+        _studentId: studentId,
+        _studentName: student.user.name,
+        _videoUrl: lesson.videoUrl,
+        _referenceAudioBlob: student.referenceAudioUrl,
+      },
+    },
+  });
+
+  // Link report to student
+  await prisma.reportStudent.create({
+    data: { reportId: report.id, studentId },
+  });
+
+  // Trigger pipeline via PubSub
+  triggerStudentAnalysis(
+    report.id,
+    lesson.videoUrl,
+    student.user.name,
+    student.referenceAudioUrl,
+  );
+
+  return res.status(201).json({
+    jobId: report.id,
+    status: 'PROCESSING',
+    studentName: student.user.name,
+    message: 'Öğrenci ses analizi başlatıldı.',
+  });
+}
+
+/**
+ * Publishes a student voice analysis request to PubSub and starts GCS polling.
+ */
+async function triggerStudentAnalysis(jobId, videoUri, studentName, referenceAudioBlob) {
+  const videoId = videoUri.split('/').pop().replace(/\.[^.]+$/, '');
+
+  analysisProgress.set(jobId, {
+    stage: 'queued',
+    message: 'Öğrenci ses analizi kuyruğa alındı...',
+    percent: 5,
+    startedAt: new Date().toISOString(),
+    videoId,
+    analysisType: 'student_voice',
+  });
+
+  await prisma.report.update({
+    where: { id: jobId },
+    data: { status: 'PROCESSING' },
+  }).catch(err => console.error('[StudentAnalysis] Status update error:', err));
+
+  try {
+    if (!pubsub) throw new Error('PubSub client not initialized');
+    const topic = pubsub.topic(STUDENT_PUBSUB_TOPIC);
+    const payload = JSON.stringify({
+      video_id: videoId,
+      student_name: studentName,
+      reference_audio_blob: referenceAudioBlob,
+      video_uri: videoUri,
+    });
+    const messageId = await topic.publishMessage({ data: Buffer.from(payload) });
+    console.log(`[StudentAnalysis] PubSub message ${messageId} published for student=${studentName}, video_id=${videoId}`);
+
+    analysisProgress.set(jobId, {
+      ...analysisProgress.get(jobId),
+      stage: 'processing',
+      message: 'Ses transkripti oluşturuluyor...',
+      percent: 15,
+    });
+
+    // Poll GCS for student report completion
+    pollGCSForStudentReport(jobId, videoId, studentName);
+  } catch (err) {
+    console.error('[StudentAnalysis] PubSub publish failed:', err.message);
+    analysisProgress.set(jobId, {
+      stage: 'failed',
+      message: 'Analiz isteği gönderilemedi: ' + err.message,
+      percent: 0,
+      analysisType: 'student_voice',
+    });
+    await prisma.report.update({
+      where: { id: jobId },
+      data: { status: 'PENDING', adminFeedback: `StudentAnalysis PubSub failed: ${err.message}` },
+    }).catch(() => {});
+  }
+}
+
+/**
+ * Polls GCS for completed student analysis report.
+ * Checks: student_reports/{student_name}/{video_id}.json
+ */
+function pollGCSForStudentReport(jobId, videoId, studentName) {
+  let pollCount = 0;
+  const safeName = studentName.toLowerCase().replace(/\s+/g, '_')
+    .replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/ç/g, 'c')
+    .replace(/ş/g, 's').replace(/ı/g, 'i').replace(/ğ/g, 'g')
+    .replace(/İ/g, 'i');
+
+  const stageMessages = [
+    { at: 6,   stage: 'processing', message: 'Transkript oluşturuluyor...',           percent: 20 },
+    { at: 30,  stage: 'processing', message: 'Konuşmacı eşleştirme yapılıyor...',     percent: 40 },
+    { at: 60,  stage: 'processing', message: 'Biyometrik ses analizi devam ediyor...', percent: 55 },
+    { at: 120, stage: 'reporting',  message: 'Pedagojik rapor oluşturuluyor...',       percent: 70 },
+    { at: 180, stage: 'reporting',  message: 'Rapor tamamlanıyor...',                  percent: 85 },
+  ];
+
+  // Candidate GCS paths where the pipeline might write the report
+  const candidatePaths = [
+    `${STUDENT_REPORTS_PREFIX}/${safeName}/${videoId}.json`,
+    `${STUDENT_REPORTS_PREFIX}/${videoId}_${safeName}.json`,
+    `${STUDENT_REPORTS_PREFIX}/${videoId}.json`,
+    `reports/${videoId}_student_${safeName}.json`,
+  ];
+
+  const interval = setInterval(async () => {
+    pollCount++;
+    const msg = [...stageMessages].reverse().find(s => pollCount >= s.at);
+    if (msg) {
+      analysisProgress.set(jobId, {
+        ...analysisProgress.get(jobId),
+        stage: msg.stage,
+        message: msg.message,
+        percent: msg.percent,
+      });
+    }
+
+    try {
+      if (!gcsStorage) throw new Error('GCS client not initialized');
+      const bucket = gcsStorage.bucket(PROCESSED_BUCKET);
+
+      // Try all candidate paths
+      for (const candidatePath of candidatePaths) {
+        const reportBlob = bucket.file(candidatePath);
+        const [exists] = await reportBlob.exists();
+        if (exists) {
+          clearInterval(interval);
+          analysisProgress.set(jobId, {
+            ...analysisProgress.get(jobId),
+            stage: 'uploading',
+            message: 'Öğrenci raporu okunuyor...',
+            percent: 95,
+          });
+
+          const [content] = await reportBlob.download();
+          let draftReport = {};
+          try { draftReport = JSON.parse(content.toString()); } catch (e) {
+            console.error('[StudentAnalysis] Report parse error:', e.message);
+          }
+
+          // Merge with existing draftReport to preserve metadata
+          const existing = await prisma.report.findUnique({
+            where: { id: jobId },
+            select: { draftReport: true },
+          });
+          const existingDraft = (typeof existing?.draftReport === 'object' && existing.draftReport) || {};
+          const mergedDraft = { ...existingDraft, ...draftReport };
+
+          await prisma.report.update({
+            where: { id: jobId },
+            data: { status: 'DRAFT', draftReport: mergedDraft },
+          });
+
+          analysisProgress.set(jobId, {
+            stage: 'completed',
+            message: 'Öğrenci ses analizi tamamlandı!',
+            percent: 100,
+            videoId,
+            analysisType: 'student_voice',
+          });
+          setTimeout(() => analysisProgress.delete(jobId), 5 * 60 * 1000);
+          console.log(`[StudentAnalysis] Report found at ${candidatePath} for jobId=${jobId}`);
+          return;
+        }
+      }
+    } catch (e) {
+      if (pollCount % 12 === 0) console.error('[StudentAnalysis] Poll error:', e.message);
+    }
+
+    if (pollCount >= GCS_MAX_POLLS) {
+      clearInterval(interval);
+      analysisProgress.set(jobId, {
+        stage: 'failed',
+        message: 'Öğrenci analizi zaman aşımına uğradı.',
+        percent: 0,
+        analysisType: 'student_voice',
+      });
+      await prisma.report.update({
+        where: { id: jobId },
+        data: { status: 'PENDING', adminFeedback: 'Student analysis timed out' },
+      }).catch(() => {});
+    }
+  }, GCS_POLL_INTERVAL);
+}
+
+/**
+ * GET /api/admin/student-analysis/jobs
+ * Returns all student voice analysis jobs.
+ */
+async function getStudentAnalysisJobs(req, res) {
+  const jobs = await prisma.report.findMany({
+    where: {
+      draftReport: { path: ['_analysisType'], equals: 'student_voice' },
+    },
+    include: {
+      reportStudents: {
+        include: { student: { include: { user: { select: { name: true } } } } },
+      },
+      lesson: { include: { group: { include: { course: true } } } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return res.json(jobs.map(j => {
+    const dr = (typeof j.draftReport === 'object' && j.draftReport) || {};
+    const studentInfo = j.reportStudents[0]?.student;
+    return {
+      jobId: j.id,
+      status: j.status,
+      studentId: studentInfo?.id || dr._studentId || null,
+      studentName: studentInfo?.user?.name || dr._studentName || null,
+      lessonId: j.lesson?.id || null,
+      lessonNo: j.lesson?.lessonNo || null,
+      courseName: j.lesson?.group?.course?.course || null,
+      videoUrl: j.lesson?.videoUrl || dr._videoUrl || null,
+      createdAt: j.createdAt,
+      updatedAt: j.updatedAt,
+    };
+  }));
+}
+
+// ═══════════════════════════════════════════════════════════
 module.exports = {
   getStats, getTeachers, uploadAnalysis, createFromUrl, assignAnalysis, getDraft,
   regenerateAnalysis, retryAnalysis, finalizeAnalysis, getLessons, getAnalysisJobs,
@@ -585,5 +981,7 @@ module.exports = {
   setTeacherCourses, getTeacherCourses, createGroup, createCourse,
   updateGroup, deleteGroup, updateUser, deleteUser, updateCourse, deleteCourse,
   getTeacherProgress,
+  // Student voice analysis
+  uploadReferenceAudio, createStudentAnalysis, getStudentAnalysisJobs,
   analysisProgress,
 };

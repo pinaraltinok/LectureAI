@@ -1,0 +1,6 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-f', 'Dockerfile.student', '-t', 'europe-west4-docker.pkg.dev/senior-design-488908/cloud-run-source-deploy/student-analysis-worker', '.']
+images:
+  - 'europe-west4-docker.pkg.dev/senior-design-488908/cloud-run-source-deploy/student-analysis-worker'
+timeout: '900s'
