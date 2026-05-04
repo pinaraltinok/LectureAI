@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { apiGet } from '../api'
-import { FileText, Mic, BarChart3, ChevronDown, ChevronUp, Sparkles, AlertTriangle, BookOpen } from 'lucide-react'
+import { FileText, Mic, BarChart3, ChevronDown, ChevronUp, Sparkles, AlertTriangle, BookOpen, Layers, Filter } from 'lucide-react'
 
 /**
  * StudentReportView — Displays the student's voice analysis reports.
  * Data comes from GET /api/student/reports which returns pipeline-generated
  * pedagogical reports (voice biometric match + Gemini LLM analysis).
+ *
+ * Reports are grouped by course so the student can navigate between
+ * different courses and see the reports that belong to each one.
  */
 
 // Parse markdown tables into structured data for rendering
@@ -144,11 +147,24 @@ function DimensionCard({ dim, index }) {
   )
 }
 
+/* ── Course color palette for tabs ── */
+const COURSE_COLORS = [
+  { bg: '#6366f1', gradient: 'linear-gradient(135deg, #6366f1, #8b5cf6)', light: '#ede9fe' },
+  { bg: '#f43f5e', gradient: 'linear-gradient(135deg, #f43f5e, #ec4899)', light: '#ffe4e6' },
+  { bg: '#10b981', gradient: 'linear-gradient(135deg, #10b981, #34d399)', light: '#d1fae5' },
+  { bg: '#f59e0b', gradient: 'linear-gradient(135deg, #f59e0b, #fbbf24)', light: '#fef3c7' },
+  { bg: '#06b6d4', gradient: 'linear-gradient(135deg, #06b6d4, #22d3ee)', light: '#cffafe' },
+  { bg: '#8b5cf6', gradient: 'linear-gradient(135deg, #8b5cf6, #a78bfa)', light: '#ede9fe' },
+]
+
+const ALL_COURSES_KEY = '__ALL__'
+
 const StudentReportView = () => {
   const [reports, setReports] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [expandedId, setExpandedId] = useState(null)
+  const [selectedCourse, setSelectedCourse] = useState(ALL_COURSES_KEY)
 
   useEffect(() => {
     apiGet('/student/reports')
@@ -159,6 +175,24 @@ const StudentReportView = () => {
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
   }, [])
+
+  // Group reports by courseName
+  const courseMap = useMemo(() => {
+    const map = {}
+    reports.forEach(r => {
+      const key = r.courseName || 'Diğer'
+      if (!map[key]) map[key] = []
+      map[key].push(r)
+    })
+    return map
+  }, [reports])
+
+  const courseNames = useMemo(() => Object.keys(courseMap), [courseMap])
+
+  const filteredReports = useMemo(() => {
+    if (selectedCourse === ALL_COURSES_KEY) return reports
+    return courseMap[selectedCourse] || []
+  }, [selectedCourse, reports, courseMap])
 
   if (loading) {
     return (
@@ -224,7 +258,7 @@ const StudentReportView = () => {
               Ders Performansım <Sparkles size={24} style={{ display: 'inline', verticalAlign: 'middle' }} />
             </h2>
             <p style={{ fontSize: '0.95rem', opacity: 0.6, fontWeight: 500, margin: 0 }}>
-              {reports.length} rapor mevcut
+              {courseNames.length} ders • {reports.length} rapor mevcut
             </p>
           </div>
           <div style={{
@@ -237,158 +271,253 @@ const StudentReportView = () => {
             <Mic size={36} />
           </div>
         </div>
+
+        {/* Quick Stats */}
+        <div className="responsive-quick-stats" style={{
+          display: 'flex', gap: '1.5rem', marginTop: '1.5rem',
+          paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)', flexWrap: 'wrap',
+        }}>
+          {[
+            { label: 'Toplam Rapor', value: reports.length, icon: <FileText size={18} /> },
+            { label: 'Ders Sayısı', value: courseNames.length, icon: <Layers size={18} /> },
+            { label: 'Onaylanan', value: reports.filter(r => r.status === 'FINALIZED').length, icon: <Sparkles size={18} /> },
+          ].map((item, i) => (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'center', gap: '10px',
+              padding: '8px 16px', borderRadius: '14px',
+              background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(4px)',
+              animation: `slideInRight 0.4s ease ${0.3 + i * 0.1}s both`,
+            }}>
+              <span style={{ color: 'rgba(255,255,255,0.9)' }}>{item.icon}</span>
+              <div>
+                <span style={{ fontSize: '1.1rem', fontWeight: 900, display: 'block', lineHeight: 1 }}>{item.value}</span>
+                <span style={{ fontSize: '0.6rem', fontWeight: 700, opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{item.label}</span>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
+
+      {/* ── Course Filter Tabs ── */}
+      {courseNames.length > 1 && (
+        <div style={{
+          display: 'flex', gap: '8px', marginBottom: '1.5rem', flexWrap: 'wrap',
+          animation: 'cardPopIn 0.4s ease 0.15s both',
+        }}>
+          {/* All courses tab */}
+          <button
+            onClick={() => setSelectedCourse(ALL_COURSES_KEY)}
+            style={{
+              padding: '10px 20px', borderRadius: '100px', border: 'none', cursor: 'pointer',
+              fontSize: '0.82rem', fontWeight: 800, transition: 'all 0.3s ease',
+              display: 'flex', alignItems: 'center', gap: '8px',
+              background: selectedCourse === ALL_COURSES_KEY
+                ? 'linear-gradient(135deg, #1e1b4b, #4338ca)' : '#f1f5f9',
+              color: selectedCourse === ALL_COURSES_KEY ? '#fff' : '#64748b',
+              boxShadow: selectedCourse === ALL_COURSES_KEY
+                ? '0 4px 15px rgba(67,56,202,0.3)' : 'none',
+            }}
+          >
+            <Filter size={14} />
+            Tüm Dersler
+            <span style={{
+              fontSize: '0.7rem', fontWeight: 900, padding: '2px 8px', borderRadius: '100px',
+              background: selectedCourse === ALL_COURSES_KEY
+                ? 'rgba(255,255,255,0.2)' : '#e2e8f0',
+            }}>
+              {reports.length}
+            </span>
+          </button>
+
+          {courseNames.map((name, idx) => {
+            const theme = COURSE_COLORS[idx % COURSE_COLORS.length]
+            const isActive = selectedCourse === name
+            return (
+              <button
+                key={name}
+                onClick={() => setSelectedCourse(name)}
+                style={{
+                  padding: '10px 20px', borderRadius: '100px', border: 'none', cursor: 'pointer',
+                  fontSize: '0.82rem', fontWeight: 800, transition: 'all 0.3s ease',
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  background: isActive ? theme.gradient : '#f1f5f9',
+                  color: isActive ? '#fff' : '#64748b',
+                  boxShadow: isActive ? `0 4px 15px ${theme.bg}40` : 'none',
+                }}
+              >
+                {name}
+                <span style={{
+                  fontSize: '0.7rem', fontWeight: 900, padding: '2px 8px', borderRadius: '100px',
+                  background: isActive ? 'rgba(255,255,255,0.2)' : '#e2e8f0',
+                }}>
+                  {courseMap[name].length}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* Report Cards */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        {reports.map((report, idx) => {
-          const isExpanded = expandedId === report.id
-          const sections = report.reportMarkdown ? parseSections(report.reportMarkdown) : null
+        {filteredReports.length === 0 ? (
+          <div style={{
+            textAlign: 'center', padding: '3rem', background: '#fff',
+            borderRadius: '20px', border: '1px solid #e2e8f0',
+          }}>
+            <FileText size={40} color="#cbd5e1" style={{ marginBottom: '1rem' }} />
+            <p style={{ fontWeight: 800, color: '#94a3b8' }}>Bu derse ait rapor bulunmuyor.</p>
+          </div>
+        ) : (
+          filteredReports.map((report, idx) => {
+            const isExpanded = expandedId === report.id
+            const sections = report.reportMarkdown ? parseSections(report.reportMarkdown) : null
 
-          return (
-            <div key={report.id} style={{
-              background: '#fff', borderRadius: '20px', overflow: 'hidden',
-              border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.04)',
-              animation: `cardPopIn 0.5s ease ${0.1 + idx * 0.1}s both`,
-            }}>
-              {/* Report Header */}
-              <button
-                onClick={() => setExpandedId(isExpanded ? null : report.id)}
-                style={{
-                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '1.25rem 1.5rem', background: isExpanded
-                    ? 'linear-gradient(135deg, #0f172a 0%, #334155 100%)'
-                    : '#fff',
-                  border: 'none', cursor: 'pointer', color: isExpanded ? '#fff' : '#1e293b',
-                  borderBottom: '1px solid #e2e8f0', transition: 'all 0.3s ease',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                  <div style={{
-                    width: '44px', height: '44px', borderRadius: '14px', display: 'grid', placeItems: 'center',
-                    background: isExpanded ? 'rgba(99,102,241,0.2)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                    color: '#fff', fontSize: '1.1rem', fontWeight: 900,
-                  }}>
-                    <FileText size={20} />
+            return (
+              <div key={report.id} style={{
+                background: '#fff', borderRadius: '20px', overflow: 'hidden',
+                border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.04)',
+                animation: `cardPopIn 0.5s ease ${0.1 + idx * 0.1}s both`,
+              }}>
+                {/* Report Header */}
+                <button
+                  onClick={() => setExpandedId(isExpanded ? null : report.id)}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '1.25rem 1.5rem', background: isExpanded
+                      ? 'linear-gradient(135deg, #0f172a 0%, #334155 100%)'
+                      : '#fff',
+                    border: 'none', cursor: 'pointer', color: isExpanded ? '#fff' : '#1e293b',
+                    borderBottom: '1px solid #e2e8f0', transition: 'all 0.3s ease',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <div style={{
+                      width: '44px', height: '44px', borderRadius: '14px', display: 'grid', placeItems: 'center',
+                      background: isExpanded ? 'rgba(99,102,241,0.2)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                      color: '#fff', fontSize: '1.1rem', fontWeight: 900,
+                    }}>
+                      <FileText size={20} />
+                    </div>
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{ fontWeight: 800, fontSize: '1rem' }}>
+                        {report.courseName || 'Ders Raporu'} — Ders {report.lessonNo || '?'}
+                      </div>
+                      <div style={{
+                        fontSize: '0.78rem', fontWeight: 600, marginTop: '2px',
+                        opacity: isExpanded ? 0.7 : 0.5,
+                      }}>
+                        {report.teacherName || ''} • {new Date(report.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        {report.biometricScore ? ` • Ses Eşleşme: %${Math.round(report.biometricScore * 100)}` : ''}
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ textAlign: 'left' }}>
-                    <div style={{ fontWeight: 800, fontSize: '1rem' }}>
-                      {report.courseName || 'Ders Raporu'} — Ders {report.lessonNo || '?'}
-                    </div>
-                    <div style={{
-                      fontSize: '0.78rem', fontWeight: 600, marginTop: '2px',
-                      opacity: isExpanded ? 0.7 : 0.5,
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{
+                      fontSize: '0.7rem', fontWeight: 800, padding: '4px 12px', borderRadius: '100px',
+                      background: report.status === 'FINALIZED' ? '#10b981' : '#6366f1',
+                      color: '#fff',
                     }}>
-                      {report.teacherName || ''} • {new Date(report.createdAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}
-                      {report.biometricScore ? ` • Ses Eşleşme: %${Math.round(report.biometricScore * 100)}` : ''}
-                    </div>
+                      {report.status === 'FINALIZED' ? 'ONAYLANDI' : 'HAZIR'}
+                    </span>
+                    {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                   </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{
-                    fontSize: '0.7rem', fontWeight: 800, padding: '4px 12px', borderRadius: '100px',
-                    background: report.status === 'FINALIZED' ? '#10b981' : '#6366f1',
-                    color: '#fff',
-                  }}>
-                    {report.status === 'FINALIZED' ? 'ONAYLANDI' : 'HAZIR'}
-                  </span>
-                  {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                </div>
-              </button>
+                </button>
 
-              {/* Report Body */}
-              {isExpanded && sections && (
-                <div style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                  {/* Intro */}
-                  {sections.intro && (
-                    <div style={{
-                      padding: '1.25rem 1.5rem', borderRadius: '14px',
-                      background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
-                      borderLeft: '4px solid #7c3aed', fontSize: '0.9rem',
-                      color: '#4c1d95', lineHeight: 1.7, fontWeight: 500,
-                    }}>
-                      {sections.intro}
-                    </div>
-                  )}
-
-                  {/* Metric Dimensions */}
-                  {sections.dimensions.map((dim, di) => (
-                    <DimensionCard key={di} dim={dim} index={di} />
-                  ))}
-
-                  {/* Strengths */}
-                  {sections.strengths && (
-                    <div style={{
-                      padding: '1.25rem 1.5rem', borderRadius: '14px',
-                      background: '#f0fdf4', border: '1px solid #bbf7d0',
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                        <Sparkles size={16} color="#15803d" />
-                        <span style={{ fontWeight: 800, color: '#15803d', fontSize: '0.85rem' }}>Öne Çıkan Güçlü Yönler</span>
+                {/* Report Body */}
+                {isExpanded && sections && (
+                  <div style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    {/* Intro */}
+                    {sections.intro && (
+                      <div style={{
+                        padding: '1.25rem 1.5rem', borderRadius: '14px',
+                        background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
+                        borderLeft: '4px solid #7c3aed', fontSize: '0.9rem',
+                        color: '#4c1d95', lineHeight: 1.7, fontWeight: 500,
+                      }}>
+                        {sections.intro}
                       </div>
-                      <p style={{ margin: 0, fontSize: '0.88rem', color: '#166534', lineHeight: 1.7 }}>
-                        {sections.strengths}
-                      </p>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Tips */}
-                  {sections.tips.length > 0 && (
-                    <div style={{
-                      padding: '1.25rem 1.5rem', borderRadius: '14px',
-                      background: '#fffbeb', border: '1px solid #fde68a',
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                        <BarChart3 size={16} color="#b45309" />
-                        <span style={{ fontWeight: 800, color: '#b45309', fontSize: '0.85rem' }}>Gelişim Önerileri</span>
+                    {/* Metric Dimensions */}
+                    {sections.dimensions.map((dim, di) => (
+                      <DimensionCard key={di} dim={dim} index={di} />
+                    ))}
+
+                    {/* Strengths */}
+                    {sections.strengths && (
+                      <div style={{
+                        padding: '1.25rem 1.5rem', borderRadius: '14px',
+                        background: '#f0fdf4', border: '1px solid #bbf7d0',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                          <Sparkles size={16} color="#15803d" />
+                          <span style={{ fontWeight: 800, color: '#15803d', fontSize: '0.85rem' }}>Öne Çıkan Güçlü Yönler</span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: '0.88rem', color: '#166534', lineHeight: 1.7 }}>
+                          {sections.strengths}
+                        </p>
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        {sections.tips.map((tip, ti) => (
-                          <div key={ti} style={{
-                            display: 'flex', gap: '10px', alignItems: 'flex-start',
-                            fontSize: '0.85rem', color: '#92400e', lineHeight: 1.6,
-                          }}>
-                            <span style={{
-                              width: '22px', height: '22px', borderRadius: '50%', flexShrink: 0,
-                              background: '#fbbf24', color: '#fff', display: 'grid', placeItems: 'center',
-                              fontSize: '0.7rem', fontWeight: 900, marginTop: '2px',
-                            }}>{ti + 1}</span>
-                            <span>{tip}</span>
-                          </div>
-                        ))}
+                    )}
+
+                    {/* Tips */}
+                    {sections.tips.length > 0 && (
+                      <div style={{
+                        padding: '1.25rem 1.5rem', borderRadius: '14px',
+                        background: '#fffbeb', border: '1px solid #fde68a',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                          <BarChart3 size={16} color="#b45309" />
+                          <span style={{ fontWeight: 800, color: '#b45309', fontSize: '0.85rem' }}>Gelişim Önerileri</span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          {sections.tips.map((tip, ti) => (
+                            <div key={ti} style={{
+                              display: 'flex', gap: '10px', alignItems: 'flex-start',
+                              fontSize: '0.85rem', color: '#92400e', lineHeight: 1.6,
+                            }}>
+                              <span style={{
+                                width: '22px', height: '22px', borderRadius: '50%', flexShrink: 0,
+                                background: '#fbbf24', color: '#fff', display: 'grid', placeItems: 'center',
+                                fontSize: '0.7rem', fontWeight: 900, marginTop: '2px',
+                              }}>{ti + 1}</span>
+                              <span>{tip}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Closing */}
-                  {sections.closing && (
-                    <div style={{
-                      padding: '1.25rem 1.5rem', borderRadius: '14px',
-                      background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)',
-                      borderLeft: '4px solid #22c55e', fontStyle: 'italic',
-                      fontSize: '0.88rem', color: '#166534', lineHeight: 1.7,
-                    }}>
-                      {sections.closing}
-                    </div>
-                  )}
-                </div>
-              )}
+                    {/* Closing */}
+                    {sections.closing && (
+                      <div style={{
+                        padding: '1.25rem 1.5rem', borderRadius: '14px',
+                        background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)',
+                        borderLeft: '4px solid #22c55e', fontStyle: 'italic',
+                        fontSize: '0.88rem', color: '#166534', lineHeight: 1.7,
+                      }}>
+                        {sections.closing}
+                      </div>
+                    )}
+                  </div>
+                )}
 
-              {/* Fallback: No parsed markdown */}
-              {isExpanded && !sections && (
-                <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>
-                  <FileText size={32} style={{ marginBottom: '0.5rem', opacity: 0.5 }} />
-                  <p style={{ fontWeight: 700, fontSize: '0.9rem' }}>
-                    Rapor içeriği henüz oluşturulmamış.
-                  </p>
-                  <p style={{ fontSize: '0.8rem' }}>
-                    Analiz tamamlandığında detaylı rapor burada görünecektir.
-                  </p>
-                </div>
-              )}
-            </div>
-          )
-        })}
+                {/* Fallback: No parsed markdown */}
+                {isExpanded && !sections && (
+                  <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>
+                    <FileText size={32} style={{ marginBottom: '0.5rem', opacity: 0.5 }} />
+                    <p style={{ fontWeight: 700, fontSize: '0.9rem' }}>
+                      Rapor içeriği henüz oluşturulmamış.
+                    </p>
+                    <p style={{ fontSize: '0.8rem' }}>
+                      Analiz tamamlandığında detaylı rapor burada görünecektir.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )
+          })
+        )}
       </div>
     </div>
   )
