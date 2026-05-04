@@ -120,10 +120,17 @@ async function postWorkerPipelineEvent(req, res) {
       const prisma = new PrismaClient();
       const newStatus = stage === 'student:completed' ? 'DRAFT' : 'FAILED';
 
-      // Find PROCESSING student voice analysis reports
+      // Parse report data from detail (worker sends full JSON on completed)
+      let reportData = {};
+      if (stage === 'student:completed' && detail) {
+        try {
+          reportData = typeof detail === 'string' ? JSON.parse(detail) : detail;
+        } catch { /* detail is plain text */ }
+      }
+
+      // Find student voice analysis reports
       const records = await prisma.report.findMany({
         where: {
-          status: 'PROCESSING',
           draftReport: { path: ['_analysisType'], equals: 'student_voice' },
         },
       });
@@ -131,12 +138,24 @@ async function postWorkerPipelineEvent(req, res) {
       for (const record of records) {
         const dr = (typeof record.draftReport === 'object' && record.draftReport) || {};
         const recordVideoId = dr._videoId || '';
-        if (recordVideoId && video_id.includes(recordVideoId)) {
+        const recordVideoUrl = dr._videoUrl || '';
+
+        const matches = (recordVideoId && video_id.includes(recordVideoId)) ||
+                        (recordVideoUrl && video_id.split('___').some(part => recordVideoUrl.includes(part)));
+
+        if (matches && record.status === 'PROCESSING') {
+          // Merge worker report data into draftReport
+          const updatedDraft = { ...dr, ...reportData, _videoId: video_id, _completedAt: new Date().toISOString() };
+
           await prisma.report.update({
             where: { id: record.id },
-            data: { status: newStatus, updatedAt: new Date() },
+            data: {
+              status: newStatus,
+              draftReport: updatedDraft,
+              updatedAt: new Date(),
+            },
           });
-          console.log(`[Pipeline] Report ${record.id} → ${newStatus}`);
+          console.log(`[Pipeline] Report ${record.id} → ${newStatus} (markdown: ${!!reportData.report_markdown})`);
           break;
         }
       }

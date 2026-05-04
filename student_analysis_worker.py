@@ -283,10 +283,20 @@ def run_student_pipeline(video_id, student_name, video_blob, reference_audio_blo
         }
 
         # Read the generated markdown if it exists
-        md_path = f"data/FINAL_RAPOR_{student_name.replace(' ', '_')}.md"
+        # generate_student_report.py uses target_student.lower() for the filename
+        md_name = student_name.lower().replace(' ', '_')
+        md_path = f"data/FINAL_RAPOR_{md_name}.md"
+        if not os.path.exists(md_path):
+            # Fallback: try glob for any matching markdown file
+            import glob as _glob
+            md_candidates = _glob.glob(f"data/FINAL_RAPOR_*{get_safe_name(student_name)}*.md") + \
+                            _glob.glob(f"data/FINAL_RAPOR_*{md_name}*.md")
+            if md_candidates:
+                md_path = md_candidates[0]
         if os.path.exists(md_path):
             with open(md_path, "r", encoding="utf-8") as f:
                 report_json["report_markdown"] = f.read()
+            print(f"[OK] Markdown içeriği JSON'a eklendi: {md_path}")
 
         # Upload JSON
         json_blob_path = f"{STUDENT_REPORTS_PREFIX}/{safe_name}/{video_id}.json"
@@ -308,7 +318,7 @@ def run_student_pipeline(video_id, student_name, video_blob, reference_audio_blo
             print(f"[OK] PDF rapor yüklendi: gs://{PROCESSED_BUCKET}/{pdf_blob_path}")
             report_json["_pdfPath"] = f"gs://{PROCESSED_BUCKET}/{pdf_blob_path}"
 
-        emit_progress(video_id, "student:completed", "Öğrenci ses analizi tamamlandı!")
+        emit_progress(video_id, "student:completed", json.dumps(report_json, ensure_ascii=False))
         return json_blob_path
 
     except Exception as e:
