@@ -74,6 +74,16 @@ def run_student_pipeline(video_id, student_name, video_blob, reference_audio_blo
     print(f"STUDENT ANALYSIS WORKER: {student_name} | {video_blob}")
     print(f"{'='*60}\n")
 
+    # Sanitize reference_audio_blob — strip bucket prefix if present
+    ref_bucket = os.getenv("STUDENT_AUDIO_BUCKET", "lectureai_student_audios")
+    if reference_audio_blob.startswith(f"{ref_bucket}/"):
+        reference_audio_blob = reference_audio_blob[len(f"{ref_bucket}/"):]
+    # Also strip gs:// style prefixes
+    if reference_audio_blob.startswith("gs://"):
+        parts = reference_audio_blob.replace("gs://", "").split("/", 1)
+        reference_audio_blob = parts[1] if len(parts) > 1 else parts[0]
+    print(f"[INFO] Sanitized reference blob: {reference_audio_blob}")
+
     load_env_file()
     if os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
