@@ -29,4 +29,5 @@ COPY --from=frontend-build /app/frontend/dist ./public
 # Cloud Run will set PORT env var (defaults to 3001)
 EXPOSE 3001
 
-CMD ["node", "src/server.js"]
+# Auto-apply schema changes on startup, then start server
+CMD ["sh", "-c", "npx prisma db push --skip-generate --accept-data-loss 2>&1 || echo '[WARN] prisma db push failed'; node src/server.js"]
