@@ -140,8 +140,10 @@ async function postWorkerPipelineEvent(req, res) {
         const recordVideoId = dr._videoId || '';
         const recordVideoUrl = dr._videoUrl || '';
 
-        const matches = (recordVideoId && video_id.includes(recordVideoId)) ||
-                        (recordVideoUrl && video_id.split('___').some(part => recordVideoUrl.includes(part)));
+        // Extract filename from _videoUrl for reliable matching
+        const urlFilename = recordVideoUrl.split('/').pop().replace(/\.[^.]+$/, '');
+        const matches = (recordVideoId && video_id === recordVideoId) ||
+                        (urlFilename && video_id === urlFilename);
 
         if (matches && record.status === 'PROCESSING') {
           // Merge worker report data into draftReport

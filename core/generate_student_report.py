@@ -327,12 +327,113 @@ except httpx.HTTPStatusError as e:
 [İSKELET BİTİŞİ]
 """
     else:
-        print(f"[!!] Gemini API Hatası: {status}")
-        print(e.response.text)
-        sys.exit(1)
+        print(f"[WARN] Gemini API Hatası (status={status}), offline şablon kullanılacak.")
+        # Fall through to offline template below
+        raise Exception(f"Gemini HTTP {status}")
 except Exception as e:
-    print(f"[!!] Beklenmeyen hata: {e}")
-    sys.exit(1)
+    print(f"[WARN] Gemini API başarısız ({e}), offline şablon ile rapor oluşturuluyor...")
+    # ── Offline template fallback (same as 429 handler) ──
+    import re
+
+    student_texts = [u["text"] for u in all_utts if u.get("speaker") == speaker_tag and u.get("text")]
+
+    def tok(s):
+        return re.findall(r"[0-9a-zA-Zİıİşğüöç_]+", s.lower())
+
+    word_counts = [len(tok(t)) for t in student_texts] or [0]
+    avg_words = sum(word_counts) / max(1, len(word_counts))
+    total_words = sum(word_counts)
+
+    tech_terms = {
+        "api", "gpu", "model", "whisper", "mediapipe", "ocr", "transkript", "transcript",
+        "notebook", "jupyter", "prototip", "pipeline", "ffmpeg", "ses", "video"
+    }
+    tech_hits = sum(1 for t in student_texts for w in tok(t) if w in tech_terms)
+    question_hits = sum(1 for t in student_texts if "?" in t or any(w in tok(t) for w in ("neden", "nasıl", "niye")))
+    initiative_hits = sum(1 for t in student_texts if any(x in t.lower() for x in ("ben denedim", "ben yapt", "prototip", "denem", "test ett", "çalıştım")))
+    planning_hits = sum(1 for t in student_texts if any(x in t.lower() for x in ("haftaya", "sonraki", "toplantı", "plan", "takvim")))
+    hedge_hits = sum(1 for t in student_texts if any(x in t.lower() for x in ("şey", "yani", "galiba", "emin değil", "tam net")))
+
+    def label_from(value, good, ok):
+        if value >= good:
+            return "✓ İyi"
+        if value >= ok:
+            return "~ Gelişiyor"
+        return "↑ Çalışılacak"
+
+    participation = label_from(len(student_texts), 6, 3)
+    comm_quality = label_from(avg_words, 10, 6)
+    confidence = "✓ İyi" if hedge_hits <= max(1, len(student_texts) // 6) else "~ Gelişiyor"
+    logical = "✓ İyi" if (tech_hits >= 6 or initiative_hits >= 2) else ("~ Gelişiyor" if tech_hits >= 2 else "↑ Çalışılacak")
+    error_mgmt = "~ Gelişiyor"
+    if any(x in " ".join(student_texts).lower() for x in ("hata", "sorun", "çıkmadı", "düzgün", "problem")):
+        error_mgmt = "✓ İyi" if any(x in " ".join(student_texts).lower() for x in ("çöz", "düzelt", "denedim", "farklı")) else "~ Gelişiyor"
+    independent = "✓ İyi" if initiative_hits >= 1 else ("~ Gelişiyor" if tech_hits >= 1 else "↑ Çalışılacak")
+    tempo = "~ Gelişiyor" if len(student_texts) < 4 else "✓ İyi"
+    prep = "✓ İyi" if (initiative_hits >= 1 or planning_hits >= 1) else "~ Gelişiyor"
+
+    intro_extra = "Derse düzenli şekilde dahil olmuş ve konuşmalarında konuya dair somut geri bildirimler vermiştir."
+    if initiative_hits >= 1:
+        intro_extra = "Ders sürecine somut denemeler/prototiplerle dahil olmuş ve süreci iyileştirme odaklı yaklaşmıştır."
+    elif question_hits >= 2:
+        intro_extra = "Ders akışında merakını sorularla göstererek konuyu derinleştirme eğilimi sergilemiştir."
+
+    strengths = "Sürece katkı verme ve iletişimde süreklilik sağlama becerisi öne çıkıyor."
+    if initiative_hits >= 1:
+        strengths = "Bağımsız deneme yapma ve ortaya çıkan sonuçları analiz ederek ilerleme planı oluşturma becerisi öne çıkıyor."
+    elif tech_hits >= 4:
+        strengths = "Teknik kavramları takip edip doğru bağlamda kullanma becerisi öne çıkıyor."
+
+    tips = []
+    if participation != "✓ İyi":
+        tips.append("- **Sözlü Katılımı Artırma:** Kısa yanıtlar yerine, 1-2 cümle ile gerekçe ekleyerek katılımın görünürlüğünü artırabilir.")
+    if comm_quality != "✓ İyi":
+        tips.append("- **İfade Netliği:** Bir fikri aktarırken önce amaç, sonra yöntem ve en sonda beklenen çıktı şeklinde yapılandırma önerilir.")
+    if independent != "✓ İyi":
+        tips.append("- **Mini Denemeler:** 10-20 saniyelik küçük örnekler üzerinde test yapıp sonuçları notlamak öğrenmeyi hızlandırır.")
+    if not tips:
+        tips = [
+            "- **Hata Günlüğü:** Denemelerde karşılaşılan hataları ve çözüm adımlarını kısa notlarla takip etmek süreklilik sağlar.",
+            "- **Küçük Test Setleri:** Parametre değişikliklerinin çıktıya etkisini küçük örneklerle karşılaştırmak doğruluğu artırır.",
+        ]
+
+    report_text = f"""<div class="intro-box">
+<strong>Sayın Veli,</strong> Bu rapor {target_student.title()}'nin ders sürecindeki katılımını ve gelişim alanlarını destekleyici bir bakış açısıyla aktarmaktadır. {intro_extra}
+</div>
+
+### 1. Katılım & İletişim
+
+| Ölçüt | Pedagojik Gözlem | Durum |
+| :--- | :--- | :--- |
+| **Sözel Katılım** | Ders akışında {len(student_texts)} kez söz alarak görüş bildirmiştir. | {participation} |
+| **İletişim Kalitesi** | Ortalama ifade uzunluğu ~{avg_words:.1f} kelime düzeyindedir. | {comm_quality} |
+| **Özgüven Tonu** | Belirsizlik belirten kalıplar {hedge_hits} kez görülmüştür. | {confidence} |
+
+### 2. Anlama & Problem Çözme
+
+| Ölçüt | Pedagojik Gözlem | Durum |
+| :--- | :--- | :--- |
+| **Mantıksal Çözümleme** | Teknik kavram kullanımı {tech_hits} gösterge ile tespit edilmiştir. | {logical} |
+| **Hata Yönetimi** | Problem tespiti ve alternatif denemeler üzerinden yorumlanmıştır. | {error_mgmt} |
+| **Bağımsız Deneme** | Bağımsız deneme işaretleri {initiative_hits} kez görülmüştür. | {independent} |
+
+### 3. Ders Akışına Uyum
+
+| Ölçüt | Pedagojik Gözlem | Durum |
+| :--- | :--- | :--- |
+| **Tempo Uyumu** | Kısa-orta uzunlukta yanıtlarla akışı takip etmiştir. | {tempo} |
+| **Hazırlık ve Materyal Kullanımı** | Süreç planlama göstergeleri {planning_hits} kez görülmüştür. | {prep} |
+| **Hedef Belirleme** | Hedef/çıktı tanımlama düzeyi göz önünde bulundurulmuştur. | ~ Gelişiyor |
+
+### Öne Çıkan Güçlü Yönler
+{strengths}
+
+### Gelişim Önerileri
+{chr(10).join(tips)}
+
+<div class="end-box">
+{target_student.title()}'nin öğrenme yolculuğunda gösterdiği çaba ve merak çok değerli. Birlikte bu temeli daha da güçlendireceğiz.
+</div>"""
 
 # ─────────────────────────────────────────────
 # 5. Markdown kaydet
