@@ -335,7 +335,7 @@ if __name__ == "__main__":
     parser.add_argument("--student", default="Yaman")
     parser.add_argument("--video", default="Lesson_Records/1777550695949___4.L2_Araba_Olu__turmak.mp4")
     parser.add_argument("--reference", default="yaman.mp3")
-    parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument("--port", type=int, default=int(os.getenv("PORT", "8080")))
     args = parser.parse_args()
 
     if args.local:
@@ -344,5 +344,3 @@ if __name__ == "__main__":
     else:
         print(f"[WORKER] Starting HTTP server on port {args.port}")
         app.run(host="0.0.0.0", port=args.port)
-"""Student analysis worker entry point for Cloud Run."""
-<parameter name="Description">Cloud Run worker that bridges the web-app PubSub trigger to the existing standalone pipeline. Uses CPU-based MFCC biometric matching (Option A from approved plan), sends webhook progress events, and uploads structured JSON report to GCS.
