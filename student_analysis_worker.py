@@ -334,16 +334,21 @@ def handle_pubsub():
     """Handle PubSub push subscription messages."""
     envelope = request.get_json(silent=True)
     if not envelope:
+        print("[WORKER] 400: no JSON body")
         return jsonify({"error": "Bad Request: no JSON body"}), 400
 
     # PubSub wraps messages in an "envelope"
     pubsub_message = envelope.get("message", {})
     if not pubsub_message:
+        print(f"[WORKER] 400: no PubSub message. Keys: {list(envelope.keys())}")
         return jsonify({"error": "Bad Request: no PubSub message"}), 400
 
     try:
-        data = json.loads(base64.b64decode(pubsub_message.get("data", "")).decode("utf-8"))
-    except Exception:
+        raw_data = base64.b64decode(pubsub_message.get("data", "")).decode("utf-8")
+        data = json.loads(raw_data)
+        print(f"[WORKER] Decoded PubSub data: {json.dumps(data, ensure_ascii=False)[:500]}")
+    except Exception as e:
+        print(f"[WORKER] 400: invalid message data: {e}")
         return jsonify({"error": "Bad Request: invalid message data"}), 400
 
     video_id = data.get("video_id", "")
@@ -352,7 +357,10 @@ def handle_pubsub():
     video_uri = data.get("video_uri", "")
 
     if not all([video_id, student_name, reference_audio_blob, video_uri]):
-        return jsonify({"error": "Missing required fields"}), 400
+        missing = [k for k, v in {"video_id": video_id, "student_name": student_name,
+                   "reference_audio_blob": reference_audio_blob, "video_uri": video_uri}.items() if not v]
+        print(f"[WORKER] 400: Missing fields: {missing}. Data keys: {list(data.keys())}")
+        return jsonify({"error": f"Missing required fields: {missing}"}), 400
 
     # Extract the blob path from gs:// URI if needed
     video_blob = video_uri

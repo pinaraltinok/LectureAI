@@ -127,6 +127,158 @@ if (fs.existsSync(frontendIndex)) {
   app.use(express.static(frontendPath));
 }
 
+// ─── Temporary Data Import Endpoint (one-time use) ───────────
+app.post('/api/admin/import-data', async (req, res) => {
+  try {
+    const secret = (req.headers.authorization || '').replace('Bearer ', '');
+    if (secret !== (process.env.PIPELINE_WEBHOOK_SECRET || 'lectureai-pipeline-secret-2026')) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const { PrismaClient } = require('@prisma/client');
+    const prisma = new PrismaClient();
+    const data = req.body;
+    const results = { created: 0, skipped: 0, errors: [], idMap: {} };
+
+    // Build user ID mapping: localId → prodId (by email match)
+    const userIdMap = {};  // local user id → prod user id
+    for (const u of (data.users || [])) {
+      const prodUser = await prisma.user.findUnique({ where: { email: u.email } });
+      if (prodUser) {
+        userIdMap[u.id] = prodUser.id;
+        results.skipped++;
+        console.log(`[MAP] User ${u.email}: ${u.id} → ${prodUser.id}`);
+      } else {
+        // Create with original ID
+        try {
+          await prisma.user.create({ data: { ...u, createdAt: new Date(u.createdAt), updatedAt: new Date(u.updatedAt) } });
+          userIdMap[u.id] = u.id;  // Same ID
+          results.created++;
+          console.log(`[NEW] User ${u.email}: ${u.id}`);
+        } catch (e) { results.errors.push(`User ${u.email}: ${e.message.substring(0,100)}`); }
+      }
+    }
+    results.idMap = userIdMap;
+
+    // Helper to remap userId
+    const mapUserId = (localId) => userIdMap[localId] || localId;
+
+    // 2. Teachers (remap userId)
+    const teacherIdMap = {};  // local teacher id → prod teacher id
+    for (const t of (data.teachers || [])) {
+      try {
+        const mappedUserId = mapUserId(t.userId);
+        // Check if teacher already exists for this user
+        const exists = await prisma.teacher.findFirst({ where: { userId: mappedUserId } });
+        if (exists) { teacherIdMap[t.id] = exists.id; results.skipped++; continue; }
+        await prisma.teacher.create({ data: { id: t.id, userId: mappedUserId } });
+        teacherIdMap[t.id] = t.id;
+        results.created++;
+      } catch (e) { results.errors.push(`Teacher: ${e.message.substring(0,100)}`); }
+    }
+
+    // 3. Students (remap userId, PRESERVE student ID!)
+    const studentIdMap = {};  // local student id → prod student id
+    for (const s of (data.students || [])) {
+      try {
+        const mappedUserId = mapUserId(s.userId);
+        const existsById = await prisma.student.findUnique({ where: { id: s.id } });
+        if (existsById) { studentIdMap[s.id] = s.id; results.skipped++; continue; }
+        const existsByUser = await prisma.student.findFirst({ where: { userId: mappedUserId } });
+        if (existsByUser) { studentIdMap[s.id] = existsByUser.id; results.skipped++; continue; }
+        await prisma.student.create({ data: { id: s.id, userId: mappedUserId, referenceAudioUrl: s.referenceAudioUrl || null } });
+        studentIdMap[s.id] = s.id;
+        results.created++;
+        console.log(`[NEW] Student ${s.id} (userId: ${mappedUserId})`);
+      } catch (e) { results.errors.push(`Student ${s.id}: ${e.message.substring(0,100)}`); }
+    }
+
+    // 4. Courses
+    for (const c of (data.courses || [])) {
+      try {
+        const exists = await prisma.course.findUnique({ where: { id: c.id } });
+        if (exists) { results.skipped++; continue; }
+        const { id, course: courseName, createdAt, updatedAt } = c;
+        await prisma.course.create({ data: { id, course: courseName, createdAt: new Date(createdAt), updatedAt: new Date(updatedAt) } });
+        results.created++;
+      } catch (e) { results.errors.push(`Course: ${e.message.substring(0,100)}`); }
+    }
+
+    // 5. Groups (remap teacherId!)
+    const mapTeacherId = (localId) => teacherIdMap[localId] || localId;
+    for (const g of (data.groups || [])) {
+      try {
+        const exists = await prisma.group.findUnique({ where: { id: g.id } });
+        if (exists) { results.skipped++; continue; }
+        await prisma.group.create({ data: { id: g.id, courseId: g.courseId, teacherId: mapTeacherId(g.teacherId) } });
+        results.created++;
+        console.log(`[NEW] Group ${g.id} (teacher: ${mapTeacherId(g.teacherId)})`);
+      } catch (e) { results.errors.push(`Group: ${e.message.substring(0,100)}`); }
+    }
+
+    // 6. StudentGroups (remap studentId!)
+    const mapStudentId = (localId) => studentIdMap[localId] || localId;
+    for (const sg of (data.studentGroups || [])) {
+      try {
+        const mappedStudentId = mapStudentId(sg.studentId);
+        const exists = await prisma.studentGroup.findFirst({ where: { studentId: mappedStudentId, groupId: sg.groupId } });
+        if (exists) { results.skipped++; continue; }
+        await prisma.studentGroup.create({ data: { studentId: mappedStudentId, groupId: sg.groupId } });
+        results.created++;
+      } catch (e) { results.errors.push(`SG: ${e.message.substring(0,100)}`); }
+    }
+
+    // 7. Lessons
+    for (const l of (data.lessons || [])) {
+      try {
+        const exists = await prisma.lesson.findUnique({ where: { id: l.id } });
+        if (exists) { results.skipped++; continue; }
+        const { id, lessonNo, dateTime, videoUrl, videoFilename, groupId, createdAt, updatedAt } = l;
+        await prisma.lesson.create({ data: {
+          id, lessonNo, groupId, videoUrl, videoFilename,
+          dateTime: dateTime ? new Date(dateTime) : null,
+          createdAt: createdAt ? new Date(createdAt) : new Date(),
+          updatedAt: updatedAt ? new Date(updatedAt) : new Date(),
+        }});
+        results.created++;
+      } catch (e) { results.errors.push(`Lesson: ${e.message.substring(0,100)}`); }
+    }
+
+    // 8. Reports
+    for (const r of (data.reports || [])) {
+      try {
+        const exists = await prisma.report.findUnique({ where: { id: r.id } });
+        if (exists) { results.skipped++; continue; }
+        const { id, lessonId, status, draftReport, adminFeedback, createdAt, updatedAt } = r;
+        await prisma.report.create({ data: {
+          id, status, draftReport: draftReport || undefined, adminFeedback,
+          lessonId: lessonId || null,
+          createdAt: createdAt ? new Date(createdAt) : new Date(),
+          updatedAt: updatedAt ? new Date(updatedAt) : new Date(),
+        }});
+        results.created++;
+      } catch (e) { results.errors.push(`Report: ${e.message.substring(0,100)}`); }
+    }
+
+    // 9. ReportStudents
+    for (const rs of (data.reportStudents || [])) {
+      try {
+        const exists = await prisma.reportStudent.findFirst({ where: { reportId: rs.reportId, studentId: rs.studentId } });
+        if (exists) { results.skipped++; continue; }
+        await prisma.reportStudent.create({ data: { reportId: rs.reportId, studentId: rs.studentId } });
+        results.created++;
+      } catch (e) { results.errors.push(`RS: ${e.message.substring(0,100)}`); }
+    }
+
+    await prisma.$disconnect();
+    console.log(`[IMPORT] Done: ${results.created} created, ${results.skipped} skipped, ${results.errors.length} errors`);
+    res.json(results);
+  } catch (err) {
+    console.error('[IMPORT] Fatal:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Health Check ────────────────────────────────────────────
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
