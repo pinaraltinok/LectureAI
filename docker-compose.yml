@@ -1,0 +1,12 @@
+services:
+  lectureai-api:
+    build: .
+    container_name: lectureai_app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./core/storage:/app/core/storage
+    restart: always

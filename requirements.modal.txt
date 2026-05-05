@@ -1,0 +1,4 @@
+# Local machine: ``python -m modal deploy modal/cv_app.py`` (Modal imports the file here first).
+# Use Python 3.12+ venv; default ``python`` 3.14 may fail on ``modal``/``aiohttp`` wheels.
+modal==1.4.2
+fastapi[standard]>=0.115

@@ -1,0 +1,35 @@
+# Node modules (will be installed during Docker build)
+frontend/node_modules/
+backend/node_modules/
+node_modules/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build outputs (rebuilt during Docker build)
+frontend/dist/
+
+# Docs and tests (not needed in production)
+docs/
+backend/tests/
+*.md
+
+# Uploads (local dev only)
+backend/uploads/
+
+# Environment files (secrets set via Cloud Run env vars)
+backend/.env
+
+# Misc
+*.log
+.dockerignore
+.gcloudignore
