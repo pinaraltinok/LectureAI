@@ -41,21 +41,69 @@ const analysisProgress = new Map();
 // STATS
 // ═══════════════════════════════════════════════════════════
 async function getStats(req, res) {
-  const [activeTeachers, totalStudents, totalLessons, pendingAnalysis, finalizedJobs] = await Promise.all([
+  const [activeTeachers, totalStudents, totalLessons, pendingAnalysis, allReportTeachers] = await Promise.all([
     prisma.teacher.count(),
     prisma.student.count(),
     prisma.lesson.count(),
     prisma.report.count({ where: { status: { in: ['PENDING', 'PROCESSING'] } } }),
-    prisma.report.findMany({ where: { status: 'FINALIZED', finalReport: { not: null } }, select: { finalReport: true } }),
+    prisma.reportTeacher.findMany({
+      where: { report: { status: { in: ['DRAFT', 'FINALIZED'] } } },
+      include: {
+        report: {
+          select: { finalReport: true, draftReport: true, createdAt: true, status: true },
+        },
+      },
+    }),
   ]);
 
+  // ── Institution score (average of all scores) ──
   let institutionScore = 0;
-  if (finalizedJobs.length > 0) {
-    const scores = finalizedJobs.map(j => j.finalReport?.overallScore).filter(s => s != null);
-    if (scores.length > 0) institutionScore = Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10;
+  const allScores = allReportTeachers
+    .map(rt => reportService.extractScore(rt))
+    .filter(s => s != null && !isNaN(s));
+  if (allScores.length > 0) {
+    institutionScore = Math.round((allScores.reduce((a, b) => a + b, 0) / allScores.length) * 20 * 10) / 10;
   }
 
-  return res.json({ institutionScore, activeTeachers, totalStudents, totalLessons, pendingAnalysis });
+  // ── Performance trend (monthly averages, score 0-100) ──
+  const monthMap = {};
+  const MONTH_NAMES = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+  allReportTeachers.forEach(rt => {
+    const score = reportService.extractScore(rt);
+    if (score == null || isNaN(score)) return;
+    const d = new Date(rt.report.createdAt);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    if (!monthMap[key]) monthMap[key] = { total: 0, count: 0, label: `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}` };
+    monthMap[key].total += score * 20; // convert 0-5 to 0-100
+    monthMap[key].count += 1;
+  });
+  const performanceTrend = Object.entries(monthMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, v]) => ({ month: v.label, skor: Math.round(v.total / v.count) }));
+
+  // ── Quality distribution (per-teacher latest score) ──
+  const teacherLatest = {};
+  allReportTeachers.forEach(rt => {
+    const score = reportService.extractScore(rt);
+    if (score == null || isNaN(score)) return;
+    const tid = rt.teacherId;
+    const d = new Date(rt.report.createdAt);
+    if (!teacherLatest[tid] || d > teacherLatest[tid].date) {
+      teacherLatest[tid] = { date: d, score: score * 20 }; // 0-100
+    }
+  });
+  let excellent = 0, good = 0, needsWork = 0;
+  Object.values(teacherLatest).forEach(({ score }) => {
+    if (score >= 90) excellent++;
+    else if (score >= 75) good++;
+    else needsWork++;
+  });
+
+  return res.json({
+    institutionScore, activeTeachers, totalStudents, totalLessons, pendingAnalysis,
+    performanceTrend,
+    qualityDistribution: { excellent, good, needsWork },
+  });
 }
 
 // ═══════════════════════════════════════════════════════════
