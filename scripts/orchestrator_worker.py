@@ -151,10 +151,13 @@ def _load_audio_result(video_id: str) -> AudioAnalysisResult:
 async def _run_orchestrator(video_id: str) -> QAReport:
     storage_client = get_storage_client()
     raw_order = settings.orchestrator_provider_order.strip()
+    openrouter_key = settings.openrouter_api_key.strip()
     if raw_order:
         provider_order = tuple(
             p.strip().lower() for p in raw_order.split(",") if p.strip()
         )
+    elif openrouter_key:
+        provider_order = ("openrouter", "aistudio", "groq")
     elif settings.gemini_api_key.strip():
         provider_order = ("aistudio", "groq")
     else:
@@ -214,6 +217,15 @@ def _extract_subscription(body: dict) -> str | None:
     if not isinstance(body, dict):
         raise HTTPException(status_code=400, detail="request body must be a JSON object")
     return body.get("subscription")
+
+
+def _require_retry_auth(request: Request) -> None:
+    expected = (settings.backend_status_webhook_bearer or "").strip()
+    if not expected:
+        return
+    auth = (request.headers.get("authorization") or "").strip()
+    if auth != f"Bearer {expected}":
+        raise HTTPException(status_code=401, detail="unauthorized")
 
 
 @app.post("/run")
@@ -410,6 +422,150 @@ async def run(request: Request) -> dict:
         notify_backend(
             "orchestrator",
             "failed",
+            video_id,
+            failed_event_detail(
+                video_id=video_id,
+                pipeline_stage="orchestrator",
+                exc=exc,
+            ),
+        )
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/retry-report")
+async def retry_report(request: Request) -> dict:
+    _require_retry_auth(request)
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid json")
+
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="request body must be a JSON object")
+
+    video_id = str(body.get("video_id") or "").strip()
+    if not video_id:
+        raise HTTPException(status_code=400, detail="video_id is required")
+
+    force = bool(body.get("force", False))
+    t0 = monotonic_ms()
+
+    try:
+        state = _read_state(video_id)
+        flags = await asyncio.to_thread(_artifact_flags, video_id)
+        state.update(flags)
+        if state.get("audio_artifact_exists"):
+            state["audio_done"] = True
+        if state.get("cv_artifact_exists"):
+            state["cv_done"] = True
+        state["report_done"] = bool(
+            state.get("report_json_exists") and state.get("report_pdf_exists")
+        )
+        _write_state(video_id, state)
+
+        missing = []
+        if not state.get("audio_done"):
+            missing.append("audio")
+        if not state.get("cv_done"):
+            missing.append("cv")
+        if missing:
+            notify_backend(
+                "orchestrator",
+                "retry_blocked_missing_dependencies",
+                video_id,
+                f"missing={','.join(missing)}",
+            )
+            raise HTTPException(
+                status_code=409,
+                detail=f"cannot retry report: missing dependencies ({','.join(missing)})",
+            )
+
+        if state.get("report_done") and not force:
+            return {
+                "ok": True,
+                "video_id": video_id,
+                "skipped": True,
+                "reason": "report_already_exists",
+                "hint": "pass force=true to regenerate report/pdf",
+                "state": state,
+            }
+
+        notify_backend(
+            "orchestrator",
+            "retry_started",
+            video_id,
+            "manual report-only retry triggered",
+        )
+        log_pipeline_event(
+            video_id=video_id,
+            stage="orchestrator",
+            event="retry_report_start",
+            status="started",
+            force=force,
+        )
+
+        report = await _run_orchestrator(video_id)
+        post_flags = await asyncio.to_thread(_artifact_flags, video_id)
+        state.update(post_flags)
+        state["report_done"] = bool(
+            state.get("report_json_exists") and state.get("report_pdf_exists")
+        )
+        qp = getattr(report, "quality_passed", None)
+        if qp is not None:
+            state["report_quality_passed"] = qp
+        if state.get("report_done"):
+            state.pop("report_error", None)
+            state.pop("report_needs_review", None)
+        _write_state(video_id, state)
+
+        publisher = get_pubsub_publisher()
+        report_topic_path = publisher.topic_path(PROJECT_ID, TOPIC_REPORT_DONE)
+        out = json.dumps(
+            {"video_id": video_id, "status": "completed", "source": "manual_retry"}
+        ).encode("utf-8")
+        publisher.publish(report_topic_path, out).result(timeout=30)
+
+        notify_backend(
+            "orchestrator",
+            "retry_completed",
+            video_id,
+            json.dumps(
+                {
+                    "report_json_exists": state.get("report_json_exists"),
+                    "report_pdf_exists": state.get("report_pdf_exists"),
+                    "quality_passed": state.get("report_quality_passed"),
+                },
+                ensure_ascii=False,
+            ),
+        )
+        log_pipeline_event(
+            video_id=video_id,
+            stage="orchestrator",
+            event="retry_report_complete",
+            status="ok",
+            duration_ms=elapsed_ms_since(t0),
+            force=force,
+        )
+        return {"ok": True, "video_id": video_id, "retried": True, "state": state}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("retry-report failed for video_id=%s: %s", video_id, exc)
+        retryable, err_code, _msg = classify_failure(
+            exc, pipeline_stage="orchestrator", _video_id=video_id
+        )
+        log_pipeline_event(
+            video_id=video_id,
+            stage="orchestrator",
+            event="retry_report_failed",
+            status="failed",
+            duration_ms=elapsed_ms_since(t0),
+            error_code=err_code,
+            retryable=retryable,
+        )
+        notify_backend(
+            "orchestrator",
+            "retry_failed",
             video_id,
             failed_event_detail(
                 video_id=video_id,

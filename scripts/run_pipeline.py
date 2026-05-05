@@ -223,10 +223,13 @@ async def main() -> None:
         buckets=buckets,
     )
     raw_order = (os.environ.get("ORCHESTRATOR_PROVIDER_ORDER") or "").strip()
+    openrouter_key = (os.environ.get("OPENROUTER_API_KEY") or "").strip()
     if raw_order:
         provider_order = tuple(
             p.strip().lower() for p in raw_order.split(",") if p.strip()
         )
+    elif openrouter_key:
+        provider_order = ("openrouter", "aistudio", "groq")
     elif (os.environ.get("GEMINI_API_KEY") or "").strip():
         provider_order = ("aistudio", "groq")
     else:

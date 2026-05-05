@@ -507,6 +507,7 @@ class AudioAnalysisClient:
     ) -> AudioAnalysisResult:
         full_text = transcript.text or ""
         segments = self._build_segments(transcript)
+        segments = self._humanize_speaker_labels(segments)
         highlights = self._build_highlights(transcript)
         duration_ms = self._duration_ms(transcript)
 
@@ -575,6 +576,41 @@ class AudioAnalysisClient:
                 )
             )
         return segments
+
+    @staticmethod
+    def _humanize_speaker_labels(
+        segments: List[TranscriptSegment],
+    ) -> List[TranscriptSegment]:
+        """Map diarization labels (A/B/...) to role-like names.
+
+        AssemblyAI diarization identifies *who spoke when* but not real identities.
+        We map the dominant speaker to teacher name and others to student labels
+        for more readable downstream reports.
+        """
+        if not segments:
+            return segments
+
+        teacher_name = (os.environ.get("CV_TEACHER_NAME") or "Eğitmen").strip() or "Eğitmen"
+        by_speaker_ms: Dict[str, int] = {}
+        for seg in segments:
+            sp = (seg.speaker or "?").strip() or "?"
+            dur = max(1, int(seg.end_ms) - int(seg.start_ms))
+            by_speaker_ms[sp] = by_speaker_ms.get(sp, 0) + dur
+        if not by_speaker_ms:
+            return segments
+
+        primary_speaker = max(by_speaker_ms.items(), key=lambda kv: kv[1])[0]
+        mapping: Dict[str, str] = {primary_speaker: teacher_name}
+
+        others = sorted([s for s in by_speaker_ms.keys() if s != primary_speaker])
+        for idx, sp in enumerate(others, start=1):
+            mapping[sp] = f"Öğrenci {idx}"
+
+        out: List[TranscriptSegment] = []
+        for seg in segments:
+            sp = (seg.speaker or "?").strip() or "?"
+            out.append(seg.model_copy(update={"speaker": mapping.get(sp, sp)}))
+        return out
 
     @staticmethod
     def _build_highlights(transcript: aai.Transcript) -> List[str]:
