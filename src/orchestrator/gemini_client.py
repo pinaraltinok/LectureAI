@@ -321,6 +321,35 @@ def _extract_retry_after_seconds(exc: BaseException) -> float | None:
     return max(0.0, minutes * 60.0 + seconds)
 
 
+def _looks_like_quota_or_rate_limit(text: str) -> bool:
+    low = (text or "").lower()
+    markers = (
+        "429",
+        "402",
+        "quota",
+        "rate limit",
+        "too many requests",
+        "payment required",
+        "resource exhausted",
+        "kota",
+        "retry-after",
+        "try again in",
+    )
+    return any(m in low for m in markers)
+
+
+def _report_indicates_quota_degraded(report: QAReport) -> bool:
+    feedback = (report.feedback_metni or "").lower()
+    markers = (
+        "ai analizi bekleniyor (kota dolu)",
+        "kota dolu",
+        "llm katmanı kota aşımı",
+        "tüm llm sağlayıcıları başarısız",
+        "yedek teknik özet",
+    )
+    return any(m in feedback for m in markers)
+
+
 def _expand_gemini_token(
     token: str,
     gemini_provider: str,
@@ -667,6 +696,7 @@ class ReportOrchestrator:
         self._degraded_fallback = degraded_fallback
         self._llm_spacing_sec = float(llm_spacing_sec)
         self._status_callback = status_callback
+        self._last_chunk_failures: list[str] = []
 
         expanded = _expand_provider_order(provider_order, gemini_provider)
         want_vertex = "vertex" in expanded
@@ -1424,9 +1454,16 @@ class ReportOrchestrator:
         metadata: Optional[Dict[str, Any]],
     ) -> QAReport:
         if not self.quality_agent:
-            return self._build_final_report(
+            report = self._build_final_report(
                 video_id, merged, duration_min, metadata=metadata
             )
+            if _report_indicates_quota_degraded(report):
+                raise OrchestratorError(
+                    "HTTP 429 quota/rate-limit fallback content detected in report; "
+                    "refusing to finalize degraded report",
+                    video_id=video_id,
+                )
+            return report
 
         extra_critique: Optional[List[str]] = None
         cur_merged = merged
@@ -1463,6 +1500,14 @@ class ReportOrchestrator:
             report.quality_score = critique.total_score
             report.quality_passed = critique.passed
             report.quality_issues = critique.issues
+            if critique.retry_reason and _looks_like_quota_or_rate_limit(
+                critique.retry_reason
+            ):
+                raise OrchestratorError(
+                    "HTTP 429 quota/rate-limit detected by quality agent; "
+                    "report generation should be retried",
+                    video_id=video_id,
+                )
             final_report = report
             if critique.passed:
                 logger.info(
@@ -1485,6 +1530,19 @@ class ReportOrchestrator:
             )
 
         assert final_report is not None
+        if final_report.quality_passed is False:
+            issues = ", ".join(final_report.quality_issues[:5]) if final_report.quality_issues else "no_issues"
+            raise OrchestratorError(
+                "quality gate failed after retries; report generation should be retried "
+                f"(score={final_report.quality_score}, issues={issues})",
+                video_id=video_id,
+            )
+        if _report_indicates_quota_degraded(final_report):
+            raise OrchestratorError(
+                "HTTP 429 quota/rate-limit fallback content detected in report; "
+                "refusing to finalize degraded report",
+                video_id=video_id,
+            )
         return final_report
 
     # ------------------------------------------------------------------ #
@@ -1519,6 +1577,16 @@ class ReportOrchestrator:
         # STEP 3 - analyse each chunk in parallel -------------------------
         chunk_analyses = await self._analyze_all_chunks(video_id, chunks)
         if not chunk_analyses:
+            quota_like = any(
+                _looks_like_quota_or_rate_limit(msg)
+                for msg in self._last_chunk_failures
+            )
+            if quota_like:
+                raise OrchestratorError(
+                    "HTTP 429 quota/rate-limit: all chunk LLM calls failed; "
+                    "retry required before generating report/pdf",
+                    video_id=video_id,
+                )
             if self._degraded_fallback:
                 logger.warning(
                     "[%s] all chunk LLM calls failed; emitting degraded QAReport",
@@ -1562,6 +1630,12 @@ class ReportOrchestrator:
                     video_id, chunk_analyses, audio_result, duration_min
                 )
             except MergeError as merge_exc:
+                if _looks_like_quota_or_rate_limit(str(merge_exc)):
+                    raise OrchestratorError(
+                        "HTTP 429 quota/rate-limit during merge; retry required "
+                        "before generating report/pdf",
+                        video_id=video_id,
+                    ) from merge_exc
                 if self._degraded_fallback:
                     logger.warning(
                         "[%s] merge LLM failed (%s); rollup from chunk JSON",
@@ -1849,8 +1923,10 @@ class ReportOrchestrator:
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         analyses: List[Dict[str, Any]] = []
+        failures: List[str] = []
         for chunk, result in zip(chunks, results):
             if isinstance(result, Exception):
+                failures.append(str(result))
                 logger.warning(
                     "[%s] chunk %d analysis failed: %s",
                     video_id,
@@ -1859,6 +1935,7 @@ class ReportOrchestrator:
                 )
                 continue
             analyses.append(result)
+        self._last_chunk_failures = failures
         return analyses
 
     async def _analyze_single_chunk(
@@ -1989,10 +2066,28 @@ Görsel bileşen değerlendirmesi için:
   Transkriptte doğrudan kanıt olmasa bile:
   - Olumsuz kanıt yoksa → İyi ver
   - Eksiklik varsa → Geliştirilmeli ver
-  - Hiç yapılmamışsa → Yetersiz ver
+  - Yetersiz SADECE ciddi pedagojik ihlal/hata varsa ver.
+    Normal eksiklikleri Yetersiz yapma; Geliştirilmeli kullan.
+
+YETERSİZ KULLANIM EŞİĞİ (SERT KURAL):
+- Aşağıdakilerden en az biri açıkça varsa Yetersiz ver:
+  1) öğrenciyi aşağılayıcı/kırıcı ifade, alay, tehdit, etik ihlal
+  2) güvenlik/etik açısından riskli yönlendirme
+  3) ağır ve tekrarlayan yanlış bilgi, dersin hedefini bozacak düzeyde hata
+  4) kritik öğretim adımının tamamen yokluğu + öğrenmeyi belirgin bozma
+- Bunlar YOKSA varsayılan olarak Geliştirilmeli kullan.
 
 - "Bu zaman aralığında gözlem yapılamadı" veya
   "veri bulunmamaktadır" YAZMA. Her metriğe rating ver.
+
+ACIK_UCLU_SORULAR İÇİN ÖNEMLİ AYRIM:
+- Operasyonel/teknik/yoklama soruları (örn. "Sesim açık mı?",
+  "Beni duyuyor musunuz?", "Kamera açık mı?", "Hazır mısınız?")
+  pedagojik açık uçlu soru metriğinde negatif kanıt sayılmaz.
+- Sınıf durumunu netleştirme veya teknik kontrol amacı taşıyan bu sorular
+  acik_uclu_sorular metriğini tek başına düşürmez.
+- Bu metrikte olumsuz değerlendirme için ders içeriğine yönelik düşünmeyi
+  derinleştiren soruların sistematik eksikliği aranır.
 
 Observe the following metrics for this lecture segment and note specific
 timestamps as evidence. For each metric provide:
@@ -2218,7 +2313,9 @@ Chunk analyses: {chunks_json}
 
 Rules:
 - If a metric is "İyi" in all chunks -> final rating "İyi"
-- If any chunk is "Yetersiz" -> final rating "Yetersiz" and count as stop_faktor
+- If any chunk is "Yetersiz" because of a strict pedagogical violation
+  (ethical breach, harm risk, severe repeated misinformation), keep final "Yetersiz"
+  and count as stop_faktor
 - Otherwise -> "Geliştirilmeli"
 - For ders_yapisi: completed=true if observed in at least one chunk.
 - speaking_time_rating: derive from audio silence_ratio and pace_wpm

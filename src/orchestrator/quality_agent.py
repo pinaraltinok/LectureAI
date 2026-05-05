@@ -37,6 +37,20 @@ class QualityAgent:
         self.model = model or self.QUALITY_MODEL
 
     async def evaluate(self, report_dict: dict, video_id: str) -> CritiqueResult:
+        if self._report_indicates_llm_quota(report_dict):
+            logger.warning(
+                "[%s] QualityAgent detected quota-degraded report content; forcing retry",
+                video_id,
+            )
+            return CritiqueResult(
+                total_score=0,
+                passed=False,
+                dimension_scores={},
+                issues=[
+                    "LLM quota/rate-limit fallback metni tespit edildi; rapor yeniden denenmeli."
+                ],
+                retry_reason="llm_quota_reached",
+            )
         prompt = self._build_prompt(report_dict)
 
         try:
@@ -93,17 +107,37 @@ class QualityAgent:
             )
 
         except Exception as e:
+            retry_reason: Optional[str] = None
+            if isinstance(e, httpx.HTTPStatusError):
+                code = e.response.status_code
+                if code in (402, 429, 503):
+                    retry_reason = f"http_{code}_quota_or_capacity"
             logger.warning(
-                "[%s] QualityAgent failed (%s), assuming pass to not block pipeline",
+                "[%s] QualityAgent failed (%s), marking as failed for retry",
                 video_id,
                 e,
             )
             return CritiqueResult(
-                total_score=75,
-                passed=True,
+                total_score=0,
+                passed=False,
                 dimension_scores={},
                 issues=[f"quality_agent_error: {e}"],
+                retry_reason=retry_reason or "quality_agent_unavailable",
             )
+
+    @staticmethod
+    def _report_indicates_llm_quota(report: dict) -> bool:
+        if not isinstance(report, dict):
+            return False
+        fb = str(report.get("feedback_metni") or "").lower()
+        markers = (
+            "ai analizi bekleniyor (kota dolu)",
+            "kota dolu",
+            "llm katmanı kota aşımı",
+            "tüm llm sağlayıcıları başarısız",
+            "yedek teknik özet",
+        )
+        return any(m in fb for m in markers)
 
     def _call_openrouter(self, prompt: str) -> str:
         response = httpx.post(
