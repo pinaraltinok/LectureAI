@@ -103,9 +103,7 @@ const TeacherPool = () => {
         duration: fr.actual_duration_min ? `${fr.actual_duration_min}dk` : '—',
         videoUrl: draft.videoUrl || report.videoUrl || null,
         localVideoUrl: draft.localVideoUrl || report.localVideoUrl || null,
-        obs: fr.feedback_metni
-          ? [{ t: 'AI Değerlendirmesi', c: fr.feedback_metni }]
-          : [{ t: 'Bilgi', c: 'Rapor detayı bulunamadı.' }],
+
         finalReport: fr,
         draftReport: fr,
       }
@@ -140,9 +138,7 @@ const TeacherPool = () => {
                     ttt: ufr.speaking_time_rating || '—',
                     duration: ufr.actual_duration_min ? `${ufr.actual_duration_min}dk` : '—',
                     evaluator: ufr.approvedBy ? 'Admin Onaylı' : 'Sistem (AI)',
-                    obs: ufr.feedback_metni
-                      ? [{ t: 'AI Değerlendirmesi', c: ufr.feedback_metni }]
-                      : [{ t: 'Bilgi', c: 'Rapor detayı bulunamadı.' }],
+
                     finalReport: ufr,
                     draftReport: ufr,
                   }))
