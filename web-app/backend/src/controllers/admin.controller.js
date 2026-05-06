@@ -501,7 +501,6 @@ async function retryReportOnly(req, res) {
   const { jobId } = req.body;
   if (!jobId) throw new AppError('jobId gereklidir.', 400);
   if (!ORCHESTRATOR_URL) throw new AppError('ORCHESTRATOR_URL yapılandırılmamış.', 500);
-  if (!PIPELINE_WEBHOOK_SECRET) throw new AppError('PIPELINE_WEBHOOK_SECRET yapılandırılmamış.', 500);
 
   const report = await prisma.report.findUnique({ where: { id: jobId }, select: { draftReport: true } });
   if (!report) throw new AppError('Rapor bulunamadı.', 404);
@@ -511,15 +510,27 @@ async function retryReportOnly(req, res) {
   const videoId = videoUrl.split('/').pop()?.replace(/\.[^.]+$/, '') || '';
   if (!videoId) throw new AppError('Video ID belirlenemedi.', 400);
 
-  // Call orchestrator /retry-report
+  // Get OIDC identity token for Cloud Run service-to-service auth
   const orchestratorUrl = `${ORCHESTRATOR_URL.replace(/\/$/, '')}/retry-report`;
+  let authToken = PIPELINE_WEBHOOK_SECRET; // fallback for local dev
+  try {
+    const metadataUrl = `http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity?audience=${ORCHESTRATOR_URL}`;
+    const tokenRes = await fetch(metadataUrl, { headers: { 'Metadata-Flavor': 'Google' } });
+    if (tokenRes.ok) {
+      authToken = await tokenRes.text();
+      console.log('[RetryReport] Got OIDC identity token from metadata server');
+    }
+  } catch (e) {
+    console.warn('[RetryReport] Metadata server unavailable (local dev?), using PIPELINE_WEBHOOK_SECRET');
+  }
+
   console.log(`[RetryReport] Calling ${orchestratorUrl} for video_id=${videoId}`);
 
   const orchRes = await fetch(orchestratorUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${PIPELINE_WEBHOOK_SECRET}`,
+      'Authorization': `Bearer ${authToken}`,
     },
     body: JSON.stringify({ video_id: videoId, force: true }),
   });
