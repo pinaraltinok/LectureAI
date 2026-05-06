@@ -15,4 +15,9 @@ build/
 .dockerignore
 Dockerfile
 docker-compose.yml
+# Production yedek/karşılaştırma dizinleri
+_prod_*/
+web-app/_prod_*/
+web-app/backend/scripts/_*
+
 # Not: Docker dosyalarını isterseniz pushlayabiliriz ama anahtarlar kesinlikle kalmalı.
