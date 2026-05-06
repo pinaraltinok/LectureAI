@@ -21,6 +21,7 @@ const {
   GCP_PROJECT_ID, PUBSUB_TOPIC, PROCESSED_BUCKET,
   VIDEO_BUCKET, VIDEO_PREFIX, GCS_POLL_INTERVAL, GCS_MAX_POLLS,
   STUDENT_AUDIO_BUCKET, STUDENT_PUBSUB_TOPIC, STUDENT_REPORTS_PREFIX,
+  ORCHESTRATOR_URL, PIPELINE_WEBHOOK_SECRET,
 } = require('../config/constants');
 
 // ─── Service Layer Imports (via Composition Root — DIP) ─────
@@ -487,6 +488,58 @@ async function retryAnalysis(req, res) {
   pollGCSForReport(jobId, videoId);
 
   return res.status(202).json({ jobId, status: 'PROCESSING', message: 'Yeniden analiz başlatıldı.', videoId });
+}
+
+/**
+ * POST /api/admin/analysis/retry-report
+ * Calls the orchestrator's /retry-report endpoint to regenerate only the
+ * report + PDF, reusing existing audio and CV artifacts.
+ * Body: { jobId }
+ * Admin only.
+ */
+async function retryReportOnly(req, res) {
+  const { jobId } = req.body;
+  if (!jobId) throw new AppError('jobId gereklidir.', 400);
+  if (!ORCHESTRATOR_URL) throw new AppError('ORCHESTRATOR_URL yapılandırılmamış.', 500);
+  if (!PIPELINE_WEBHOOK_SECRET) throw new AppError('PIPELINE_WEBHOOK_SECRET yapılandırılmamış.', 500);
+
+  const report = await prisma.report.findUnique({ where: { id: jobId }, select: { draftReport: true } });
+  if (!report) throw new AppError('Rapor bulunamadı.', 404);
+
+  const dr = (typeof report.draftReport === 'object' && report.draftReport) || {};
+  const videoUrl = dr._videoUrl || '';
+  const videoId = videoUrl.split('/').pop()?.replace(/\.[^.]+$/, '') || '';
+  if (!videoId) throw new AppError('Video ID belirlenemedi.', 400);
+
+  // Call orchestrator /retry-report
+  const orchestratorUrl = `${ORCHESTRATOR_URL.replace(/\/$/, '')}/retry-report`;
+  console.log(`[RetryReport] Calling ${orchestratorUrl} for video_id=${videoId}`);
+
+  const orchRes = await fetch(orchestratorUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${PIPELINE_WEBHOOK_SECRET}`,
+    },
+    body: JSON.stringify({ video_id: videoId, force: true }),
+  });
+
+  const orchBody = await orchRes.json().catch(() => ({}));
+
+  if (orchRes.status === 409) {
+    throw new AppError('Ses/CV verileri henüz hazır değil. Lütfen tam analiz çalıştırın.', 409);
+  }
+  if (!orchRes.ok) {
+    const detail = orchBody.error || orchBody.detail || `HTTP ${orchRes.status}`;
+    throw new AppError(`Orchestrator hatası: ${detail}`, orchRes.status >= 500 ? 502 : orchRes.status);
+  }
+
+  // Update report status
+  await prisma.report.update({ where: { id: jobId }, data: { status: 'PROCESSING' } });
+  analysisProgress.set(jobId, { stage: 'reporting', message: 'Rapor yeniden oluşturuluyor...', percent: 55, startedAt: new Date().toISOString(), videoId });
+  pollGCSForReport(jobId, videoId);
+
+  return res.status(202).json({ jobId, status: 'PROCESSING', message: 'Rapor yeniden oluşturma başlatıldı.', videoId });
 }
 
 async function getTeacherReports(req, res) {
@@ -1023,7 +1076,7 @@ async function getStudentAnalysisJobs(req, res) {
 // ═══════════════════════════════════════════════════════════
 module.exports = {
   getStats, getTeachers, uploadAnalysis, createFromUrl, assignAnalysis, getDraft,
-  regenerateAnalysis, retryAnalysis, finalizeAnalysis, getLessons, getAnalysisJobs,
+  regenerateAnalysis, retryAnalysis, retryReportOnly, finalizeAnalysis, getLessons, getAnalysisJobs,
   getCourses, getGroups, getAnalysisProgress, getTeacherReports, syncGCSReports,
   createUser, getStudents, assignStudentToGroup, removeStudentFromGroup,
   setTeacherCourses, getTeacherCourses, createGroup, createCourse,

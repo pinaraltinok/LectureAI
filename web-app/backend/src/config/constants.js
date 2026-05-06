@@ -28,6 +28,10 @@ module.exports = {
   GCS_POLL_INTERVAL:  parseInt(process.env.GCS_POLL_INTERVAL || '5000', 10),
   GCS_MAX_POLLS:      parseInt(process.env.GCS_MAX_POLLS     || '720', 10),
 
+  // ── Orchestrator (retry-report proxy) ──────────────────────
+  ORCHESTRATOR_URL:         process.env.ORCHESTRATOR_URL         || '',
+  PIPELINE_WEBHOOK_SECRET:  process.env.PIPELINE_WEBHOOK_SECRET  || '',
+
   // ── Authentication ─────────────────────────────────────────
   JWT_SECRET:         (() => {
     const secret = process.env.JWT_SECRET;

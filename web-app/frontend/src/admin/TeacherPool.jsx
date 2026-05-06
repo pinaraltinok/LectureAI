@@ -29,6 +29,8 @@ const TeacherPool = () => {
   // Admin action states
   const [adminNote, setAdminNote] = useState('')
   const [finalizing, setFinalizing] = useState(false)
+  const [retryingReport, setRetryingReport] = useState(false)
+  const [retryReportMsg, setRetryReportMsg] = useState('')
 
   // Progress polling for PROCESSING reports
   const [detailProgress, setDetailProgress] = useState(null)
@@ -223,6 +225,30 @@ const TeacherPool = () => {
       }
     }
 
+    const handleRetryReport = async () => {
+      if (!selectedReport.jobId) return
+      setRetryingReport(true)
+      setRetryReportMsg('')
+      setError('')
+      try {
+        await apiPost('/admin/analysis/retry-report', { jobId: selectedReport.jobId })
+        setRetryReportMsg('Rapor yeniden oluşturma başlatıldı!')
+        setSelectedReport(prev => ({ ...prev, status: 'PROCESSING' }))
+        // Refresh reports list
+        const data = await apiGet(`/admin/teacher/${selectedTeacher.id}/reports`)
+        setTeacherReports(data.reports || [])
+      } catch (err) {
+        const msg = err.message || 'Bilinmeyen hata'
+        if (msg.includes('409') || msg.includes('Ses/CV')) {
+          setRetryReportMsg('⚠ Ses/CV verileri henüz hazır değil. Önce tam analiz çalıştırın.')
+        } else {
+          setError('Rapor yeniden oluşturma hatası: ' + msg)
+        }
+      } finally {
+        setRetryingReport(false)
+      }
+    }
+
     return (
       <div style={{animation: 'fadeIn 0.3s ease', padding: '1rem'}}>
         <button
@@ -344,7 +370,23 @@ const TeacherPool = () => {
               onBlur={e => e.currentTarget.style.borderColor = '#e2e8f0'}
             />
 
-            <div className="responsive-action-buttons" style={{display: 'flex', gap: '1rem', marginTop: '1.25rem'}}>
+            <div className="responsive-action-buttons" style={{display: 'flex', gap: '1rem', marginTop: '1.25rem', flexWrap: 'wrap'}}>
+              <button
+                onClick={handleRetryReport}
+                disabled={retryingReport}
+                style={{
+                  flex: '0 0 auto', padding: '14px 20px', borderRadius: '14px',
+                  border: '1.5px solid #fca5a5',
+                  background: retryingReport ? '#fef2f2' : '#fff',
+                  color: '#dc2626',
+                  fontSize: '0.85rem', fontWeight: 800,
+                  cursor: retryingReport ? 'wait' : 'pointer',
+                  transition: 'all 0.2s',
+                  opacity: retryingReport ? 0.7 : 1,
+                }}
+              >
+                {retryingReport ? '⏳ Oluşturuluyor...' : '🔄 Raporu Yeniden Oluştur'}
+              </button>
               <button
                 onClick={handleRegenerate}
                 disabled={!adminNote.trim()}
@@ -374,6 +416,17 @@ const TeacherPool = () => {
                 {finalizing ? '⏳ Onaylanıyor...' : '✓ Raporu Onayla ve Yayınla'}
               </button>
             </div>
+            {retryReportMsg && (
+              <div style={{
+                marginTop: '0.75rem', padding: '0.75rem 1.25rem', borderRadius: '12px',
+                fontSize: '0.85rem', fontWeight: 700,
+                background: retryReportMsg.includes('⚠') ? '#fffbeb' : '#f0fdf4',
+                color: retryReportMsg.includes('⚠') ? '#b45309' : '#15803d',
+                border: `1px solid ${retryReportMsg.includes('⚠') ? '#fde68a' : '#bbf7d0'}`,
+              }}>
+                {retryReportMsg}
+              </div>
+            )}
           </div>
         )}
 

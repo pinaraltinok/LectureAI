@@ -720,6 +720,32 @@ const AnalysisWorkflow = ({ onStepChange }) => {
     }
   }
 
+  // Retry report only (uses orchestrator /retry-report endpoint)
+  const [retryingReport, setRetryingReport] = useState(false)
+  const [retryReportMsg, setRetryReportMsg] = useState('')
+
+  const handleRetryReportOnly = async () => {
+    if (!currentJobId) return
+    setRetryingReport(true)
+    setRetryReportMsg('')
+    setError('')
+    try {
+      await apiPost('/admin/analysis/retry-report', { jobId: currentJobId })
+      setRetryReportMsg('Rapor yeniden oluşturma başlatıldı!')
+      setIsAnalyzing(true)
+      setIsRegenerating(true)
+    } catch (err) {
+      const msg = err.message || 'Bilinmeyen hata'
+      if (msg.includes('409') || msg.includes('Ses/CV')) {
+        setRetryReportMsg('⚠ Ses/CV verileri henüz hazır değil. Önce tam analiz çalıştırın.')
+      } else {
+        setError('Rapor yeniden oluşturma hatası: ' + msg)
+      }
+    } finally {
+      setRetryingReport(false)
+    }
+  }
+
   return (
     <div className="workflow-container" style={{animation: 'fadeIn 0.5s ease'}}>
       <div className="alert-banner" style={{background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: '16px', padding: '1.5rem', marginBottom: '2rem', display: 'flex', gap: '1.25rem', alignItems: 'center'}}>
@@ -818,7 +844,20 @@ const AnalysisWorkflow = ({ onStepChange }) => {
           style={{width:'100%', minHeight:'120px', border:'1.5px solid #e2e8f0', borderRadius:'24px', padding:'1.5rem', fontSize:'0.95rem', outline:'none'}}
         ></textarea>
         
-        <div style={{display: 'flex', gap: '1.5rem', marginTop: '2.5rem'}}>
+        <div style={{display: 'flex', gap: '1.5rem', marginTop: '2.5rem', flexWrap: 'wrap'}}>
+          <button 
+            onClick={handleRetryReportOnly}
+            disabled={retryingReport}
+            style={{
+              flex: '0 0 auto', padding: '1.1rem 1.5rem', borderRadius: '16px',
+              border: '1.5px solid #fca5a5', background: retryingReport ? '#fef2f2' : '#fff',
+              color: '#dc2626', fontSize: '0.9rem', fontWeight: 800,
+              cursor: retryingReport ? 'wait' : 'pointer',
+              transition: 'all 0.2s', opacity: retryingReport ? 0.7 : 1,
+            }}
+          >
+            {retryingReport ? '⏳ Oluşturuluyor...' : '🔄 Raporu Yeniden Oluştur'}
+          </button>
           <button 
             className="outline-btn" 
             style={{flex: 1, padding: '1.1rem', borderRadius: '16px', opacity: adminNote ? 1 : 0.5, cursor: adminNote ? 'pointer' : 'not-allowed'}} 
@@ -834,6 +873,17 @@ const AnalysisWorkflow = ({ onStepChange }) => {
             ✓ Raporu Onayla ve Eğitmen Paneline Gönder
           </button>
         </div>
+        {retryReportMsg && (
+          <div style={{
+            marginTop: '1rem', padding: '0.75rem 1.5rem', borderRadius: '12px',
+            fontSize: '0.88rem', fontWeight: 700,
+            background: retryReportMsg.includes('⚠') ? '#fffbeb' : '#f0fdf4',
+            color: retryReportMsg.includes('⚠') ? '#b45309' : '#15803d',
+            border: `1px solid ${retryReportMsg.includes('⚠') ? '#fde68a' : '#bbf7d0'}`,
+          }}>
+            {retryReportMsg}
+          </div>
+        )}
       </div>
     </div>
   )
