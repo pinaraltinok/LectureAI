@@ -224,6 +224,9 @@ def _require_retry_auth(request: Request) -> None:
     if not expected:
         return
     auth = (request.headers.get("authorization") or "").strip()
+    # Accept Cloud Run IAM OIDC tokens (JWT format with dots) — IAM already validated them
+    if auth.startswith("Bearer ") and "." in auth.split(" ", 1)[1]:
+        return
     if auth != f"Bearer {expected}":
         raise HTTPException(status_code=401, detail="unauthorized")
 
