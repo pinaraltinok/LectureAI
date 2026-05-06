@@ -1074,6 +1074,81 @@ async function getStudentAnalysisJobs(req, res) {
 }
 
 // ═══════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/group/:groupId/student-reports
+ * Returns all student voice analysis reports for students in a given group.
+ * Includes student info, report markdown, biometric scores, etc.
+ */
+async function getGroupStudentReports(req, res) {
+  const { groupId } = req.params;
+
+  // 1. Get students in this group
+  const studentGroups = await prisma.studentGroup.findMany({
+    where: { groupId },
+    include: {
+      student: {
+        include: {
+          user: { select: { name: true, email: true } },
+          reportStudents: {
+            include: {
+              report: {
+                include: {
+                  lesson: {
+                    include: {
+                      group: {
+                        include: {
+                          course: true,
+                          teacher: { include: { user: { select: { name: true } } } },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const students = studentGroups.map(sg => {
+    const student = sg.student;
+    const reports = student.reportStudents
+      .map(rs => rs.report)
+      .filter(r => {
+        const dr = (typeof r.draftReport === 'object' && r.draftReport) || {};
+        return dr._analysisType === 'student_voice' && (r.status === 'DRAFT' || r.status === 'FINALIZED' || r.status === 'PROCESSING');
+      })
+      .map(r => {
+        const dr = (typeof r.draftReport === 'object' && r.draftReport) || {};
+        return {
+          id: r.id,
+          status: r.status,
+          biometricScore: dr.biometric_score || null,
+          reportMarkdown: dr.report_markdown || null,
+          lessonNo: r.lesson?.lessonNo || null,
+          courseName: r.lesson?.group?.course?.course || null,
+          teacherName: r.lesson?.group?.teacher?.user?.name || null,
+          createdAt: r.createdAt,
+          updatedAt: r.updatedAt,
+        };
+      })
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    return {
+      studentId: student.id,
+      studentName: student.user.name,
+      studentEmail: student.user.email,
+      reportCount: reports.length,
+      reports,
+    };
+  });
+
+  return res.json(students);
+}
+
 module.exports = {
   getStats, getTeachers, uploadAnalysis, createFromUrl, assignAnalysis, getDraft,
   regenerateAnalysis, retryAnalysis, retryReportOnly, finalizeAnalysis, getLessons, getAnalysisJobs,
@@ -1084,5 +1159,6 @@ module.exports = {
   getTeacherProgress,
   // Student voice analysis
   uploadReferenceAudio, createStudentAnalysis, getStudentAnalysisJobs,
+  getGroupStudentReports,
   analysisProgress,
 };

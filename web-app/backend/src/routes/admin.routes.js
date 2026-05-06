@@ -15,6 +15,7 @@ const {
   updateGroup, deleteGroup, updateUser, deleteUser, updateCourse, deleteCourse,
   getTeacherProgress,
   uploadReferenceAudio, createStudentAnalysis, getStudentAnalysisJobs,
+  getGroupStudentReports,
 } = require('../controllers/admin.controller');
 
 // Multer configuration with security limits
@@ -92,5 +93,6 @@ router.delete('/courses/:id', auth, roleGuard('ADMIN'), asyncHandler(deleteCours
 router.post('/students/:studentId/reference-audio', auth, roleGuard('ADMIN'), audioUpload.single('audio'), asyncHandler(uploadReferenceAudio));
 router.post('/student-analysis/create', auth, roleGuard('ADMIN'), validate(createStudentAnalysisSchema), asyncHandler(createStudentAnalysis));
 router.get('/student-analysis/jobs', auth, roleGuard('ADMIN'), asyncHandler(getStudentAnalysisJobs));
+router.get('/group/:groupId/student-reports', auth, roleGuard('ADMIN'), asyncHandler(getGroupStudentReports));
 
 module.exports = router;

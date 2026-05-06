@@ -9,6 +9,7 @@ import AdminSummary from './admin/AdminSummary.jsx'
 import TeacherPool from './admin/TeacherPool.jsx'
 import AnalysisWorkflow from './admin/AnalysisWorkflow.jsx'
 import AdminManagement from './admin/AdminManagement.jsx'
+import AdminStudentReports from './admin/AdminStudentReports.jsx'
 
 // TEACHER sayfaları
 import TeacherDashboard from './teacher/TeacherDashboard.jsx'
@@ -129,6 +130,10 @@ function AppContent() {
                 <Settings size={18} style={{marginRight:'12px', opacity: 0.8, flexShrink: 0}} />
                 Kullanıcı & Grup Yönetimi
               </NavLink>
+              <NavLink to="/admin/ogrenci-raporlari" className={({isActive})=>isActive?"menu-link active":"menu-link"}>
+                <Mic size={18} style={{marginRight:'12px', opacity: 0.8, flexShrink: 0}} />
+                Öğrenci Ses Raporları
+              </NavLink>
             </>
           )}
 
@@ -202,6 +207,7 @@ function AppContent() {
                     : <div><h1>Taslak Rapor Önizleme</h1><p>Raporu onaylayın veya revize edin.</p></div>
                 } />
                 <Route path="yonetim" element={<div><h1>Kullanıcı & Grup Yönetimi</h1><p>Öğrenci, eğitmen ve grup işlemlerini yönetin.</p></div>} />
+                <Route path="ogrenci-raporlari" element={<div><h1>Öğrenci Ses Raporları</h1><p>Gruplardaki öğrencilerin ses analiz raporlarını inceleyin.</p></div>} />
               </Routes>
             } />
             
@@ -245,6 +251,7 @@ function AppContent() {
           <Route path="/admin/egitmen-havuzu" element={<TeacherPool />} />
           <Route path="/admin/analiz-atama" element={<AnalysisWorkflow onStepChange={setWorkflowStep} />} />
           <Route path="/admin/yonetim" element={<AdminManagement />} />
+          <Route path="/admin/ogrenci-raporlari" element={<AdminStudentReports />} />
           
           <Route path="/teacher/ders-ozeti" element={<TeacherDashboard />} />
           <Route path="/teacher/feedback" element={<TeacherAttendance />} />
