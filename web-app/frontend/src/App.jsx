@@ -86,7 +86,7 @@ function AppContent() {
       />
 
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
-        <div className="brand" style={{marginBottom: '2.5rem', padding: '0 1.2rem'}}>
+        <div className="brand" style={{marginBottom: '2.5rem', padding: '0 1.2rem', cursor: 'pointer'}} onClick={() => navigate('/')}>
           <div style={{display:'flex', alignItems:'center', gap:'1rem'}}>
             <div style={{
               width: '52px', height: '52px', borderRadius: '50%',
