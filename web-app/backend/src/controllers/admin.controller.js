@@ -20,7 +20,7 @@ const AppError = require('../utils/AppError');
 const {
   GCP_PROJECT_ID, PUBSUB_TOPIC, PROCESSED_BUCKET,
   VIDEO_BUCKET, VIDEO_PREFIX, GCS_POLL_INTERVAL, GCS_MAX_POLLS,
-  STUDENT_AUDIO_BUCKET, STUDENT_PUBSUB_TOPIC, STUDENT_REPORTS_PREFIX,
+  STUDENT_AUDIO_BUCKET, STUDENT_PUBSUB_TOPIC, STUDENT_REPORTS_BUCKET, STUDENT_REPORTS_PREFIX,
   ORCHESTRATOR_URL, PIPELINE_WEBHOOK_SECRET,
 } = require('../config/constants');
 
@@ -971,7 +971,15 @@ function pollGCSForStudentReport(jobId, videoId, studentName) {
   ];
 
   // Candidate GCS paths where the pipeline might write the report
-  const candidatePaths = [
+  // Primary: İrem's pipeline writes to lectureai_student_reports bucket
+  const studentReportsBucket = gcsStorage.bucket(STUDENT_REPORTS_BUCKET);
+  const candidatePathsNewBucket = [
+    `reports/${videoId}.json`,
+    `reports/${videoId}_${safeName}.json`,
+  ];
+  // Fallback: legacy paths in PROCESSED_BUCKET
+  const legacyBucket = gcsStorage.bucket(PROCESSED_BUCKET);
+  const candidatePathsLegacy = [
     `${STUDENT_REPORTS_PREFIX}/${safeName}/${videoId}.json`,
     `${STUDENT_REPORTS_PREFIX}/${videoId}_${safeName}.json`,
     `${STUDENT_REPORTS_PREFIX}/${videoId}.json`,
@@ -992,11 +1000,10 @@ function pollGCSForStudentReport(jobId, videoId, studentName) {
 
     try {
       if (!gcsStorage) throw new Error('GCS client not initialized');
-      const bucket = gcsStorage.bucket(PROCESSED_BUCKET);
 
-      // Try all candidate paths
-      for (const candidatePath of candidatePaths) {
-        const reportBlob = bucket.file(candidatePath);
+      // Try new bucket first (İrem's pipeline: lectureai_student_reports)
+      for (const candidatePath of candidatePathsNewBucket) {
+        const reportBlob = studentReportsBucket.file(candidatePath);
         const [exists] = await reportBlob.exists();
         if (exists) {
           clearInterval(interval);
@@ -1013,7 +1020,6 @@ function pollGCSForStudentReport(jobId, videoId, studentName) {
             console.error('[StudentAnalysis] Report parse error:', e.message);
           }
 
-          // Merge with existing draftReport to preserve metadata
           const existing = await prisma.report.findUnique({
             where: { id: jobId },
             select: { draftReport: true },
@@ -1034,7 +1040,51 @@ function pollGCSForStudentReport(jobId, videoId, studentName) {
             analysisType: 'student_voice',
           });
           setTimeout(() => analysisProgress.delete(jobId), 5 * 60 * 1000);
-          console.log(`[StudentAnalysis] Report found at ${candidatePath} for jobId=${jobId}`);
+          console.log(`[StudentAnalysis] Report found at ${STUDENT_REPORTS_BUCKET}/${candidatePath} for jobId=${jobId}`);
+          return;
+        }
+      }
+
+      // Fallback: try legacy paths in PROCESSED_BUCKET
+      for (const candidatePath of candidatePathsLegacy) {
+        const reportBlob = legacyBucket.file(candidatePath);
+        const [exists] = await reportBlob.exists();
+        if (exists) {
+          clearInterval(interval);
+          analysisProgress.set(jobId, {
+            ...analysisProgress.get(jobId),
+            stage: 'uploading',
+            message: 'Öğrenci raporu okunuyor...',
+            percent: 95,
+          });
+
+          const [content] = await reportBlob.download();
+          let draftReport = {};
+          try { draftReport = JSON.parse(content.toString()); } catch (e) {
+            console.error('[StudentAnalysis] Report parse error:', e.message);
+          }
+
+          const existing = await prisma.report.findUnique({
+            where: { id: jobId },
+            select: { draftReport: true },
+          });
+          const existingDraft = (typeof existing?.draftReport === 'object' && existing.draftReport) || {};
+          const mergedDraft = { ...existingDraft, ...draftReport };
+
+          await prisma.report.update({
+            where: { id: jobId },
+            data: { status: 'DRAFT', draftReport: mergedDraft },
+          });
+
+          analysisProgress.set(jobId, {
+            stage: 'completed',
+            message: 'Öğrenci ses analizi tamamlandı!',
+            percent: 100,
+            videoId,
+            analysisType: 'student_voice',
+          });
+          setTimeout(() => analysisProgress.delete(jobId), 5 * 60 * 1000);
+          console.log(`[StudentAnalysis] Report found at ${PROCESSED_BUCKET}/${candidatePath} for jobId=${jobId}`);
           return;
         }
       }
