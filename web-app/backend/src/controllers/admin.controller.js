@@ -526,31 +526,41 @@ async function retryReportOnly(req, res) {
 
   console.log(`[RetryReport] Calling ${orchestratorUrl} for video_id=${videoId}`);
 
-  const orchRes = await fetch(orchestratorUrl, {
+  // Update report status BEFORE calling orchestrator (fire-and-forget)
+  await prisma.report.update({ where: { id: jobId }, data: { status: 'PROCESSING' } });
+  analysisProgress.set(jobId, { stage: 'reporting', message: 'Rapor yeniden oluşturuluyor...', percent: 55, startedAt: new Date().toISOString(), videoId });
+
+  // Return 202 immediately — don't wait for orchestrator to finish
+  res.status(202).json({ jobId, status: 'PROCESSING', message: 'Rapor yeniden oluşturma başlatıldı.', videoId });
+
+  // Fire-and-forget: call orchestrator in background
+  fetch(orchestratorUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${authToken}`,
     },
     body: JSON.stringify({ video_id: videoId, force: true }),
-  });
-
-  const orchBody = await orchRes.json().catch(() => ({}));
-
-  if (orchRes.status === 409) {
-    throw new AppError('Ses/CV verileri henüz hazır değil. Lütfen tam analiz çalıştırın.', 409);
-  }
-  if (!orchRes.ok) {
-    const detail = orchBody.error || orchBody.detail || `HTTP ${orchRes.status}`;
-    throw new AppError(`Orchestrator hatası: ${detail}`, orchRes.status >= 500 ? 502 : orchRes.status);
-  }
-
-  // Update report status
-  await prisma.report.update({ where: { id: jobId }, data: { status: 'PROCESSING' } });
-  analysisProgress.set(jobId, { stage: 'reporting', message: 'Rapor yeniden oluşturuluyor...', percent: 55, startedAt: new Date().toISOString(), videoId });
-  pollGCSForReport(jobId, videoId);
-
-  return res.status(202).json({ jobId, status: 'PROCESSING', message: 'Rapor yeniden oluşturma başlatıldı.', videoId });
+  })
+    .then(async (orchRes) => {
+      const orchBody = await orchRes.json().catch(() => ({}));
+      if (orchRes.status === 409) {
+        console.warn(`[RetryReport] 409: Audio/CV not ready for ${videoId}`);
+        analysisProgress.set(jobId, { stage: 'error', message: 'Ses/CV verileri henüz hazır değil.', percent: 0 });
+        await prisma.report.update({ where: { id: jobId }, data: { status: 'DRAFT' } });
+      } else if (!orchRes.ok) {
+        const detail = orchBody.error || orchBody.detail || `HTTP ${orchRes.status}`;
+        console.error(`[RetryReport] Orchestrator error for ${videoId}: ${detail}`);
+        analysisProgress.set(jobId, { stage: 'error', message: `Orchestrator hatası: ${detail}`, percent: 0 });
+      } else {
+        console.log(`[RetryReport] Orchestrator accepted for ${videoId}, polling for result...`);
+        pollGCSForReport(jobId, videoId);
+      }
+    })
+    .catch((err) => {
+      console.error(`[RetryReport] Network error calling orchestrator for ${videoId}:`, err.message);
+      analysisProgress.set(jobId, { stage: 'error', message: `Bağlantı hatası: ${err.message}`, percent: 0 });
+    });
 }
 
 async function getTeacherReports(req, res) {
