@@ -196,19 +196,7 @@ const SharedReport = ({ report }) => {
 
   const allCompetencies = categoryGroups.flatMap(g => g.metrics)
 
-  // Build timestamped observations from per-metric data (matches PDF)
-  const buildObservations = () => {
-    const obs = []
-    categoryGroups.forEach(group => {
-      group.metrics.forEach(m => {
-        if (m.obs && m.obs.trim()) {
-          obs.push({ t: `${group.title} — ${m.l}`, c: m.obs, rating: m.s, color: m.color, tip: m.tip })
-        }
-      })
-    })
-    return obs
-  }
-  const timestampedObservations = buildObservations()
+
 
   // Lesson structure from ders_yapisi
   const lessonStructure = dr.ders_yapisi || []
@@ -453,35 +441,6 @@ const SharedReport = ({ report }) => {
                   }}>
                     {item.completed ? '✓' : '✗'} {item.item}
                   </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Per-Metric Timestamped Observations — replaces the old duplicated section */}
-          {timestampedObservations.length > 0 && (
-            <div>
-              <h4 style={{fontSize: '0.95rem', fontWeight: 800, color: '#1e293b', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '8px'}}>
-                Analiz Kanıtları & Gözlemler
-                {videoUrl && <span style={{fontSize: '10px', fontWeight: 700, color: '#6366f1', background: '#f5f3ff', padding: '3px 10px', borderRadius: '6px'}}>🎬 Zaman damgalarına tıklayarak video önizleme yapabilirsiniz</span>}
-              </h4>
-              <div style={{display:'flex', flexDirection:'column', gap:'0.75rem'}}>
-                {timestampedObservations.map((o, idx) => (
-                  <div key={idx} style={{padding:'1rem 1.25rem', background:'#f8fafc', borderRadius:'12px', border:'1px solid #f1f5f9', fontSize:'0.85rem', color:'#475569', lineHeight:1.8}}>
-                    <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px'}}>
-                      <strong style={{color:'#1e293b', fontSize: '0.82rem'}}>{o.t}</strong>
-                      <span style={{
-                        display: 'inline-block', padding: '2px 8px', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 800,
-                        background: `${o.color}15`, color: o.color, border: `1px solid ${o.color}30`,
-                      }}>{o.rating}</span>
-                    </div>
-                    <div>{parseTimestamps(o.c, seekTo)}</div>
-                    {o.tip && o.tip.trim() && (
-                      <div style={{fontSize: '0.78rem', color: '#b45309', lineHeight: 1.5, marginTop: '8px', fontStyle: 'italic'}}>
-                        💡 <strong>Gelişim önerisi:</strong> {o.tip}
-                      </div>
-                    )}
-                  </div>
                 ))}
               </div>
             </div>
