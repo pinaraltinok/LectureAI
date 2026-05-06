@@ -27,7 +27,6 @@ const TeacherPool = () => {
   const [progressData, setProgressData] = useState([])
 
   // Admin action states
-  const [adminNote, setAdminNote] = useState('')
   const [finalizing, setFinalizing] = useState(false)
   const [retryingReport, setRetryingReport] = useState(false)
   const [retryReportMsg, setRetryReportMsg] = useState('')
@@ -112,7 +111,7 @@ const TeacherPool = () => {
         draftReport: fr,
       }
       setSelectedReport(reportObj)
-      setAdminNote('')
+
       setView('detail')
 
       // Start polling if PROCESSING
@@ -210,22 +209,7 @@ const TeacherPool = () => {
       }
     }
 
-    const handleRegenerate = async () => {
-      if (!selectedReport.jobId || !adminNote.trim()) return
-      try {
-        await apiPost('/admin/analysis/regenerate', {
-          jobId: selectedReport.jobId,
-          feedback: adminNote,
-        })
-        setAdminNote('')
-        setSelectedReport(prev => ({ ...prev, status: 'PROCESSING' }))
-        // Refresh reports
-        const data = await apiGet(`/admin/teacher/${selectedTeacher.id}/reports`)
-        setTeacherReports(data.reports || [])
-      } catch (err) {
-        setError('Yeniden oluşturma hatası: ' + err.message)
-      }
-    }
+
 
     const handleRetryReport = async () => {
       if (!selectedReport.jobId) return
@@ -359,20 +343,7 @@ const TeacherPool = () => {
               Admin İşlemleri
             </h5>
 
-            <textarea
-              placeholder="Rapor hakkında geri bildirim veya düzeltme notu yazın... (opsiyonel)"
-              value={adminNote}
-              onChange={(e) => setAdminNote(e.target.value)}
-              style={{
-                width: '100%', minHeight: '100px', padding: '1.25rem', borderRadius: '16px',
-                border: '1.5px solid #e2e8f0', fontSize: '0.9rem', outline: 'none',
-                background: '#fff', fontFamily: 'inherit', resize: 'vertical',
-              }}
-              onFocus={e => e.currentTarget.style.borderColor = '#6366f1'}
-              onBlur={e => e.currentTarget.style.borderColor = '#e2e8f0'}
-            />
-
-            <div className="responsive-action-buttons" style={{display: 'flex', gap: '1rem', marginTop: '1.25rem', flexWrap: 'wrap'}}>
+            <div className="responsive-action-buttons" style={{display: 'flex', gap: '1rem', marginTop: '0', flexWrap: 'wrap'}}>
               <button
                 onClick={handleRetryReport}
                 disabled={retryingReport}
@@ -388,19 +359,6 @@ const TeacherPool = () => {
                 }}
               >
                 {retryingReport ? '⏳ Oluşturuluyor...' : '🔄 Raporu Yeniden Oluştur'}
-              </button>
-              <button
-                onClick={handleRegenerate}
-                disabled={!adminNote.trim()}
-                style={{
-                  flex: 1, padding: '14px', borderRadius: '14px', border: '1.5px solid #e2e8f0',
-                  background: adminNote.trim() ? '#fff' : '#f8fafc',
-                  color: adminNote.trim() ? '#6366f1' : '#94a3b8',
-                  fontSize: '0.85rem', fontWeight: 800, cursor: adminNote.trim() ? 'pointer' : 'not-allowed',
-                  transition: 'all 0.2s',
-                }}
-              >
-                ↺ Feedback ile Yeniden Oluştur
               </button>
               <button
                 onClick={handleFinalize}
