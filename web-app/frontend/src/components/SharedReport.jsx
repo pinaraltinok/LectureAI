@@ -210,13 +210,38 @@ const SharedReport = ({ report }) => {
   return (
     <div className="report-card-internal" style={{background: '#fff', padding: '0', border: '1px solid #cbd5e1', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.05)', overflow: 'hidden', animation: 'fadeIn 0.5s ease'}}>
        {/* Document Header (Dark) */}
-       <div style={{background: 'linear-gradient(135deg, #0f172a 0%, #334155 100%)', padding: '2rem 2.5rem', color: 'white'}}>
+       <div style={{background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)', padding: '2rem 2.5rem', color: 'white'}}>
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: '1rem'}}>
              <span style={{fontSize:'10px', fontWeight:800, color:'var(--primary)', letterSpacing:'0.2em'}}>TAM KALİTE ANALİZ RAPORU</span>
              <div style={{padding:'4px 12px', background:'rgba(255,255,255,0.1)', borderRadius:'6px', fontSize:'10px', fontWeight:700}}>REF: #QA-2026-DOC-{report.id}</div>
           </div>
-          <h2 style={{fontSize:'1.8rem', fontWeight:800, margin:0}}>{report.module || (report.name + " - Analizi")}</h2>
-          <div style={{display:'flex', gap:'1.5rem', marginTop:'1rem', opacity:0.8, fontSize:'0.85rem'}}>
+
+          {/* Teacher Name - Prominent Display */}
+          {report.name && (
+            <div style={{display:'flex', alignItems:'center', gap:'16px', marginBottom:'1rem'}}>
+              <div style={{
+                width:'52px', height:'52px', borderRadius:'16px',
+                background:'linear-gradient(135deg, #6366f1, #a855f7)',
+                display:'grid', placeItems:'center',
+                fontWeight:900, fontSize:'1.1rem', color:'#fff',
+                boxShadow:'0 8px 20px rgba(99, 102, 241, 0.4)',
+                flexShrink:0,
+              }}>
+                {report.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+              </div>
+              <div>
+                <div style={{fontSize:'1.4rem', fontWeight:900, letterSpacing:'-0.02em', lineHeight:1.2}}>
+                  {report.name}
+                </div>
+                <div style={{fontSize:'0.78rem', fontWeight:600, color:'rgba(255,255,255,0.5)', marginTop:'2px'}}>
+                  Eğitmen
+                </div>
+              </div>
+            </div>
+          )}
+
+          <h2 style={{fontSize:'1.8rem', fontWeight:800, margin:0}}>{report.module || (report.name ? report.name + ' - Analizi' : 'Analiz Raporu')}</h2>
+          <div style={{display:'flex', gap:'1.5rem', marginTop:'1rem', opacity:0.8, fontSize:'0.85rem', flexWrap:'wrap'}}>
              <span>📅 {report.date || report.details?.date}</span>
              <span>👥 {report.group || report.details?.group}</span>
              <span>👤 Değerlendiren: {report.evaluator || report.details?.evaluator || 'QA Uzmanı'}</span>

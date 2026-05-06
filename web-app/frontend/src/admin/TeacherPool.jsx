@@ -91,12 +91,14 @@ const TeacherPool = () => {
       console.log('[TeacherPool] draftReport:', draft.draftReport)
       console.log('[TeacherPool] finalReport:', draft.finalReport)
       const fr = draft.finalReport || draft.draftReport || {}
+      const teacherName = selectedTeacher?.name || draft.teacher?.name || ''
+      console.log('[TeacherPool] Teacher name debug:', { selectedTeacherName: selectedTeacher?.name, draftTeacherName: draft.teacher?.name, resolved: teacherName })
       const reportObj = {
         jobId: report.jobId,
         status: draft.status || report.status,
         id: report.jobId?.slice(0, 8),
-        name: selectedTeacher?.name || '',
-        module: draft.lesson?.course || report.courseName || selectedTeacher?.name + ' Analizi',
+        name: teacherName,
+        module: draft.lesson?.course || report.courseName || (teacherName ? teacherName + ' Analizi' : 'Analiz'),
         date: report.createdAt ? new Date(report.createdAt).toLocaleDateString('tr-TR') : '',
         group: report.lessonNo ? formatLessonLabel(report.lessonNo, report.moduleSize) : '',
         evaluator: fr.approvedBy ? 'Admin Onaylı' : 'Sistem (AI)',
