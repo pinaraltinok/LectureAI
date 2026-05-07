@@ -1,0 +1,28 @@
+# Gcloud Ignore - for Cloud Build
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.vscode/
+.idea/
+.git/
+*.swp
+.DS_Store
+Thumbs.db
+*.log
+.pytest_cache/
+htmlcov/
+.coverage
+pdfs/
+tmp/
+node_modules/
+web-app/
+work/
+data/
+
+# Explicitly include service account key for Cloud Build
+!senior-design-488908-*.json

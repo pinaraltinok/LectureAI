@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, NavLink, useNavigate, Navigate, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Users, Upload, Settings, BookOpen, MessageSquare, BarChart3, GraduationCap, ClipboardEdit, StickyNote, LogOut, BookOpenCheck, Menu, X } from 'lucide-react'
+import { LayoutDashboard, Users, Upload, Settings, BookOpen, MessageSquare, BarChart3, GraduationCap, ClipboardEdit, StickyNote, LogOut, BookOpenCheck, Menu, X, Mic } from 'lucide-react'
 import { AuthProvider, useAuth } from './context/AuthContext.jsx'
 import Login from './Login.jsx'
 
@@ -9,6 +9,7 @@ import AdminSummary from './admin/AdminSummary.jsx'
 import TeacherPool from './admin/TeacherPool.jsx'
 import AnalysisWorkflow from './admin/AnalysisWorkflow.jsx'
 import AdminManagement from './admin/AdminManagement.jsx'
+import AdminStudentReports from './admin/AdminStudentReports.jsx'
 
 // TEACHER sayfaları
 import TeacherDashboard from './teacher/TeacherDashboard.jsx'
@@ -23,6 +24,7 @@ import StudentDashboard from './student/StudentDashboard.jsx'
 import StudentSurvey from './student/StudentSurvey.jsx'
 import StudentNotes from './student/StudentNotes.jsx'
 import StudentLessonPlayer from './student/StudentLessonPlayer.jsx'
+import StudentReportView from './student/StudentReportView.jsx'
 import ProfilePage from './components/ProfilePage.jsx'
 
 function AppContent() {
@@ -85,7 +87,7 @@ function AppContent() {
       />
 
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
-        <div className="brand" style={{marginBottom: '2.5rem', padding: '0 1.2rem'}}>
+        <div className="brand" style={{marginBottom: '2.5rem', padding: '0 1.2rem', cursor: 'pointer'}} onClick={() => navigate('/')}>
           <div style={{display:'flex', alignItems:'center', gap:'1rem'}}>
             <div style={{
               width: '52px', height: '52px', borderRadius: '50%',
@@ -128,6 +130,10 @@ function AppContent() {
                 <Settings size={18} style={{marginRight:'12px', opacity: 0.8, flexShrink: 0}} />
                 Kullanıcı & Grup Yönetimi
               </NavLink>
+              <NavLink to="/admin/ogrenci-raporlari" className={({isActive})=>isActive?"menu-link active":"menu-link"}>
+                <Mic size={18} style={{marginRight:'12px', opacity: 0.8, flexShrink: 0}} />
+                Öğrenci Ses Raporları
+              </NavLink>
             </>
           )}
 
@@ -161,6 +167,10 @@ function AppContent() {
               <NavLink to="/student/notlar" className={({isActive})=>isActive?"menu-link active":"menu-link"}>
                 <StickyNote size={18} style={{marginRight:'12px', opacity: 0.8, flexShrink: 0}} />
                 Hocamın Notları
+              </NavLink>
+              <NavLink to="/student/raporlarim" className={({isActive})=>isActive?"menu-link active":"menu-link"}>
+                <Mic size={18} style={{marginRight:'12px', opacity: 0.8, flexShrink: 0}} />
+                Ses Raporlarım
               </NavLink>
             </>
           )}
@@ -197,6 +207,7 @@ function AppContent() {
                     : <div><h1>Taslak Rapor Önizleme</h1><p>Raporu onaylayın veya revize edin.</p></div>
                 } />
                 <Route path="yonetim" element={<div><h1>Kullanıcı & Grup Yönetimi</h1><p>Öğrenci, eğitmen ve grup işlemlerini yönetin.</p></div>} />
+                <Route path="ogrenci-raporlari" element={<div><h1>Öğrenci Ses Raporları</h1><p>Gruplardaki öğrencilerin ses analiz raporlarını inceleyin.</p></div>} />
               </Routes>
             } />
             
@@ -214,6 +225,7 @@ function AppContent() {
                 <Route path="ders-kaydi" element={<div><h1>Ders Kaydı</h1><p>Ders kaydını izleyin ve not alın</p></div>} />
                 <Route path="anket" element={<div><h1>Ders Anketi</h1><p>Anonim ders değerlendirmesi</p></div>} />
                 <Route path="notlar" element={<div><h1>Hocamın Notları</h1><p>Eğitmenlerinizden gelen geri bildirimler</p></div>} />
+                <Route path="raporlarim" element={<div><h1>Ses Analiz Raporlarım</h1><p>Ders performansınıza dair pedagojik raporlar</p></div>} />
               </Routes>
             } />
 
@@ -239,6 +251,7 @@ function AppContent() {
           <Route path="/admin/egitmen-havuzu" element={<TeacherPool />} />
           <Route path="/admin/analiz-atama" element={<AnalysisWorkflow onStepChange={setWorkflowStep} />} />
           <Route path="/admin/yonetim" element={<AdminManagement />} />
+          <Route path="/admin/ogrenci-raporlari" element={<AdminStudentReports />} />
           
           <Route path="/teacher/ders-ozeti" element={<TeacherDashboard />} />
           <Route path="/teacher/feedback" element={<TeacherAttendance />} />
@@ -248,6 +261,7 @@ function AppContent() {
           <Route path="/student/ders-kaydi" element={<StudentLessonPlayer />} />
           <Route path="/student/anket" element={<StudentSurvey />} />
           <Route path="/student/notlar" element={<StudentNotes />} />
+          <Route path="/student/raporlarim" element={<StudentReportView />} />
 
           <Route path="/profil" element={<ProfilePage />} />
 

@@ -6,6 +6,7 @@ const asyncHandler = require('../middleware/asyncHandler');
 const {
   getCourses, getEvaluations, submitSurvey, getMySurveys,
   getLessonDetail, getLessonNotes, createLessonNote, updateLessonNote, deleteLessonNote,
+  getMyReports,
 } = require('../controllers/student.controller');
 
 router.get('/courses', auth, roleGuard('STUDENT'), asyncHandler(getCourses));
@@ -19,5 +20,8 @@ router.get('/lesson/:lessonId/notes', auth, roleGuard('STUDENT'), asyncHandler(g
 router.post('/lesson/:lessonId/notes', auth, roleGuard('STUDENT'), asyncHandler(createLessonNote));
 router.put('/lesson/:lessonId/notes/:noteId', auth, roleGuard('STUDENT'), asyncHandler(updateLessonNote));
 router.delete('/lesson/:lessonId/notes/:noteId', auth, roleGuard('STUDENT'), asyncHandler(deleteLessonNote));
+
+// Student Voice Analysis Reports
+router.get('/reports', auth, roleGuard('STUDENT'), asyncHandler(getMyReports));
 
 module.exports = router;

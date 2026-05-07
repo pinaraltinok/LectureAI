@@ -8,7 +8,7 @@ const storage = getStorageClient();
 const SIGNED_URL_EXPIRY_MINUTES = 60;
 
 // Allowed buckets (whitelist)
-const ALLOWED_BUCKETS = ['lectureai_full_videos', 'lectureai_processed'];
+const ALLOWED_BUCKETS = ['lectureai_full_videos', 'lectureai_processed', 'lectureai_student_audios'];
 
 /**
  * Security: Validates GCS object path against path traversal attacks.

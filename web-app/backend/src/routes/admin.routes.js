@@ -5,15 +5,17 @@ const auth = require('../middleware/auth');
 const roleGuard = require('../middleware/roleGuard');
 const asyncHandler = require('../middleware/asyncHandler');
 const validate = require('../middleware/validate');
-const { assignAnalysisSchema, createUserSchema, createGroupSchema, createCourseSchema } = require('../schemas/admin.schema');
+const { assignAnalysisSchema, createUserSchema, createGroupSchema, createCourseSchema, createStudentAnalysisSchema } = require('../schemas/admin.schema');
 const {
   getStats, getTeachers, uploadAnalysis, createFromUrl, assignAnalysis, getDraft,
-  regenerateAnalysis, retryAnalysis, finalizeAnalysis, getLessons, getAnalysisJobs,
+  regenerateAnalysis, retryAnalysis, retryReportOnly, finalizeAnalysis, getLessons, getAnalysisJobs,
   getCourses, getGroups, getAnalysisProgress, getTeacherReports, syncGCSReports,
   createUser, getStudents, assignStudentToGroup, removeStudentFromGroup,
   setTeacherCourses, getTeacherCourses, createGroup, createCourse,
   updateGroup, deleteGroup, updateUser, deleteUser, updateCourse, deleteCourse,
   getTeacherProgress,
+  uploadReferenceAudio, createStudentAnalysis, getStudentAnalysisJobs,
+  getGroupStudentReports,
 } = require('../controllers/admin.controller');
 
 // Multer configuration with security limits
@@ -37,6 +39,20 @@ const upload = multer({
   },
 });
 
+// Audio multer for student reference voice uploads
+const ALLOWED_AUDIO_MIMETYPES = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/ogg', 'audio/webm', 'audio/mp4', 'audio/x-m4a'];
+const audioUpload = multer({
+  storage: multerStorage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB max for audio
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_AUDIO_MIMETYPES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Sadece ses dosyaları (mp3, wav, ogg, webm, m4a) yüklenebilir.'), false);
+    }
+  },
+});
+
 router.get('/stats', auth, roleGuard('ADMIN'), asyncHandler(getStats));
 router.get('/teachers', auth, roleGuard('ADMIN'), asyncHandler(getTeachers));
 router.get('/courses', auth, roleGuard('ADMIN'), asyncHandler(getCourses));
@@ -53,6 +69,7 @@ router.post('/analysis/create-from-url', auth, roleGuard('ADMIN'), asyncHandler(
 router.post('/analysis/assign', auth, roleGuard('ADMIN'), validate(assignAnalysisSchema), asyncHandler(assignAnalysis));
 router.post('/analysis/regenerate', auth, roleGuard('ADMIN'), asyncHandler(regenerateAnalysis));
 router.post('/analysis/retry', auth, roleGuard('ADMIN'), asyncHandler(retryAnalysis));
+router.post('/analysis/retry-report', auth, roleGuard('ADMIN'), asyncHandler(retryReportOnly));
 router.post('/analysis/finalize', auth, roleGuard('ADMIN'), asyncHandler(finalizeAnalysis));
 router.post('/sync-reports', auth, roleGuard('ADMIN'), asyncHandler(syncGCSReports));
 
@@ -71,5 +88,11 @@ router.put('/users/:id', auth, roleGuard('ADMIN'), asyncHandler(updateUser));
 router.delete('/users/:id', auth, roleGuard('ADMIN'), asyncHandler(deleteUser));
 router.put('/courses/:id', auth, roleGuard('ADMIN'), asyncHandler(updateCourse));
 router.delete('/courses/:id', auth, roleGuard('ADMIN'), asyncHandler(deleteCourse));
+
+// Student Voice Analysis
+router.post('/students/:studentId/reference-audio', auth, roleGuard('ADMIN'), audioUpload.single('audio'), asyncHandler(uploadReferenceAudio));
+router.post('/student-analysis/create', auth, roleGuard('ADMIN'), validate(createStudentAnalysisSchema), asyncHandler(createStudentAnalysis));
+router.get('/student-analysis/jobs', auth, roleGuard('ADMIN'), asyncHandler(getStudentAnalysisJobs));
+router.get('/group/:groupId/student-reports', auth, roleGuard('ADMIN'), asyncHandler(getGroupStudentReports));
 
 module.exports = router;

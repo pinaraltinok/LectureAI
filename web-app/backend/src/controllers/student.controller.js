@@ -261,4 +261,56 @@ async function deleteLessonNote(req, res) {
   return res.json({ message: 'Not silindi.' });
 }
 
-module.exports = { getCourses, getEvaluations, submitSurvey, getMySurveys, getLessonDetail, getLessonNotes, createLessonNote, updateLessonNote, deleteLessonNote };
+/**
+ * GET /api/student/reports
+ * Returns all voice analysis reports linked to this student.
+ */
+async function getMyReports(req, res) {
+  const studentId = req.user.userId;
+
+  const reportStudents = await prisma.reportStudent.findMany({
+    where: { studentId },
+    include: {
+      report: {
+        include: {
+          lesson: {
+            include: {
+              group: {
+                include: {
+                  course: true,
+                  teacher: { include: { user: { select: { name: true } } } },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    orderBy: { report: { createdAt: 'desc' } },
+  });
+
+  const reports = reportStudents
+    .filter(rs => rs.report.status === 'DRAFT' || rs.report.status === 'FINALIZED')
+    .map(rs => {
+      const r = rs.report;
+      const dr = (typeof r.draftReport === 'object' && r.draftReport) || {};
+      return {
+        id: r.id,
+        status: r.status,
+        studentName: dr._studentName || null,
+        speakerId: dr._speakerId || dr.speaker_id || null,
+        biometricScore: dr.biometric_score || null,
+        reportMarkdown: dr.report_markdown || null,
+        videoUrl: r.lesson?.videoUrl || dr._videoUrl || null,
+        lessonNo: r.lesson?.lessonNo || null,
+        courseName: r.lesson?.group?.course?.course || null,
+        teacherName: r.lesson?.group?.teacher?.user?.name || null,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+      };
+    });
+
+  return res.json(reports);
+}
+
+module.exports = { getCourses, getEvaluations, submitSurvey, getMySurveys, getLessonDetail, getLessonNotes, createLessonNote, updateLessonNote, deleteLessonNote, getMyReports };

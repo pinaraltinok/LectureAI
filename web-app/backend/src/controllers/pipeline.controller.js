@@ -36,6 +36,17 @@ const STAGE_PROGRESS_MAP = {
   'orchestrator:completed':           { stage: 'completed',  message: 'Analiz tamamlandı!',              percent: 100 },
   'orchestrator:failed':              { stage: 'failed',     message: 'Analiz başarısız oldu.',           percent: 0 },
   'orchestrator:skipped_report_exists': { stage: 'completed', message: 'Rapor zaten mevcut.',             percent: 100 },
+
+  // ── Student Voice Analysis Pipeline stages ────────────────
+  'student:transcript_started':       { stage: 'processing', message: 'Öğrenci transkripti oluşturuluyor...',       percent: 10 },
+  'student:transcript_completed':     { stage: 'processing', message: 'Transkript tamamlandı.',                     percent: 25 },
+  'student:biometric_started':        { stage: 'processing', message: 'Biyometrik ses eşleştirme başladı...',       percent: 30 },
+  'student:biometric_matching':       { stage: 'processing', message: 'Konuşmacı eşleştirme yapılıyor...',          percent: 45 },
+  'student:biometric_completed':      { stage: 'processing', message: 'Ses eşleştirme tamamlandı.',                 percent: 55 },
+  'student:report_generating':        { stage: 'reporting',  message: 'Pedagojik rapor oluşturuluyor...',            percent: 70 },
+  'student:report_uploading':         { stage: 'uploading',  message: 'Rapor yükleniyor...',                         percent: 85 },
+  'student:completed':                { stage: 'completed',  message: 'Öğrenci ses analizi tamamlandı!',            percent: 100 },
+  'student:failed':                   { stage: 'failed',     message: 'Öğrenci ses analizi başarısız oldu.',         percent: 0 },
 };
 
 /**
@@ -78,8 +89,7 @@ async function postWorkerPipelineEvent(req, res) {
   console.log(`[Pipeline] Event: video_id=${video_id}, stage=${stage}, status=${status}`);
 
   // ── Update analysisProgress for backward compat ──
-  const progressKey = `${stage}:${status}`;
-  const mapped = STAGE_PROGRESS_MAP[progressKey];
+  const mapped = STAGE_PROGRESS_MAP[stage];
 
   if (mapped) {
     // Find the jobId that corresponds to this video_id
@@ -100,6 +110,60 @@ async function postWorkerPipelineEvent(req, res) {
         percent: mapped.percent,
       });
       console.log(`[Pipeline] Progress updated for jobId=${targetJobId}: ${mapped.stage} ${mapped.percent}%`);
+    }
+  }
+
+  // ── Update student voice analysis Report record on terminal events ──
+  if (stage === 'student:completed' || stage === 'student:failed') {
+    try {
+      const { PrismaClient } = require('@prisma/client');
+      const prisma = new PrismaClient();
+      const newStatus = stage === 'student:completed' ? 'DRAFT' : 'FAILED';
+
+      // Parse report data from detail (worker sends full JSON on completed)
+      let reportData = {};
+      if (stage === 'student:completed' && detail) {
+        try {
+          reportData = typeof detail === 'string' ? JSON.parse(detail) : detail;
+        } catch { /* detail is plain text */ }
+      }
+
+      // Find student voice analysis reports
+      const records = await prisma.report.findMany({
+        where: {
+          draftReport: { path: ['_analysisType'], equals: 'student_voice' },
+        },
+      });
+
+      for (const record of records) {
+        const dr = (typeof record.draftReport === 'object' && record.draftReport) || {};
+        const recordVideoId = dr._videoId || '';
+        const recordVideoUrl = dr._videoUrl || '';
+
+        // Extract filename from _videoUrl for reliable matching
+        const urlFilename = recordVideoUrl.split('/').pop().replace(/\.[^.]+$/, '');
+        const matches = (recordVideoId && video_id === recordVideoId) ||
+                        (urlFilename && video_id === urlFilename);
+
+        if (matches && record.status === 'PROCESSING') {
+          // Merge worker report data into draftReport
+          const updatedDraft = { ...dr, ...reportData, _videoId: video_id, _completedAt: new Date().toISOString() };
+
+          await prisma.report.update({
+            where: { id: record.id },
+            data: {
+              status: newStatus,
+              draftReport: updatedDraft,
+              updatedAt: new Date(),
+            },
+          });
+          console.log(`[Pipeline] Report ${record.id} → ${newStatus} (markdown: ${!!reportData.report_markdown})`);
+          break;
+        }
+      }
+      await prisma.$disconnect();
+    } catch (dbErr) {
+      console.error('[Pipeline] DB update failed for student analysis:', dbErr.message);
     }
   }
 

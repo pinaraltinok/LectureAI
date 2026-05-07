@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { apiGet, apiPost } from '../api'
 import { formatLessonLabel } from '../utils/lessonLabel'
 import SharedReport from '../components/SharedReport.jsx'
@@ -27,8 +27,12 @@ const TeacherPool = () => {
   const [progressData, setProgressData] = useState([])
 
   // Admin action states
-  const [adminNote, setAdminNote] = useState('')
   const [finalizing, setFinalizing] = useState(false)
+
+
+  // Progress polling for PROCESSING reports
+  const [detailProgress, setDetailProgress] = useState(null)
+  const progressIntervalRef = useRef(null)
 
   // Load teachers
   useEffect(() => {
@@ -72,18 +76,27 @@ const TeacherPool = () => {
 
   // ─── Handler: Open report detail ──────────────────────────
   const handleViewReport = async (report) => {
+    // Clear previous progress polling
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current)
+      progressIntervalRef.current = null
+    }
+    setDetailProgress(null)
+
     try {
       const draft = await apiGet(`/admin/analysis/draft/${report.jobId}`)
       console.log('[TeacherPool] Draft API response:', draft)
       console.log('[TeacherPool] draftReport:', draft.draftReport)
       console.log('[TeacherPool] finalReport:', draft.finalReport)
       const fr = draft.finalReport || draft.draftReport || {}
-      setSelectedReport({
+      const teacherName = selectedTeacher?.name || draft.teacher?.name || ''
+      console.log('[TeacherPool] Teacher name debug:', { selectedTeacherName: selectedTeacher?.name, draftTeacherName: draft.teacher?.name, resolved: teacherName })
+      const reportObj = {
         jobId: report.jobId,
         status: draft.status || report.status,
         id: report.jobId?.slice(0, 8),
-        name: selectedTeacher?.name || '',
-        module: draft.lesson?.course || report.courseName || selectedTeacher?.name + ' Analizi',
+        name: teacherName,
+        module: draft.lesson?.course || report.courseName || (teacherName ? teacherName + ' Analizi' : 'Analiz'),
         date: report.createdAt ? new Date(report.createdAt).toLocaleDateString('tr-TR') : '',
         group: report.lessonNo ? formatLessonLabel(report.lessonNo, report.moduleSize) : '',
         evaluator: fr.approvedBy ? 'Admin Onaylı' : 'Sistem (AI)',
@@ -92,19 +105,65 @@ const TeacherPool = () => {
         duration: fr.actual_duration_min ? `${fr.actual_duration_min}dk` : '—',
         videoUrl: draft.videoUrl || report.videoUrl || null,
         localVideoUrl: draft.localVideoUrl || report.localVideoUrl || null,
-        obs: fr.feedback_metni
-          ? [{ t: 'AI Değerlendirmesi', c: fr.feedback_metni }]
-          : [{ t: 'Bilgi', c: 'Rapor detayı bulunamadı.' }],
+
         finalReport: fr,
         draftReport: fr,
-      })
-      setAdminNote('')
+      }
+      setSelectedReport(reportObj)
+
       setView('detail')
+
+      // Start polling if PROCESSING
+      if ((draft.status || report.status) === 'PROCESSING') {
+        // Initial progress fetch
+        try {
+          const prog = await apiGet(`/admin/analysis/progress/${report.jobId}`)
+          setDetailProgress(prog)
+        } catch {}
+
+        progressIntervalRef.current = setInterval(async () => {
+          try {
+            const prog = await apiGet(`/admin/analysis/progress/${report.jobId}`)
+            setDetailProgress(prog)
+            if (prog.stage === 'completed' || prog.stage === 'failed') {
+              clearInterval(progressIntervalRef.current)
+              progressIntervalRef.current = null
+              // Refresh report data when completed
+              if (prog.stage === 'completed') {
+                try {
+                  const updatedDraft = await apiGet(`/admin/analysis/draft/${report.jobId}`)
+                  const ufr = updatedDraft.finalReport || updatedDraft.draftReport || {}
+                  setSelectedReport(prev => ({
+                    ...prev,
+                    status: updatedDraft.status || 'DRAFT',
+                    quality: ufr.yeterlilikler || '—',
+                    ttt: ufr.speaking_time_rating || '—',
+                    duration: ufr.actual_duration_min ? `${ufr.actual_duration_min}dk` : '—',
+                    evaluator: ufr.approvedBy ? 'Admin Onaylı' : 'Sistem (AI)',
+
+                    finalReport: ufr,
+                    draftReport: ufr,
+                  }))
+                } catch {}
+              }
+            }
+          } catch {}
+        }, 3000)
+      }
     } catch (e) {
       console.error('Report fetch error:', e)
       setError('Rapor yüklenirken hata oluştu.')
     }
   }
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current)
+      }
+    }
+  }, [])
 
   // ─── Loading state ──────────────────────────────────────
   if (loading) {
@@ -122,6 +181,16 @@ const TeacherPool = () => {
   if (view === 'detail' && selectedReport) {
     const isDraft = selectedReport.status === 'DRAFT'
     const isFinalized = selectedReport.status === 'FINALIZED'
+    const isProcessing = selectedReport.status === 'PROCESSING'
+
+    const PROGRESS_STAGES = [
+      { key: 'queued', label: 'Sisteme Kaydedildi', icon: '💾' },
+      { key: 'downloading', label: 'Video İndiriliyor', icon: '⬇️' },
+      { key: 'processing', label: 'Video İşleniyor', icon: '🎬' },
+      { key: 'reporting', label: 'Rapor Oluşturuluyor', icon: '📊' },
+      { key: 'uploading', label: 'Sisteme Yükleniyor', icon: '☁️' },
+      { key: 'completed', label: 'Tamamlandı!', icon: '✅' },
+    ]
 
     const handleFinalize = async () => {
       if (!selectedReport.jobId) return
@@ -139,27 +208,17 @@ const TeacherPool = () => {
       }
     }
 
-    const handleRegenerate = async () => {
-      if (!selectedReport.jobId || !adminNote.trim()) return
-      try {
-        await apiPost('/admin/analysis/regenerate', {
-          jobId: selectedReport.jobId,
-          feedback: adminNote,
-        })
-        setAdminNote('')
-        setSelectedReport(prev => ({ ...prev, status: 'PROCESSING' }))
-        // Refresh reports
-        const data = await apiGet(`/admin/teacher/${selectedTeacher.id}/reports`)
-        setTeacherReports(data.reports || [])
-      } catch (err) {
-        setError('Yeniden oluşturma hatası: ' + err.message)
-      }
-    }
+
+
+
 
     return (
       <div style={{animation: 'fadeIn 0.3s ease', padding: '1rem'}}>
         <button
-          onClick={() => { setSelectedReport(null); setView('reports') }}
+          onClick={() => { 
+            if (progressIntervalRef.current) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; }
+            setSelectedReport(null); setDetailProgress(null); setView('reports');
+          }}
           style={{background: 'none', border: 'none', color: '#6366f1', fontWeight: 800, fontSize: '11px', cursor: 'pointer', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '8px'}}
         >
           ‹ RAPORLARA GERİ DÖN
@@ -182,6 +241,75 @@ const TeacherPool = () => {
 
         <SharedReport report={selectedReport} />
 
+        {/* Live Progress Tracker for PROCESSING reports */}
+        {isProcessing && (
+          <div style={{
+            marginTop: '2rem', padding: '2rem', borderRadius: '20px',
+            background: 'linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%)',
+            border: '1.5px solid #bfdbfe',
+          }}>
+            <div style={{display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem'}}>
+              <div style={{
+                width: '40px', height: '40px', borderRadius: '12px',
+                background: 'linear-gradient(135deg, #6366f1, #a855f7)', color: '#fff',
+                display: 'grid', placeItems: 'center', fontWeight: 900, fontSize: '1.1rem',
+                animation: 'pulse 2s infinite',
+              }}>⏳</div>
+              <div>
+                <strong style={{fontSize: '0.95rem', color: '#1e40af'}}>Analiz Devam Ediyor</strong>
+                <p style={{margin: '2px 0 0', fontSize: '0.82rem', color: '#3b82f6', fontWeight: 600}}>
+                  {detailProgress?.message || 'Pipeline çalışıyor, rapor hazır olduğunda burada görünecektir...'}
+                </p>
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            <div style={{background: 'rgba(255,255,255,0.7)', borderRadius: '12px', height: '10px', overflow: 'hidden', marginBottom: '1.5rem'}}>
+              <div style={{
+                width: `${detailProgress?.percent || 5}%`,
+                height: '100%',
+                borderRadius: '12px',
+                background: 'linear-gradient(90deg, #6366f1, #a855f7, #ec4899)',
+                transition: 'width 0.8s ease',
+              }}></div>
+            </div>
+
+            {/* Stage indicators */}
+            <div style={{display: 'flex', flexWrap: 'wrap', gap: '6px'}}>
+              {PROGRESS_STAGES.map((s, i) => {
+                const currentIdx = PROGRESS_STAGES.findIndex(ps => ps.key === (detailProgress?.stage || 'queued'))
+                const isDone = i < currentIdx
+                const isActive = i === currentIdx
+                return (
+                  <div key={s.key} style={{
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    padding: '6px 12px', borderRadius: '10px',
+                    background: isDone ? '#f0fdf4' : isActive ? '#f5f3ff' : '#f8fafc',
+                    border: `1px solid ${isDone ? '#bbf7d0' : isActive ? '#ddd6fe' : '#e2e8f0'}`,
+                    transition: 'all 0.3s ease',
+                  }}>
+                    <span style={{fontSize: '0.75rem'}}>
+                      {isDone ? '✅' : s.icon}
+                    </span>
+                    <span style={{
+                      fontSize: '0.72rem', fontWeight: isActive ? 800 : 600,
+                      color: isDone ? '#15803d' : isActive ? '#4f46e5' : '#94a3b8',
+                    }}>
+                      {s.label}
+                    </span>
+                    {isActive && (
+                      <div style={{
+                        width: '6px', height: '6px', borderRadius: '50%',
+                        background: '#6366f1', animation: 'pulse 1.5s infinite',
+                      }}></div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Admin Action Panel */}
         {!isFinalized && (
           <div style={{
@@ -192,38 +320,12 @@ const TeacherPool = () => {
               Admin İşlemleri
             </h5>
 
-            <textarea
-              placeholder="Rapor hakkında geri bildirim veya düzeltme notu yazın... (opsiyonel)"
-              value={adminNote}
-              onChange={(e) => setAdminNote(e.target.value)}
-              style={{
-                width: '100%', minHeight: '100px', padding: '1.25rem', borderRadius: '16px',
-                border: '1.5px solid #e2e8f0', fontSize: '0.9rem', outline: 'none',
-                background: '#fff', fontFamily: 'inherit', resize: 'vertical',
-              }}
-              onFocus={e => e.currentTarget.style.borderColor = '#6366f1'}
-              onBlur={e => e.currentTarget.style.borderColor = '#e2e8f0'}
-            />
-
-            <div className="responsive-action-buttons" style={{display: 'flex', gap: '1rem', marginTop: '1.25rem'}}>
-              <button
-                onClick={handleRegenerate}
-                disabled={!adminNote.trim()}
-                style={{
-                  flex: 1, padding: '14px', borderRadius: '14px', border: '1.5px solid #e2e8f0',
-                  background: adminNote.trim() ? '#fff' : '#f8fafc',
-                  color: adminNote.trim() ? '#6366f1' : '#94a3b8',
-                  fontSize: '0.85rem', fontWeight: 800, cursor: adminNote.trim() ? 'pointer' : 'not-allowed',
-                  transition: 'all 0.2s',
-                }}
-              >
-                ↺ Feedback ile Yeniden Oluştur
-              </button>
+            <div className="responsive-action-buttons" style={{display: 'flex', gap: '1rem', marginTop: '0', flexWrap: 'wrap'}}>
               <button
                 onClick={handleFinalize}
                 disabled={finalizing}
                 style={{
-                  flex: 2, padding: '14px', borderRadius: '14px', border: 'none',
+                  flex: 1, padding: '14px', borderRadius: '14px', border: 'none',
                   background: 'linear-gradient(135deg, #6366f1, #a855f7)',
                   color: '#fff', fontSize: '0.85rem', fontWeight: 800,
                   cursor: finalizing ? 'wait' : 'pointer',
@@ -465,6 +567,7 @@ const TeacherPool = () => {
 
         <style>{`
           @keyframes spin { 100% { transform: rotate(360deg); } }
+          @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.5); } }
         `}</style>
       </div>
     )

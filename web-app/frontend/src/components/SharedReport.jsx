@@ -146,55 +146,63 @@ const SharedReport = ({ report }) => {
 
   // Build competency data from real report or fallback
   const dr = report.draftReport || report.finalReport || {}
-  
-  const buildCompetencies = () => {
-    const competencies = []
-    const ratingColor = (r) => {
-      if (!r) return '#94a3b8'
-      const val = (r || '').toLowerCase()
-      if (val === 'good' || val === 'iyi') return '#10b981'
-      if (val === 'acceptable' || val === 'kabul edilebilir') return '#f59e0b'
-      if (val === 'poor' || val === 'zayıf') return '#f43f5e'
-      return '#94a3b8'
-    }
-    
-    // From iletisim
-    if (dr.iletisim) {
-      Object.entries(dr.iletisim).forEach(([key, val]) => {
-        competencies.push({ l: key.replace(/_/g, ' '), s: val.rating || '—', color: ratingColor(val.rating), obs: val.observation, tip: val.improvement_tip })
-      })
-    }
-    // From hazirlik
-    if (dr.hazirlik) {
-      Object.entries(dr.hazirlik).forEach(([key, val]) => {
-        competencies.push({ l: key.replace(/_/g, ' '), s: val.rating || '—', color: ratingColor(val.rating), obs: val.observation, tip: val.improvement_tip })
-      })
-    }
-    // From organizasyon
-    if (dr.organizasyon) {
-      Object.entries(dr.organizasyon).forEach(([key, val]) => {
-        competencies.push({ l: key.replace(/_/g, ' '), s: val.rating || '—', color: ratingColor(val.rating), obs: val.observation, tip: val.improvement_tip })
-      })
-    }
-    
-    if (competencies.length === 0) {
-      return [
-        { l: 'İletişim', s: 'Good', color: '#10b981' }, { l: 'Hazırlık', s: 'Good', color: '#10b981' },
-        { l: 'Motivasyon', s: 'Good', color: '#10b981' }, { l: 'Ders Yapısı', s: 'Good', color: '#10b981' },
-        { l: 'Tempo', s: 'Good', color: '#10b981' }, { l: 'Konu Bilgisi', s: 'Good', color: '#10b981' },
-        { l: 'Açıklama Netliği', s: 'Good', color: '#10b981' }, { l: 'Teknik Hâkimiyet', s: 'Good', color: '#10b981' }
-      ]
-    }
-    return competencies
+
+  // ── Turkish label maps matching the PDF output ──
+  const ILETISIM_LABELS = {
+    ders_dinamikleri: 'Ders dinamikleri', mod_tutum: 'Mod & Tutum',
+    saygi_sinirlar: 'Saygı ve sınırlar', tesvik_motivasyon: 'Teşvik & Motivasyon',
+    hatalar: 'Hatalar', acik_uclu_sorular: 'Açık uçlu sorular',
+    empati_destekleyici: 'Empati & Destekleyici tutum', etik_degerler: 'Etik Değerler',
+  }
+  const HAZIRLIK_LABELS = {
+    ders_akisi_tempo: 'Ders akışı & Tempo', konu_bilgisi: 'Konu bilgisi',
+    aciklama_netligi: 'Açıklama netliği', rasyonel_ipucu: 'Rasyonel & İpucu',
+  }
+  const ORGANIZASYON_LABELS = {
+    gorsel_bilesenler: 'Görsel Bileşenler', konusma_ses_tonu: 'Konuşma & Ses tonu',
+    teknik_bilesen: 'Teknik bileşen', zamanlama: 'Zamanlama',
+  }
+  const RATING_LABELS = {
+    good: 'İyi', iyi: 'İyi', acceptable: 'Geliştirilmeli', 'geliştirilmeli': 'Geliştirilmeli',
+    'kabul edilebilir': 'Geliştirilmeli', poor: 'Yetersiz', 'zayıf': 'Yetersiz', 'yetersiz': 'Yetersiz',
+    na: 'Değerlendirilemedi', 'değerlendirilemedi': 'Değerlendirilemedi',
   }
 
-  const competencies = buildCompetencies()
-  
+  const ratingColor = (r) => {
+    if (!r) return '#94a3b8'
+    const val = (r || '').toLowerCase()
+    if (val === 'good' || val === 'iyi' || val === 'İyi') return '#10b981'
+    if (val === 'acceptable' || val === 'kabul edilebilir' || val === 'geliştirilmeli' || val === 'Geliştirilmeli') return '#f59e0b'
+    if (val === 'poor' || val === 'zayıf' || val === 'yetersiz' || val === 'Yetersiz') return '#f43f5e'
+    return '#94a3b8'
+  }
+  const ratingLabel = (r) => RATING_LABELS[(r || '').toLowerCase()] || r || '—'
+
+  // Build competency groups matching the PDF's three-category structure
+  const buildCategoryMetrics = (data, labelMap) => {
+    if (!data) return []
+    return Object.entries(labelMap).map(([key, label]) => {
+      const val = data[key]
+      if (!val) return null
+      return { l: label, s: ratingLabel(val.rating), color: ratingColor(val.rating), obs: val.observation || '', tip: val.improvement_tip || '' }
+    }).filter(Boolean)
+  }
+
+  const categoryGroups = [
+    { title: 'İletişim', metrics: buildCategoryMetrics(dr.iletisim, ILETISIM_LABELS) },
+    { title: 'Hazırlık', metrics: buildCategoryMetrics(dr.hazirlik, HAZIRLIK_LABELS) },
+    { title: 'Organizasyon', metrics: buildCategoryMetrics(dr.organizasyon, ORGANIZASYON_LABELS) },
+  ].filter(g => g.metrics.length > 0)
+
+  const allCompetencies = categoryGroups.flatMap(g => g.metrics)
+
+
+
   // Lesson structure from ders_yapisi
   const lessonStructure = dr.ders_yapisi || []
 
-  // Feedback text
-  const feedbackText = dr.feedback_metni || report.obs?.find(o => o.t === 'AI Değerlendirmesi')?.c || ''
+  // Feedback text (only for the Geribildirim Özeti section)
+  const feedbackText = dr.feedback_metni || ''
 
   // Overall result
   const genelSonuc = dr.genel_sonuc || 'Beklentilere uygundu.'
@@ -202,13 +210,38 @@ const SharedReport = ({ report }) => {
   return (
     <div className="report-card-internal" style={{background: '#fff', padding: '0', border: '1px solid #cbd5e1', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.05)', overflow: 'hidden', animation: 'fadeIn 0.5s ease'}}>
        {/* Document Header (Dark) */}
-       <div style={{background: 'linear-gradient(135deg, #0f172a 0%, #334155 100%)', padding: '2rem 2.5rem', color: 'white'}}>
+       <div style={{background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)', padding: '2rem 2.5rem', color: 'white'}}>
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: '1rem'}}>
              <span style={{fontSize:'10px', fontWeight:800, color:'var(--primary)', letterSpacing:'0.2em'}}>TAM KALİTE ANALİZ RAPORU</span>
              <div style={{padding:'4px 12px', background:'rgba(255,255,255,0.1)', borderRadius:'6px', fontSize:'10px', fontWeight:700}}>REF: #QA-2026-DOC-{report.id}</div>
           </div>
-          <h2 style={{fontSize:'1.8rem', fontWeight:800, margin:0}}>{report.module || (report.name + " - Analizi")}</h2>
-          <div style={{display:'flex', gap:'1.5rem', marginTop:'1rem', opacity:0.8, fontSize:'0.85rem'}}>
+
+          {/* Teacher Name - Prominent Display */}
+          {report.name && (
+            <div style={{display:'flex', alignItems:'center', gap:'16px', marginBottom:'1rem'}}>
+              <div style={{
+                width:'52px', height:'52px', borderRadius:'16px',
+                background:'linear-gradient(135deg, #6366f1, #a855f7)',
+                display:'grid', placeItems:'center',
+                fontWeight:900, fontSize:'1.1rem', color:'#fff',
+                boxShadow:'0 8px 20px rgba(99, 102, 241, 0.4)',
+                flexShrink:0,
+              }}>
+                {report.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+              </div>
+              <div>
+                <div style={{fontSize:'1.4rem', fontWeight:900, letterSpacing:'-0.02em', lineHeight:1.2}}>
+                  {report.name}
+                </div>
+                <div style={{fontSize:'0.78rem', fontWeight:600, color:'rgba(255,255,255,0.5)', marginTop:'2px'}}>
+                  Eğitmen
+                </div>
+              </div>
+            </div>
+          )}
+
+          <h2 style={{fontSize:'1.8rem', fontWeight:800, margin:0}}>{report.module || (report.name ? report.name + ' - Analizi' : 'Analiz Raporu')}</h2>
+          <div style={{display:'flex', gap:'1.5rem', marginTop:'1rem', opacity:0.8, fontSize:'0.85rem', flexWrap:'wrap'}}>
              <span>📅 {report.date || report.details?.date}</span>
              <span>👥 {report.group || report.details?.group}</span>
              <span>👤 Değerlendiren: {report.evaluator || report.details?.evaluator || 'QA Uzmanı'}</span>
@@ -358,35 +391,66 @@ const SharedReport = ({ report }) => {
        {/* Detailed Body */}
        <div className="responsive-report-body" style={{padding: '2.5rem', display: 'flex', flexDirection: 'column', gap: '2.5rem'}}>
           
-          {/* Teaching Competencies Grid */}
-          <div style={{border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden'}}>
-            <div style={{background: '#f1f5f9', padding: '0.75rem 1rem', fontSize: '10px', fontWeight: 800, borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between'}}>
-              <span>ÖĞRETİM YETERLİLİKLERİ</span>
-              <span style={{color: '#94a3b8'}}>Toplam {competencies.length} kriter</span>
+          {/* Teaching Competencies — grouped by category like the PDF */}
+          {categoryGroups.length > 0 ? categoryGroups.map((group, gi) => (
+            <div key={gi} style={{border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden'}}>
+              <div style={{background: '#f1f5f9', padding: '0.75rem 1rem', fontSize: '10px', fontWeight: 800, borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between'}}>
+                <span>{group.title.toUpperCase()}</span>
+                <span style={{color: '#94a3b8'}}>{group.metrics.length} kriter</span>
+              </div>
+              <div style={{fontSize: '0.85rem'}}>
+                {group.metrics.map((item, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      padding: '1rem 1.25rem', borderBottom: i < group.metrics.length - 1 ? '1px solid #f1f5f9' : 'none',
+                      display: 'flex', gap: '1rem', alignItems: 'flex-start',
+                    }}
+                  >
+                    {/* Label & Rating */}
+                    <div style={{minWidth: '140px', flexShrink: 0}}>
+                      <div style={{color: '#1e293b', fontSize: '0.82rem', fontWeight: 700, marginBottom: '4px'}}>{item.l}</div>
+                      <span style={{
+                        display: 'inline-block', padding: '3px 10px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 800,
+                        background: `${item.color}15`, color: item.color, border: `1px solid ${item.color}30`,
+                      }}>{item.s}</span>
+                    </div>
+                    {/* Observation + Tip — full text like PDF */}
+                    <div style={{flex: 1, minWidth: 0}}>
+                      {item.obs && (
+                        <div style={{fontSize: '0.82rem', color: '#475569', lineHeight: 1.7}}>
+                          {parseTimestamps(item.obs, seekTo)}
+                        </div>
+                      )}
+                      {item.tip && item.tip.trim() && (
+                        <div style={{fontSize: '0.78rem', color: '#b45309', lineHeight: 1.5, marginTop: '6px', fontStyle: 'italic', display: 'flex', gap: '6px', alignItems: 'flex-start'}}>
+                          <span style={{fontWeight: 800, flexShrink: 0}}>💡 Gelişim önerisi:</span>
+                          <span>{item.tip}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="responsive-competency-grid" style={{display:'grid', gridTemplateColumns: `repeat(${Math.min(4, competencies.length)}, 1fr)`, fontSize: '0.85rem'}}>
-              {competencies.map((item, i) => (
-                <div 
-                  key={i} 
-                  style={{
-                    padding:'0.75rem 1rem', borderRight:'1px solid #f1f5f9', borderBottom:'1px solid #f1f5f9',
-                    display:'flex', flexDirection: 'column', gap: '4px',
-                    cursor: item.obs ? 'pointer' : 'default',
-                    transition: '0.2s',
-                  }}
-                  title={item.obs ? `${item.obs}${item.tip ? '\n\n💡 ' + item.tip : ''}` : ''}
-                >
-                  <span style={{color:'#64748b', fontSize: '0.8rem', textTransform: 'capitalize'}}>{item.l}</span>
-                  <span style={{fontWeight:700, color: item.color || '#10b981', fontSize: '0.85rem'}}>{item.s}</span>
-                  {item.obs && (
-                    <span style={{fontSize: '0.72rem', color: '#94a3b8', lineHeight: 1.4, marginTop: '2px'}}>
-                      {parseTimestamps(item.obs.length > 60 ? item.obs.slice(0, 60) + '...' : item.obs, seekTo)}
-                    </span>
-                  )}
+          )) : (
+            /* Fallback grid when no structured data */
+            allCompetencies.length > 0 && (
+              <div style={{border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden'}}>
+                <div style={{background: '#f1f5f9', padding: '0.75rem 1rem', fontSize: '10px', fontWeight: 800, borderBottom: '1px solid #e2e8f0'}}>
+                  <span>ÖĞRETİM YETERLİLİKLERİ</span>
                 </div>
-              ))}
-            </div>
-          </div>
+                <div className="responsive-competency-grid" style={{display:'grid', gridTemplateColumns: `repeat(${Math.min(4, allCompetencies.length)}, 1fr)`, fontSize: '0.85rem'}}>
+                  {allCompetencies.map((item, i) => (
+                    <div key={i} style={{padding:'0.75rem 1rem', borderRight:'1px solid #f1f5f9', borderBottom:'1px solid #f1f5f9', display:'flex', flexDirection: 'column', gap: '4px'}}>
+                      <span style={{color:'#64748b', fontSize: '0.8rem'}}>{item.l}</span>
+                      <span style={{fontWeight:700, color: item.color, fontSize: '0.85rem'}}>{item.s}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          )}
 
           {/* Lesson Structure */}
           {lessonStructure.length > 0 && (
@@ -407,40 +471,15 @@ const SharedReport = ({ report }) => {
             </div>
           )}
 
-          {/* Observations Section with Clickable Timestamps */}
-          <div>
-            <h4 style={{fontSize: '0.95rem', fontWeight: 800, color: '#1e293b', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '8px'}}>
-              Analiz Kanıtları & Gözlemler
-              {videoUrl && <span style={{fontSize: '10px', fontWeight: 700, color: '#6366f1', background: '#f5f3ff', padding: '3px 10px', borderRadius: '6px'}}>🎬 Zaman damgalarına tıklayarak video önizleme yapabilirsiniz</span>}
-            </h4>
-            <div style={{display:'flex', flexDirection:'column', gap:'1rem'}}>
-               {(report.obs || report.details?.obs || [
-                 { t: 'Gözlem', c: 'Rapor detayları henüz yüklenmedi.' }
-               ]).map((o, idx) => (
-                  <div key={idx} style={{padding:'1.25rem', background:'#f8fafc', borderRadius:'12px', border:'1px solid #f1f5f9', fontSize:'0.85rem', color:'#475569', lineHeight:1.8}}>
-                    <strong style={{color:'var(--primary)'}}>{o.t}:</strong>{' '}
-                    {parseTimestamps(o.c, seekTo)}
-                  </div>
-               ))}
-            </div>
-          </div>
-
-          {/* Verbatim Feedback Block */}
+          {/* Geribildirim Özeti (feedback_metni — shown only once) */}
           {feedbackText && (
             <div style={{padding: '2rem', background: 'linear-gradient(to bottom right, #f5f3ff, #fff)', borderRadius: '16px', border: '1px solid #ddd6fe'}}>
               <h4 style={{margin:'0 0 1rem 0', fontSize: '1.1rem', fontWeight: 800, color: '#4c1d95'}}>Geribildirim Özeti</h4>
-              <p style={{fontSize: '0.92rem', color: '#4c1d95', lineHeight: 1.8}}>
-                {parseTimestamps(feedbackText, seekTo)}
-              </p>
-            </div>
-          )}
-
-          {!feedbackText && (
-            <div style={{padding: '2rem', background: 'linear-gradient(to bottom right, #f5f3ff, #fff)', borderRadius: '16px', border: '1px solid #ddd6fe'}}>
-              <h4 style={{margin:'0 0 1rem 0', fontSize: '1.1rem', fontWeight: 800, color: '#4c1d95'}}>Geribildirim Özeti</h4>
-              <p style={{fontSize: '0.92rem', color: '#4c1d95', lineHeight: 1.8}}>
-                Eğitmen ders içeriğine hakimiyeti ve öğrencilerle kurduğu dinamik iletişimle standardın üzerinde bir performans sergilemiştir.
-              </p>
+              <div style={{fontSize: '0.92rem', color: '#4c1d95', lineHeight: 1.8}}>
+                {feedbackText.split('\n\n').filter(p => p.trim()).map((paragraph, pi) => (
+                  <p key={pi} style={{margin: '0 0 0.75rem 0'}}>{parseTimestamps(paragraph, seekTo)}</p>
+                ))}
+              </div>
             </div>
           )}
        </div>
