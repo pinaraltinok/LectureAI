@@ -1,24 +1,32 @@
+# Local files and backups
 legacy_backup/
 scratch/
-__pycache__/
-*.pyc
-.env
 data/
+gcp-key.json
+senior-design-488908-28bd7c55329d.json
+
+# Storage and Configuration
 core/storage/*.json
 !core/storage/student_registry.json
-gcp-key.json
 *.json
 !package.json
 !package-lock.json
 !docker-compose.yml
 *.key
 *.pem
-senior-design-488908-28bd7c55329d.json
 
-# Dependencies
+# Dependencies and Environments
 node_modules/
 .venv/
 venv/
+ENV/
+env/
 __pycache__/
 *.pyc
 .env
+
+# IDEs and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
