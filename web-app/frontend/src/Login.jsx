@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from './context/AuthContext.jsx'
 import './Login.css'
 
@@ -254,14 +255,36 @@ export default function Login() {
           </div>
           <div className="input-group">
             <label>ŞİFRE</label>
-            <input type={showMainPassword ? 'text' : 'password'} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
-            <button
-              type="button"
-              className="password-toggle-btn"
-              onClick={() => setShowMainPassword((prev) => !prev)}
-            >
-              {showMainPassword ? 'Gizle' : 'Göster'}
-            </button>
+            <div className="password-input-wrap">
+              <input
+                type={showMainPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="password-input-with-icon"
+              />
+              <button
+                type="button"
+                className="password-toggle-icon-btn"
+                onClick={() => setShowMainPassword((prev) => !prev)}
+                aria-label={showMainPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
+              >
+                {showMainPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+            {isLogin && (
+              <a
+                href="#"
+                className="forgot-password-inline-link"
+                onClick={(e) => {
+                  e.preventDefault()
+                  setIsForgotPasswordView(true)
+                }}
+              >
+                Şifremi unuttum
+              </a>
+            )}
           </div>
 
           {/* Student-specific fields */}
@@ -285,15 +308,6 @@ export default function Login() {
           <button type="submit" className="login-submit-btn">
             {isLogin ? "Giriş Yap" : "Hesap Oluştur"}
           </button>
-          {isLogin && (
-            <button
-              type="button"
-              className="forgot-password-btn"
-              onClick={() => setIsForgotPasswordView(true)}
-            >
-              Şifremi unuttum
-            </button>
-          )}
         </form>
         ) : (
           <form onSubmit={handleForgotPasswordSubmit} className="login-form forgot-password-view">
@@ -313,25 +327,45 @@ export default function Login() {
             </div>
             <div className="input-group">
               <label>YENİ ŞİFRE</label>
-              <input type={showNewPassword ? 'text' : 'password'} placeholder="••••••••" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
-              <button
-                type="button"
-                className="password-toggle-btn"
-                onClick={() => setShowNewPassword((prev) => !prev)}
-              >
-                {showNewPassword ? 'Gizle' : 'Göster'}
-              </button>
+              <div className="password-input-wrap">
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  className="password-input-with-icon"
+                />
+                <button
+                  type="button"
+                  className="password-toggle-icon-btn"
+                  onClick={() => setShowNewPassword((prev) => !prev)}
+                  aria-label={showNewPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
+                >
+                  {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
             <div className="input-group">
               <label>YENİ ŞİFRE (TEKRAR)</label>
-              <input type={showNewPasswordRepeat ? 'text' : 'password'} placeholder="••••••••" value={newPasswordRepeat} onChange={(e) => setNewPasswordRepeat(e.target.value)} required />
-              <button
-                type="button"
-                className="password-toggle-btn"
-                onClick={() => setShowNewPasswordRepeat((prev) => !prev)}
-              >
-                {showNewPasswordRepeat ? 'Gizle' : 'Göster'}
-              </button>
+              <div className="password-input-wrap">
+                <input
+                  type={showNewPasswordRepeat ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  value={newPasswordRepeat}
+                  onChange={(e) => setNewPasswordRepeat(e.target.value)}
+                  required
+                  className="password-input-with-icon"
+                />
+                <button
+                  type="button"
+                  className="password-toggle-icon-btn"
+                  onClick={() => setShowNewPasswordRepeat((prev) => !prev)}
+                  aria-label={showNewPasswordRepeat ? 'Şifreyi gizle' : 'Şifreyi göster'}
+                >
+                  {showNewPasswordRepeat ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
             </div>
             <button type="submit" className="login-submit-btn">
               Şifreyi Güncelle
@@ -355,8 +389,6 @@ export default function Login() {
           {isLogin ? (
             <p>
               Hesabınız yok mu? <a href="#" onClick={(e) => { e.preventDefault(); setIsLogin(false) }}>Şimdi Kaydolun</a>
-              {' '}•{' '}
-              <a href="#" onClick={(e) => { e.preventDefault(); setIsForgotPasswordView(true) }}>Şifremi Unuttum</a>
             </p>
           ) : (
             <p>

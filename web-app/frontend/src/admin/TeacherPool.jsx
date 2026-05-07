@@ -105,6 +105,20 @@ const TeacherPool = () => {
 
   const colorPalette = ['#6366f1', '#f59e0b', '#10b981', '#ec4899', '#06b6d4', '#f43f5e']
 
+  const pickFirstNonEmpty = (...values) =>
+    values.map(v => (typeof v === 'string' ? v.trim() : '')).find(Boolean) || ''
+
+  const toDisplayTitleFromFilename = (name) => {
+    if (!name || typeof name !== 'string') return ''
+    const base = name.replace(/\.[^/.]+$/, '')
+    // remove common trailing technical tokens like UUID/date/hash fragments
+    const cleaned = base
+      .replace(/[_-](\d{6,}|[a-f0-9]{8,}|[a-f0-9-]{20,})$/i, '')
+      .replace(/[_-]+/g, ' ')
+      .trim()
+    return cleaned.length >= 3 ? cleaned : ''
+  }
+
   // ─── Handler: Open teacher's reports ──────────────────────
   const handleViewReports = async (teacher, idx) => {
     setSelectedTeacher({ ...teacher, color: colorPalette[idx % colorPalette.length] })
@@ -149,14 +163,25 @@ const TeacherPool = () => {
         report.teacherName ||
         report.teacher?.name ||
         ''
-      const lectureName =
-        draft.lesson?.course ||
-        draft.lesson?.name ||
-        report.courseName ||
-        report.lessonName ||
-        report.lesson?.course ||
-        report.lesson?.name ||
-        ''
+      const lectureName = pickFirstNonEmpty(
+        draft.lesson?.course,
+        draft.lesson?.name,
+        report.courseName,
+        report.lessonName,
+        report.lesson?.course,
+        report.lesson?.name,
+        fr.ders_adi,
+        fr.courseName,
+        fr.course_name,
+        fr.lessonName,
+        fr.lesson_name,
+        fr.moduleName,
+        fr.module_name,
+        fr.topic,
+        fr.classTopic,
+        toDisplayTitleFromFilename(draft.videoFilename),
+        toDisplayTitleFromFilename(report.videoFilename)
+      )
       console.log('[TeacherPool] Teacher name debug:', { selectedTeacherName: selectedTeacher?.name, draftTeacherName: draft.teacher?.name, resolved: teacherName })
       const reportObj = {
         jobId: report.jobId,
@@ -164,7 +189,7 @@ const TeacherPool = () => {
         id: report.jobId?.slice(0, 8),
         name: teacherName,
         lectureName,
-        module: lectureName || (teacherName ? teacherName + ' Analizi' : 'Analiz'),
+        module: lectureName || 'Analiz Raporu',
         date: report.createdAt ? new Date(report.createdAt).toLocaleDateString('tr-TR') : '',
         group: report.lessonNo ? formatLessonLabel(report.lessonNo, report.moduleSize) : '',
         evaluator: fr.approvedBy ? 'Admin Onaylı' : 'Sistem (AI)',
@@ -707,7 +732,7 @@ const TeacherPool = () => {
 
   // ─── VIEW 1: Teacher List ──────────────────────────────
   const rows = teachers.map((t, idx) => {
-    const numericScore = Number(t.lastScore)
+    const numericScore = Number(t.averageScore ?? t.lastScore)
     const hasNumericScore = Number.isFinite(numericScore)
     return ({
     ...t,
@@ -801,7 +826,7 @@ const TeacherPool = () => {
         }}>
           <span>EĞİTMEN</span>
           <span>RAPOR SAYISI</span>
-          <span>SON SKOR</span>
+          <span>ORT. SKOR</span>
           <span style={{ textAlign: 'right' }}>AKSİYON</span>
         </div>
 

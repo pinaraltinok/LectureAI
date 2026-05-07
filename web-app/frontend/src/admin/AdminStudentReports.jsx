@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { apiGet } from '../api'
+import { apiGet, apiDelete } from '../api'
 import { FileText, ChevronDown, ChevronUp, Mic, BarChart3, BookOpen, Sparkles, Users } from 'lucide-react'
 
 /* ── Reusable markdown parsing (same logic as StudentReportView) ── */
@@ -140,6 +140,8 @@ const AdminStudentReports = () => {
   const [expandedStudent, setExpandedStudent] = useState(null)
   const [expandedReport, setExpandedReport] = useState(null)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [confirmState, setConfirmState] = useState({ open: false, message: '', onConfirm: null })
 
   useEffect(() => {
     apiGet('/admin/groups')
@@ -150,12 +152,31 @@ const AdminStudentReports = () => {
 
   useEffect(() => {
     if (!selectedGroupId) { setStudents([]); return }
-    setLoadingReports(true); setError(''); setExpandedStudent(null); setExpandedReport(null)
+    setLoadingReports(true); setError(''); setSuccess(''); setExpandedStudent(null); setExpandedReport(null)
     apiGet(`/admin/group/${selectedGroupId}/student-reports`)
       .then(data => setStudents(data))
       .catch(err => setError(err.message))
       .finally(() => setLoadingReports(false))
   }, [selectedGroupId])
+
+  const closeConfirm = () => setConfirmState({ open: false, message: '', onConfirm: null })
+
+  const handleDeleteStudentReport = async (reportId) => {
+    try {
+      await apiDelete(`/admin/report/${reportId}`)
+      setStudents(prev =>
+        prev.map(student => {
+          const filteredReports = student.reports.filter(r => r.id !== reportId)
+          return { ...student, reports: filteredReports, reportCount: filteredReports.length }
+        })
+      )
+      setExpandedReport(prev => (prev === reportId ? null : prev))
+      setSuccess('Öğrenci raporu silindi.')
+      setTimeout(() => setSuccess(''), 2500)
+    } catch (err) {
+      setError(err.message || 'Rapor silinirken hata oluştu.')
+    }
+  }
 
   const selectedGroup = groups.find(g => g.id === selectedGroupId)
   const studentsWithReports = students.filter(s => s.reportCount > 0)
@@ -169,6 +190,25 @@ const AdminStudentReports = () => {
 
   return (
     <div style={{ animation: 'fadeIn 0.5s ease' }}>
+      {confirmState.open && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(2, 6, 23, 0.62)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', zIndex: 2600, padding: '1rem' }}
+          onClick={closeConfirm}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: 'min(460px, 94vw)', background: 'linear-gradient(145deg, #0f172a, #111827)', border: '1px solid rgba(148, 163, 184, 0.28)', borderRadius: '18px', boxShadow: '0 28px 90px rgba(15, 23, 42, 0.7)', padding: '1.35rem 1.4rem' }}
+          >
+            <h3 style={{ margin: '0 0 0.55rem', color: '#f8fafc', fontSize: '1.05rem', fontWeight: 800 }}>{confirmState.message}</h3>
+            <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.9rem' }}>Bu işlem geri alınamaz.</p>
+            <div style={{ marginTop: '1.1rem', display: 'flex', justifyContent: 'flex-end', gap: '0.65rem' }}>
+              <button onClick={closeConfirm} style={{ border: 'none', borderRadius: '11px', padding: '0.58rem 0.95rem', fontSize: '0.84rem', fontWeight: 700, cursor: 'pointer', background: 'rgba(148, 163, 184, 0.16)', color: '#e2e8f0' }}>Vazgeç</button>
+              <button onClick={() => { const run = confirmState.onConfirm; closeConfirm(); if (typeof run === 'function') run() }} style={{ border: 'none', borderRadius: '11px', padding: '0.58rem 0.95rem', fontSize: '0.84rem', fontWeight: 700, cursor: 'pointer', background: 'linear-gradient(135deg, #ef4444, #f43f5e)', color: '#fff' }}>Sil</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '1.8rem', fontWeight: 950, color: '#0f172a', letterSpacing: '-0.02em', margin: '0 0 4px' }}>Öğrenci Raporları</h1>
@@ -210,6 +250,7 @@ const AdminStudentReports = () => {
       </div>
 
       {error && <div style={{ color: '#f43f5e', background: '#ffe4e6', padding: '0.75rem 1.5rem', borderRadius: '12px', fontSize: '0.9rem', marginBottom: '1.5rem', fontWeight: 700 }}>⚠ {error}</div>}
+      {success && <div style={{ color: '#166534', background: '#dcfce7', padding: '0.75rem 1.5rem', borderRadius: '12px', fontSize: '0.9rem', marginBottom: '1.5rem', fontWeight: 700 }}>✓ {success}</div>}
 
       {/* Loading state */}
       {loadingReports && (
@@ -305,6 +346,28 @@ const AdminStudentReports = () => {
                                   {report.biometricScore && <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#6366f1', background: '#ede9fe', padding: '2px 8px', borderRadius: '6px' }}>Ses: %{Math.round(report.biometricScore * 100)}</span>}
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setConfirmState({
+                                        open: true,
+                                        message: 'Bu öğrenci raporunu silmek istediğinize emin misiniz?',
+                                        onConfirm: () => handleDeleteStudentReport(report.id),
+                                      })
+                                    }}
+                                    style={{
+                                      border: 'none',
+                                      borderRadius: '8px',
+                                      padding: '4px 10px',
+                                      fontSize: '0.68rem',
+                                      fontWeight: 800,
+                                      cursor: 'pointer',
+                                      background: '#fee2e2',
+                                      color: '#dc2626',
+                                    }}
+                                  >
+                                    Sil
+                                  </button>
                                   <span style={{ fontSize: '0.65rem', fontWeight: 800, padding: '3px 10px', borderRadius: '100px', background: statusColors[report.status] || '#94a3b8', color: '#fff' }}>
                                     {statusLabels[report.status] || report.status}
                                   </span>

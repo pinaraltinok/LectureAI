@@ -156,18 +156,29 @@
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
-.password-toggle-btn {
-  margin-top: 0.45rem;
-  padding: 0;
+.password-input-wrap {
+  position: relative;
+}
+
+.password-input-with-icon {
+  padding-right: 2.8rem !important;
+}
+
+.password-toggle-icon-btn {
+  position: absolute;
+  right: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
   border: none;
   background: transparent;
   color: #c4b5fd;
-  font-weight: 700;
-  font-size: 0.82rem;
   cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
 }
 
-.password-toggle-btn:hover {
+.password-toggle-icon-btn:hover {
   color: #ffffff;
 }
 
@@ -197,24 +208,17 @@
   transform: translateY(-1px);
 }
 
-.forgot-password-btn {
-  width: 100%;
-  margin-top: 0.7rem;
-  background: transparent;
+.forgot-password-inline-link {
+  display: inline-block;
+  margin-top: 0.45rem;
   color: #c4b5fd;
-  border: 1px solid rgba(196, 181, 253, 0.35);
-  border-radius: 12px;
-  padding: 0.8rem 1rem;
-  font-size: 0.9rem;
+  text-decoration: none;
+  font-size: 0.85rem;
   font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s ease;
 }
 
-.forgot-password-btn:hover {
+.forgot-password-inline-link:hover {
   color: #fff;
-  border-color: #6366f1;
-  background: rgba(99, 102, 241, 0.12);
 }
 
 .forgot-password-view {

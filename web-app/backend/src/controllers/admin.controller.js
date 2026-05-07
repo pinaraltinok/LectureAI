@@ -127,17 +127,19 @@ async function getTeachers(req, res) {
   const result = teachers.map(t => {
     const allReports = t.reportTeachers;
     const latest = allReports[0]?.report || null;
-    const latestScored = allReports.find((rt) => {
+    const scoredReports = allReports.filter((rt) => {
       const status = rt?.report?.status;
       if (!['DRAFT', 'FINALIZED'].includes(status)) return false;
       const s = reportService.extractScore(rt);
-      return s != null && !isNaN(s) && s > 0;
-    }) || null;
-    const lastScore = latestScored ? reportService.extractScore(latestScored) : null;
+      return s != null && !isNaN(s) && s >= 0;
+    });
+    const averageScore = scoredReports.length
+      ? Math.round((scoredReports.reduce((acc, rt) => acc + reportService.extractScore(rt), 0) / scoredReports.length) * 10) / 10
+      : null;
 
     return {
       id: t.id, name: t.user.name, email: t.user.email, phone: t.user.phone,
-      startOfDate: t.startOfDate, lastScore, latestJobId: latest?.id || null, reportCount: allReports.length,
+      startOfDate: t.startOfDate, lastScore: averageScore, averageScore, latestJobId: latest?.id || null, reportCount: allReports.length,
     };
   });
 
