@@ -86,6 +86,18 @@ class QualityAgent:
                         f"{dim} ({sc}/20): "
                         f"{feedback.get(dim, 'yetersiz')}"
                     )
+            # Add deterministic, actionable remediation hints so retry attempts
+            # can improve quality instead of repeating similar weak outputs.
+            issues.extend(
+                self._build_remediation_issues(
+                    scores=scores,
+                    feedback_word_count=self._last_feedback_word_count,
+                    timestamp_count=self._last_ts_count,
+                    has_english=self._last_has_english,
+                )
+            )
+            # Deduplicate while preserving order.
+            issues = list(dict.fromkeys(issues))
 
             logger.info(
                 "[%s] QualityAgent score=%d/100 passed=%s model=%s",
@@ -196,6 +208,8 @@ class QualityAgent:
         ts_count = len(
             re.findall(r"\d{2}:\d{2}:\d{2}|\d{2}:\d{2}", feedback)
         )
+        self._last_feedback_word_count = len(feedback.split())
+        self._last_ts_count = ts_count
 
         english_words = (
             "the ",
@@ -207,6 +221,7 @@ class QualityAgent:
         )
         fb_low = feedback.lower()
         has_english = any(w in fb_low for w in english_words)
+        self._last_has_english = has_english
 
         return f"""Bu QA raporunu 5 kritere göre değerlendir (her biri 0-20 puan):
 
@@ -252,3 +267,49 @@ SADECE bu JSON formatında döndür:
   }},
   "retry_reason": "<varsa neden retry gerekiyor, yoksa null>"
 }}"""
+
+    # Defaults used if prompt stats are unavailable for any reason.
+    _last_feedback_word_count: int = 0
+    _last_ts_count: int = 0
+    _last_has_english: bool = False
+
+    def _build_remediation_issues(
+        self,
+        *,
+        scores: Dict[str, Any],
+        feedback_word_count: int,
+        timestamp_count: int,
+        has_english: bool,
+    ) -> List[str]:
+        def _score(name: str) -> int:
+            try:
+                return int(scores.get(name, 0))
+            except (TypeError, ValueError):
+                return 0
+
+        out: List[str] = []
+        if _score("feedback_kalitesi") < 14 or feedback_word_count < 180 or timestamp_count < 3:
+            out.append(
+                "DÜZELTME: feedback_metni en az 220 kelime olsun; en az 4 farklı timestamp "
+                "(MM:SS veya HH:MM:SS) içersin; şablon/genel ifadeleri kaldır."
+            )
+        if _score("somutluk") < 14:
+            out.append(
+                "DÜZELTME: düşük kalan her metrik observation alanında en az 2 cümle yaz; "
+                "her observation içinde en az 1 somut timestamp ve derse özgü kanıt ver."
+            )
+        if _score("rating_tutarliligi") < 14:
+            out.append(
+                "DÜZELTME: rating-observation uyumunu düzelt (İyi=net güçlü kanıt, "
+                "Geliştirilmeli=eksiklik+öneri, Yetersiz=sadece ciddi ihlal/hata)."
+            )
+        if _score("ders_yapisi_mantigi") < 14:
+            out.append(
+                "DÜZELTME: ders_yapisi maddelerini transcript kanıtına göre yeniden işaretle; "
+                "tamamlandı=true sadece açık ifade/sinyal varsa ver."
+            )
+        if _score("turkce_kalitesi") < 14 or has_english:
+            out.append(
+                "DÜZELTME: serbest metinlerde tamamen Türkçe kullan; İngilizce kelime/kalıp bırakma."
+            )
+        return out

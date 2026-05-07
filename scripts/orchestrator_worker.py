@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import sys
+import re
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any, Dict
@@ -51,6 +52,23 @@ STATE_PREFIX = "pipeline_state"
 TOPIC_REPORT_DONE = "lecture-report-completed"
 
 app = FastAPI(title="orchestrator-worker")
+
+
+def _is_quality_gate_retryable(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    if "quality gate failed after retries" in msg:
+        return True
+    return "quality_passed" in msg and "false" in msg
+
+
+def _quality_retry_delay_sec(exc: BaseException, attempt: int) -> float:
+    msg = str(exc)
+    m = re.search(r"score=(\d+)", msg)
+    score = int(m.group(1)) if m else 0
+    # Low quality often improves with a fresh generation pass; keep waits short.
+    # Slightly longer wait when score is very low to avoid bursty retries.
+    base = 4.0 if score >= 45 else 8.0
+    return min(30.0, base * attempt)
 
 
 def _bucket_config() -> BucketConfig:
@@ -194,7 +212,38 @@ async def _run_orchestrator(video_id: str) -> QAReport:
     notify_backend("orchestrator", "loading_audio_input", video_id, "reading data/audio JSON")
     audio_result = _load_audio_result(video_id)
     notify_backend("orchestrator", "report_generation_started", video_id)
-    report = await orchestrator.generate_report(video_id, audio_result)
+    max_quality_retry_runs_raw = (os.environ.get("ORCHESTRATOR_QUALITY_RETRY_RUNS") or "").strip()
+    try:
+        max_quality_retry_runs = int(max_quality_retry_runs_raw) if max_quality_retry_runs_raw else 2
+    except ValueError:
+        max_quality_retry_runs = 2
+    max_quality_retry_runs = max(0, min(max_quality_retry_runs, 6))
+
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            report = await orchestrator.generate_report(video_id, audio_result)
+            break
+        except Exception as exc:
+            if not _is_quality_gate_retryable(exc) or attempt > (max_quality_retry_runs + 1):
+                raise
+            delay = _quality_retry_delay_sec(exc, attempt)
+            logger.warning(
+                "[%s] quality gate failed on run attempt %d/%d; retrying in %.0fs: %s",
+                video_id,
+                attempt,
+                max_quality_retry_runs + 1,
+                delay,
+                exc,
+            )
+            notify_backend(
+                "orchestrator",
+                "quality_retry_wait",
+                video_id,
+                f"attempt={attempt}/{max_quality_retry_runs + 1} delay_sec={delay:.0f}",
+            )
+            await asyncio.sleep(delay)
     notify_backend("orchestrator", "pdf_generation_started", video_id)
     await asyncio.to_thread(
         generate_pdf_for_video_id,
