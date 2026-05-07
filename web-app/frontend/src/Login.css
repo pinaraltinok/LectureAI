@@ -2,25 +2,24 @@
   min-height: 100vh;
   display: grid;
   place-items: center;
-  background: #0a0f1e;
-  background-image: url('./login_background_abstract_1776620288976.png');
-  background-size: cover;
-  background-position: center;
+  /* Blue → Silver gradient matching the logo */
+  background: linear-gradient(135deg, #0a1628 0%, #0f2340 20%, #1a3a5c 40%, #2d5a7b 60%, #6b8fa3 80%, #b0c4ce 100%);
   padding: 2rem;
   position: relative;
   overflow: hidden;
 }
 
+/* Soft light wash to add depth */
 .background-overlay {
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: 
-    radial-gradient(circle at 70% 30%, rgba(99, 102, 241, 0.15), transparent 40%),
-    radial-gradient(circle at 20% 80%, rgba(6, 182, 212, 0.1), transparent 40%),
-    linear-gradient(to bottom, rgba(0,0,0,0.3), rgba(0,0,0,0.5));
+  background:
+    radial-gradient(ellipse 70% 50% at 30% 20%, rgba(30, 144, 220, 0.12), transparent),
+    radial-gradient(ellipse 50% 50% at 75% 80%, rgba(176, 196, 206, 0.08), transparent);
   pointer-events: none;
 }
 
+/* ─── Card — original dark style ─── */
 .login-card {
   background: rgba(15, 23, 42, 0.75);
   backdrop-filter: blur(30px);
@@ -59,12 +58,6 @@
     0 0 30px rgba(99, 102, 241, 0.3),
     0 0 60px rgba(6, 182, 212, 0.15);
   border: 2px solid rgba(255, 255, 255, 0.1);
-  animation: logoPulse 3s ease-in-out infinite;
-}
-
-@keyframes logoPulse {
-  0%, 100% { box-shadow: 0 0 30px rgba(99, 102, 241, 0.3), 0 0 60px rgba(6, 182, 212, 0.15); }
-  50% { box-shadow: 0 0 40px rgba(99, 102, 241, 0.5), 0 0 80px rgba(6, 182, 212, 0.25); }
 }
 
 /* ─── Brand Text ─── */
@@ -167,7 +160,7 @@
 .login-submit-btn {
   width: 100%;
   padding: 1.1rem;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  background: linear-gradient(135deg, #1e88c7 0%, #38bdf8 50%, #94a3b8 100%);
   color: #fff;
   border: none;
   border-radius: 16px;
@@ -176,13 +169,13 @@
   cursor: pointer;
   margin-top: 0.75rem;
   transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  box-shadow: 0 15px 30px -8px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 15px 30px -8px rgba(30, 136, 199, 0.4);
   letter-spacing: 0.02em;
 }
 
 .login-submit-btn:hover {
   transform: translateY(-3px) scale(1.01);
-  box-shadow: 0 20px 40px -10px rgba(99, 102, 241, 0.5);
+  box-shadow: 0 20px 40px -10px rgba(30, 136, 199, 0.5);
 }
 
 .login-submit-btn:active {

@@ -11,15 +11,38 @@ import { FileText, Mic, BarChart3, ChevronDown, ChevronUp, Sparkles, AlertTriang
  * different courses and see the reports that belong to each one.
  */
 
+// Strip all HTML tags from a string
+function stripHtml(str) {
+  return str.replace(/<[^>]*>/g, '').trim()
+}
+
+// Normalize a status cell to one of the 3 canonical labels
+function normalizeStatus(raw) {
+  const text = stripHtml(raw).replace(/\*\*/g, '').trim()
+  if (text === '✓ İyi' || text === '~ Gelişiyor' || text === '↑ Çalışılacak') return text
+  const lower = text.toLowerCase().replace(/[^\wçşğüöıİ]/g, '')
+  if (lower.includes('iyi')) return '✓ İyi'
+  if (lower.includes('gelisiyor') || lower.includes('gelişiyor') || lower.includes('geliyor')) return '~ Gelişiyor'
+  if (lower.includes('calisilacak') || lower.includes('çalışılacak') || lower.includes('calisil')) return '↑ Çalışılacak'
+  return text
+}
+
 // Parse markdown tables into structured data for rendering
 function parseMarkdownTable(mdText) {
   const lines = mdText.split('\n').filter(l => l.trim().startsWith('|'))
   if (lines.length < 2) return null
 
-  const headers = lines[0].split('|').map(h => h.trim()).filter(Boolean)
-  const rows = lines.slice(2).map(row =>
-    row.split('|').map(cell => cell.trim()).filter(Boolean)
-  ).filter(r => r.length >= headers.length)
+  const headers = lines[0].split('|').map(h => stripHtml(h).replace(/\*\*/g, '')).filter(Boolean)
+  const rows = lines.slice(2).map(row => {
+    const cells = row.split('|').map(cell => cell.trim()).filter(Boolean)
+    return cells.map((cell) => {
+      if (/<span[^>]*class\s*=\s*['"]?status-/i.test(cell) || /[✓~↑]/.test(cell) ||
+          /\b(iyi|gelişiyor|geliyor|çalışılacak)\b/i.test(stripHtml(cell))) {
+        return normalizeStatus(cell)
+      }
+      return stripHtml(cell).replace(/\*\*/g, '')
+    })
+  }).filter(r => r.length >= headers.length)
 
   return { headers, rows }
 }
@@ -30,7 +53,7 @@ function parseSections(md) {
 
   // Extract intro box
   const introMatch = md.match(/<div class="intro-box">([\s\S]*?)<\/div>/)
-  const intro = introMatch ? introMatch[1].replace(/<[^>]*>/g, '').trim() : ''
+  const intro = introMatch ? stripHtml(introMatch[1]) : ''
 
   // Extract sections by ### headers
   const sectionRegex = /###\s+(.+)\n([\s\S]*?)(?=###|<div class="end-box"|$)/g
@@ -46,8 +69,20 @@ function parseSections(md) {
     if (title.includes('Güçlü Yön')) {
       strengths = content.replace(/\*\*/g, '')
     } else if (title.includes('Gelişim Öneri')) {
-      const tipLines = content.split('\n').filter(l => l.trim().startsWith('-'))
-      tipLines.forEach(l => tips.push(l.replace(/^-\s*/, '').replace(/\*\*/g, '')))
+      // Handle multiple formats: "- item", "1. item", "* item", or plain lines with bold
+      const lines = content.split('\n').filter(l => l.trim().length > 0)
+      lines.forEach(l => {
+        const trimmed = l.trim()
+        if (/^[-*]\s+/.test(trimmed)) {
+          tips.push(trimmed.replace(/^[-*]\s+/, '').replace(/\*\*/g, ''))
+        } else if (/^\d+[.)]\s+/.test(trimmed)) {
+          tips.push(trimmed.replace(/^\d+[.)]\s+/, '').replace(/\*\*/g, ''))
+        } else if (/^\*\*/.test(trimmed)) {
+          tips.push(trimmed.replace(/\*\*/g, ''))
+        } else if (trimmed.length > 10 && !trimmed.startsWith('|') && !trimmed.startsWith('#')) {
+          tips.push(trimmed.replace(/\*\*/g, ''))
+        }
+      })
     } else {
       const table = parseMarkdownTable(content)
       if (table) {
@@ -58,7 +93,7 @@ function parseSections(md) {
 
   // Extract closing
   const closingMatch = md.match(/<div class="end-box">([\s\S]*?)<\/div>/)
-  const closing = closingMatch ? closingMatch[1].replace(/<[^>]*>/g, '').trim() : ''
+  const closing = closingMatch ? stripHtml(closingMatch[1]) : ''
 
   return { intro, dimensions, strengths, tips, closing }
 }
@@ -132,9 +167,9 @@ function DimensionCard({ dim, index }) {
                       padding: '10px 14px', color: ci === 0 ? '#1e293b' : '#475569',
                       fontWeight: ci === 0 ? 700 : 400, lineHeight: 1.5,
                     }}>
-                      {['✓ İyi', '~ Gelişiyor', '↑ Çalışılacak'].includes(cell.trim())
-                        ? <StatusBadge status={cell.trim()} />
-                        : cell.replace(/\*\*/g, '')}
+                      {['✓ İyi', '~ Gelişiyor', '↑ Çalışılacak'].includes(cell)
+                        ? <StatusBadge status={cell} />
+                        : cell}
                     </td>
                   ))}
                 </tr>
