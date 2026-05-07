@@ -66,17 +66,18 @@ async function getStats(req, res) {
     institutionScore = Math.round((allScores.reduce((a, b) => a + b, 0) / allScores.length) * 20 * 10) / 10;
   }
 
-  // ── Performance trend (daily averages, last 30 days, score 0-100) ──
+  // ── Performance trend (daily averages, up to last 30 report-days, score 0-100) ──
   const dayMap = {};
   const now = new Date();
-  const cutoff = new Date(now);
-  cutoff.setDate(cutoff.getDate() - 30);
+  const recentReportTeachers = [...allReportTeachers]
+    .sort((a, b) => new Date(b.report.createdAt) - new Date(a.report.createdAt))
+    .slice(0, 120); // enough sample to build up to 30 distinct days
   const DAY_MONTH_FMT = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' });
-  allReportTeachers.forEach(rt => {
+  recentReportTeachers.forEach(rt => {
     const score = reportService.extractScore(rt);
     if (score == null || isNaN(score)) return;
     const d = new Date(rt.report.createdAt);
-    if (d < cutoff || d > now) return;
+    if (d > now) return;
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     if (!dayMap[key]) dayMap[key] = { total: 0, count: 0, label: DAY_MONTH_FMT.format(d) };
     dayMap[key].total += score * 20; // convert 0-5 to 0-100
@@ -84,6 +85,7 @@ async function getStats(req, res) {
   });
   const performanceTrend = Object.entries(dayMap)
     .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-30)
     .map(([dateKey, v]) => ({ day: v.label, date: dateKey, skor: Math.round(v.total / v.count) }));
 
   // ── Quality distribution (per-teacher latest score) ──
@@ -125,8 +127,13 @@ async function getTeachers(req, res) {
   const result = teachers.map(t => {
     const allReports = t.reportTeachers;
     const latest = allReports[0]?.report || null;
-    const latestReportTeacher = allReports[0] || null;
-    const lastScore = latestReportTeacher ? reportService.extractScore(latestReportTeacher) : null;
+    const latestScored = allReports.find((rt) => {
+      const status = rt?.report?.status;
+      if (!['DRAFT', 'FINALIZED'].includes(status)) return false;
+      const s = reportService.extractScore(rt);
+      return s != null && !isNaN(s) && s > 0;
+    }) || null;
+    const lastScore = latestScored ? reportService.extractScore(latestScored) : null;
 
     return {
       id: t.id, name: t.user.name, email: t.user.email, phone: t.user.phone,

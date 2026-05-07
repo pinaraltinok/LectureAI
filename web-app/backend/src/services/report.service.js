@@ -112,12 +112,15 @@ function createReportService(db) {
     const report = reportTeacher.report;
     const fr = report.finalReport || report.draftReport || {};
 
-    let score = reportTeacher.score;
-    if (score == null && fr.overallScore != null) score = fr.overallScore;
+    // Prefer report payload scores over junction-table score.
+    // Some legacy records may carry stale/normalized rt.score values.
+    let score = null;
+    if (fr.overallScore != null) score = fr.overallScore;
     if (score == null && fr.genel_sonuc != null) {
       const parsed = parseFloat(fr.genel_sonuc);
       if (!isNaN(parsed)) score = parsed;
     }
+    if (score == null) score = reportTeacher.score;
     if (score == null && fr.yeterlilikler) {
       const map = { 'çok iyi': 5, 'iyi': 4, 'orta': 3, 'geliştirilmeli': 2, 'düşük': 2, 'yetersiz': 1 };
       score = map[fr.yeterlilikler.toLowerCase()] || null;

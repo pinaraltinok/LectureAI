@@ -17,6 +17,7 @@ const TeacherAttendance = () => {
   const [editingId, setEditingId] = useState(null)
   const [editNote, setEditNote] = useState('')
   const [editSaving, setEditSaving] = useState(false)
+  const [confirmState, setConfirmState] = useState({ open: false, message: '', onConfirm: null })
 
   useEffect(() => {
     Promise.all([apiGet('/teacher/lessons'), apiGet('/teacher/my-evaluations')])
@@ -70,7 +71,6 @@ const TeacherAttendance = () => {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Bu değerlendirmeyi silmek istediğinize emin misiniz?')) return
     try {
       await apiDelete(`/teacher/student-evaluation/${id}`)
       setEvaluations(prev => prev.filter(ev => ev.id !== id))
@@ -85,6 +85,25 @@ const TeacherAttendance = () => {
 
   return (
     <div className="responsive-attendance-grid" style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', animation: 'fadeIn 0.5s ease'}}>
+      {confirmState.open && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(2, 6, 23, 0.62)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', zIndex: 2600, padding: '1rem' }}
+          onClick={() => setConfirmState({ open: false, message: '', onConfirm: null })}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: 'min(460px, 94vw)', background: 'linear-gradient(145deg, #0f172a, #111827)', border: '1px solid rgba(148, 163, 184, 0.28)', borderRadius: '18px', boxShadow: '0 28px 90px rgba(15, 23, 42, 0.7)', padding: '1.35rem 1.4rem' }}
+          >
+            <h3 style={{ margin: '0 0 0.55rem', color: '#f8fafc', fontSize: '1.05rem', fontWeight: 800 }}>{confirmState.message}</h3>
+            <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.9rem' }}>Bu işlem geri alınamaz.</p>
+            <div style={{ marginTop: '1.1rem', display: 'flex', justifyContent: 'flex-end', gap: '0.65rem' }}>
+              <button onClick={() => setConfirmState({ open: false, message: '', onConfirm: null })} style={{ border: 'none', borderRadius: '11px', padding: '0.58rem 0.95rem', fontSize: '0.84rem', fontWeight: 700, cursor: 'pointer', background: 'rgba(148, 163, 184, 0.16)', color: '#e2e8f0' }}>Vazgeç</button>
+              <button onClick={() => { const run = confirmState.onConfirm; setConfirmState({ open: false, message: '', onConfirm: null }); if (typeof run === 'function') run() }} style={{ border: 'none', borderRadius: '11px', padding: '0.58rem 0.95rem', fontSize: '0.84rem', fontWeight: 700, cursor: 'pointer', background: 'linear-gradient(135deg, #ef4444, #f43f5e)', color: '#fff' }}>Sil</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Left: Send Evaluation */}
       <div className="report-card-internal" style={{padding: '2rem'}}>
         <h3 style={{fontSize:'1rem', fontWeight:800, color:'#0f172a', marginBottom:'1.5rem'}}>📝 Öğrenci Değerlendirmesi</h3>
@@ -164,7 +183,7 @@ const TeacherAttendance = () => {
                           fontSize:'0.85rem', padding:'2px', color:'#6366f1',
                           transition:'all 0.2s',
                         }} title="Düzenle">✏️</button>
-                        <button onClick={() => handleDelete(ev.id)} style={{
+                        <button onClick={() => setConfirmState({ open: true, message: 'Bu değerlendirmeyi silmek istediğinize emin misiniz?', onConfirm: () => handleDelete(ev.id) })} style={{
                           background:'none', border:'none', cursor:'pointer',
                           fontSize:'0.85rem', padding:'2px', color:'#ef4444',
                           transition:'all 0.2s',

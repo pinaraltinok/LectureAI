@@ -110,7 +110,7 @@ const ProgressChart = ({
   const gridLines = [0, 1, 2, 3, 4, 5]
 
   // Date labels — limit to max 8 to avoid overlap
-  const maxLabels = 8
+  const maxLabels = xMode === 'report' ? 6 : 8
   const labelStep = Math.max(1, Math.ceil(points.length / maxLabels))
 
   // Date formatter
@@ -327,16 +327,18 @@ const ProgressChart = ({
                   style={{transition: 'all 0.2s ease'}}
                 />
 
-                {/* Score label above dot (always visible) */}
-                <text
-                  x={p.x} y={p.y - 16}
-                  textAnchor="middle" fontSize="11" fontWeight="900"
-                  fill={ptColor}
-                  opacity={isHovered ? 1 : 0.8}
-                  fontFamily="system-ui, -apple-system, sans-serif"
-                >
-                  {points[i].score.toFixed(1)}
-                </text>
+                {/* Score label */}
+                {(xMode !== 'report' || isHovered) && (
+                  <text
+                    x={p.x} y={p.y - 16}
+                    textAnchor="middle" fontSize="11" fontWeight="900"
+                    fill={ptColor}
+                    opacity={isHovered ? 1 : 0.8}
+                    fontFamily="system-ui, -apple-system, sans-serif"
+                  >
+                    {points[i].score.toFixed(1)}
+                  </text>
+                )}
 
                 {/* Tooltip on hover */}
                 {isHovered && (() => {

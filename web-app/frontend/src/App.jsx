@@ -276,22 +276,66 @@ function AppContent() {
       </main>
 
       {logoutConfirmOpen && (
-        <div className="confirm-modal-backdrop" onClick={() => setLogoutConfirmOpen(false)}>
-          <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Çıkış yapmak istediğinize emin misiniz?</h3>
-            <p>Oturumunuz sonlandırılacak ve giriş ekranına yönlendirileceksiniz.</p>
-            <div className="confirm-modal-actions">
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(2, 6, 23, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'grid',
+            placeItems: 'center',
+            zIndex: 3000,
+            padding: '1rem',
+          }}
+          onClick={() => setLogoutConfirmOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: 'min(460px, 92vw)',
+              background: 'linear-gradient(145deg, #0f172a, #111827)',
+              border: '1px solid rgba(148, 163, 184, 0.28)',
+              borderRadius: '18px',
+              boxShadow: '0 28px 90px rgba(15, 23, 42, 0.7)',
+              padding: '1.35rem 1.4rem',
+            }}
+          >
+            <h3 style={{ margin: '0 0 0.55rem', color: '#f8fafc', fontSize: '1.05rem', fontWeight: 800 }}>
+              Çıkış yapmak istediğinize emin misiniz?
+            </h3>
+            <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.9rem' }}>
+              Oturumunuz sonlandırılacak ve giriş ekranına yönlendirileceksiniz.
+            </p>
+            <div style={{ marginTop: '1.1rem', display: 'flex', justifyContent: 'flex-end', gap: '0.65rem' }}>
               <button
                 type="button"
-                className="confirm-modal-btn cancel"
                 onClick={() => setLogoutConfirmOpen(false)}
+                style={{
+                  border: 'none',
+                  borderRadius: '11px',
+                  padding: '0.58rem 0.95rem',
+                  fontSize: '0.84rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: 'rgba(148, 163, 184, 0.16)',
+                  color: '#e2e8f0',
+                }}
               >
                 Vazgeç
               </button>
               <button
                 type="button"
-                className="confirm-modal-btn danger"
                 onClick={confirmLogout}
+                style={{
+                  border: 'none',
+                  borderRadius: '11px',
+                  padding: '0.58rem 0.95rem',
+                  fontSize: '0.84rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: 'linear-gradient(135deg, #ef4444, #f43f5e)',
+                  color: '#fff',
+                }}
               >
                 Çıkış Yap
               </button>

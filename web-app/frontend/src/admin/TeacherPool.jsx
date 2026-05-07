@@ -32,6 +32,7 @@ const TeacherPool = () => {
   // Admin action states
   const [finalizing, setFinalizing] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [confirmState, setConfirmState] = useState({ open: false, message: '', onConfirm: null })
 
 
   // Progress polling for PROCESSING reports
@@ -277,7 +278,6 @@ const TeacherPool = () => {
 
     const handleDeleteReport = async () => {
       if (!selectedReport.jobId) return
-      if (!window.confirm('Bu raporu kalıcı olarak silmek istediğinize emin misiniz?')) return
       setDeleting(true)
       try {
         await apiDelete(`/admin/report/${selectedReport.jobId}`)
@@ -294,8 +294,30 @@ const TeacherPool = () => {
       }
     }
 
+    const requestConfirm = (message, onConfirm) => {
+      setConfirmState({ open: true, message, onConfirm })
+    }
+
     return (
       <div style={{animation: 'fadeIn 0.3s ease', padding: '1rem'}}>
+        {confirmState.open && (
+          <div
+            style={{ position: 'fixed', inset: 0, background: 'rgba(2, 6, 23, 0.62)', backdropFilter: 'blur(4px)', display: 'grid', placeItems: 'center', zIndex: 2600, padding: '1rem' }}
+            onClick={() => setConfirmState({ open: false, message: '', onConfirm: null })}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{ width: 'min(460px, 94vw)', background: 'linear-gradient(145deg, #0f172a, #111827)', border: '1px solid rgba(148, 163, 184, 0.28)', borderRadius: '18px', boxShadow: '0 28px 90px rgba(15, 23, 42, 0.7)', padding: '1.35rem 1.4rem' }}
+            >
+              <h3 style={{ margin: '0 0 0.55rem', color: '#f8fafc', fontSize: '1.05rem', fontWeight: 800 }}>{confirmState.message}</h3>
+              <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.9rem' }}>Bu işlem geri alınamaz.</p>
+              <div style={{ marginTop: '1.1rem', display: 'flex', justifyContent: 'flex-end', gap: '0.65rem' }}>
+                <button onClick={() => setConfirmState({ open: false, message: '', onConfirm: null })} style={{ border: 'none', borderRadius: '11px', padding: '0.58rem 0.95rem', fontSize: '0.84rem', fontWeight: 700, cursor: 'pointer', background: 'rgba(148, 163, 184, 0.16)', color: '#e2e8f0' }}>Vazgeç</button>
+                <button onClick={() => { const run = confirmState.onConfirm; setConfirmState({ open: false, message: '', onConfirm: null }); if (typeof run === 'function') run() }} style={{ border: 'none', borderRadius: '11px', padding: '0.58rem 0.95rem', fontSize: '0.84rem', fontWeight: 700, cursor: 'pointer', background: 'linear-gradient(135deg, #ef4444, #f43f5e)', color: '#fff' }}>Sil</button>
+              </div>
+            </div>
+          </div>
+        )}
         <button
           onClick={() => { 
             if (progressIntervalRef.current) { clearInterval(progressIntervalRef.current); progressIntervalRef.current = null; }
@@ -419,7 +441,7 @@ const TeacherPool = () => {
                 {finalizing ? '⏳ Onaylanıyor...' : '✓ Raporu Onayla ve Yayınla'}
               </button>
               <button
-                onClick={handleDeleteReport}
+                onClick={() => requestConfirm('Bu raporu kalıcı olarak silmek istediğinize emin misiniz?', handleDeleteReport)}
                 disabled={deleting}
                 style={{
                   padding: '14px', borderRadius: '14px', border: '1.5px solid #fecaca',
@@ -453,7 +475,7 @@ const TeacherPool = () => {
               </div>
             </div>
             <button
-              onClick={handleDeleteReport}
+              onClick={() => requestConfirm('Bu raporu kalıcı olarak silmek istediğinize emin misiniz?', handleDeleteReport)}
               disabled={deleting}
               style={{
                 padding: '10px 20px', borderRadius: '12px', border: '1.5px solid #fecaca',

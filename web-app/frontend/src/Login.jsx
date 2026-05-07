@@ -355,6 +355,8 @@ export default function Login() {
           {isLogin ? (
             <p>
               Hesabınız yok mu? <a href="#" onClick={(e) => { e.preventDefault(); setIsLogin(false) }}>Şimdi Kaydolun</a>
+              {' '}•{' '}
+              <a href="#" onClick={(e) => { e.preventDefault(); setIsForgotPasswordView(true) }}>Şifremi Unuttum</a>
             </p>
           ) : (
             <p>
