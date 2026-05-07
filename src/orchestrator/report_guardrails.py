@@ -216,6 +216,9 @@ def _fix_inconsistent_ratings(
             "motivasyonunu düşürmemeye",
             "destekliyor",
             "yardımcı oluyor",
+            "yapıcı ve destekleyici",
+            "destekleyici bir şekilde",
+            "yapıcı bir şekilde ele",
         ]
         if any(p in obs_lower for p in positive_hatalar):
             metric["rating"] = "İyi"

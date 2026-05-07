@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Users, Star, BookOpen, BarChart3, ClipboardList, AlertTriangle, MessageCircle, CheckCircle, Circle, Activity } from 'lucide-react'
 import { apiGet } from '../api'
 import { formatLessonLabel } from '../utils/lessonLabel'
@@ -13,6 +13,9 @@ const TeacherDashboard = () => {
   const [progressData, setProgressData] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [reportNotification, setReportNotification] = useState(null)
+  const knownReportIdsRef = useRef(new Set())
+  const initializedReportTrackingRef = useRef(false)
 
   useEffect(() => {
     Promise.all([
@@ -27,6 +30,53 @@ const TeacherDashboard = () => {
     }).catch(err => setError(err.message))
       .finally(() => setLoading(false))
   }, [])
+
+  // Poll teacher reports and notify when a new generated report appears in system
+  useEffect(() => {
+    if (loading) return
+
+    const syncReports = async () => {
+      try {
+        const latestReports = await apiGet('/teacher/reports')
+        setReports(latestReports)
+
+        if (!initializedReportTrackingRef.current) {
+          knownReportIdsRef.current = new Set((latestReports || []).map(r => r.jobId))
+          initializedReportTrackingRef.current = true
+          return
+        }
+
+        const newReports = (latestReports || []).filter(
+          (r) => r.jobId && !knownReportIdsRef.current.has(r.jobId)
+        )
+
+        if (newReports.length > 0) {
+          const newest = [...newReports].sort(
+            (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
+          )[0]
+          setReportNotification({
+            jobId: newest.jobId,
+            courseName: newest.courseName || 'Ders Analizi',
+            lessonNo: newest.lessonNo,
+            moduleSize: newest.moduleSize,
+          })
+        }
+
+        knownReportIdsRef.current = new Set((latestReports || []).map(r => r.jobId))
+      } catch {
+        // Silent fail for polling; existing page error state remains untouched
+      }
+    }
+
+    const intervalId = setInterval(syncReports, 20000)
+    return () => clearInterval(intervalId)
+  }, [loading])
+
+  useEffect(() => {
+    if (!reportNotification) return
+    const timeoutId = setTimeout(() => setReportNotification(null), 6000)
+    return () => clearTimeout(timeoutId)
+  }, [reportNotification])
 
   const teacherStats = [
     { label: "Toplam Öğrenci", value: stats?.totalStudents ?? '—', icon: <Users size={22} />, color: "#6366f1", gradient: 'linear-gradient(135deg, #6366f1, #8b5cf6)' },
@@ -82,6 +132,49 @@ const TeacherDashboard = () => {
 
   return (
     <div className="dashboard-page">
+      {reportNotification && (
+        <div style={{
+          position: 'fixed',
+          top: '24px',
+          right: '24px',
+          zIndex: 2500,
+          width: 'min(420px, 92vw)',
+          padding: '1rem 1rem 0.9rem',
+          borderRadius: '16px',
+          background: 'linear-gradient(135deg, #ecfeff 0%, #f0f9ff 100%)',
+          border: '1px solid #bae6fd',
+          boxShadow: '0 18px 40px rgba(14, 116, 144, 0.2)',
+          animation: 'slideInRight 0.35s ease',
+        }}>
+          <div style={{display: 'flex', justifyContent: 'space-between', gap: '12px'}}>
+            <div>
+              <p style={{margin: 0, fontSize: '0.82rem', fontWeight: 900, color: '#0369a1', letterSpacing: '0.04em'}}>
+                YENİ RAPOR HAZIR
+              </p>
+              <p style={{margin: '0.35rem 0 0', fontSize: '0.9rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.45}}>
+                {reportNotification.courseName} dersi için yeni analiz raporu sisteme eklendi
+                {reportNotification.lessonNo ? ` (${formatLessonLabel(reportNotification.lessonNo, reportNotification.moduleSize)}).` : '.'}
+              </p>
+            </div>
+            <button
+              onClick={() => setReportNotification(null)}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                color: '#0ea5e9',
+                fontSize: '1.1rem',
+                cursor: 'pointer',
+                fontWeight: 900,
+                lineHeight: 1,
+              }}
+              aria-label="Bildirimi kapat"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Welcome Banner */}
       <div className="welcome-banner" style={{
         background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4338ca 100%)',

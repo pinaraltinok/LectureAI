@@ -174,6 +174,10 @@ _CV_WHITELIST_KEYS = {
     "smile_frame_ratio",
     "hand_visible_ratio",
     "movement_energy_avg",
+    "screen_share_frames",
+    "screen_share_ratio",
+    "screen_share_minutes",
+    "visual_material_used",
 }
 
 
@@ -225,6 +229,12 @@ def _extract_cv_visual_summary(cv_data: Dict[str, Any]) -> str:
     eng = cv_data.get("engagement")
     engagement = eng if isinstance(eng, dict) else {}
 
+    def _pick_first(*vals: Any) -> Any:
+        for v in vals:
+            if v is not None:
+                return v
+        return None
+
     def _norm_pct(val: Any) -> Optional[int]:
         if val is None:
             return None
@@ -234,39 +244,84 @@ def _extract_cv_visual_summary(cv_data: Dict[str, Any]) -> str:
             return None
         return round(f * 100) if f <= 1.0 else round(f)
 
-    smile = (
-        engagement.get("smile_ratio")
-        or engagement.get("smile_percentage")
-        or cv_data.get("smile_frame_ratio")
+    smile = _pick_first(
+        engagement.get("smile_ratio"),
+        engagement.get("smile_percentage"),
+        cv_data.get("smile_frame_ratio"),
     )
     sp = _norm_pct(smile)
     if sp is not None:
         lines.append(f"- Gülümseme oranı: %{sp}")
 
-    camera = (
-        engagement.get("camera_on_ratio")
-        or engagement.get("face_visible_ratio")
-        or cv_data.get("camera_open_ratio_total")
-        or cv_data.get("camera_open_ratio_among_located")
-        or cv_data.get("face_visible_ratio")
+    camera = _pick_first(
+        engagement.get("camera_on_ratio"),
+        engagement.get("face_visible_ratio"),
+        cv_data.get("camera_open_ratio_total"),
+        cv_data.get("camera_open_ratio_among_located"),
+        cv_data.get("face_visible_ratio"),
     )
     cp = _norm_pct(camera)
     if cp is not None:
         lines.append(f"- Kamera açık / yüz görünür oranı: %{cp}")
 
-    board = engagement.get("board_usage_ratio") or cv_data.get("board_usage_ratio")
+    board = _pick_first(
+        engagement.get("board_usage_ratio"),
+        cv_data.get("board_usage_ratio"),
+    )
     bp = _norm_pct(board)
     if bp is not None:
         lines.append(f"- Tahta kullanım oranı: %{bp}")
 
-    motion = engagement.get("avg_motion_per_minute") or cv_data.get(
-        "movement_energy_avg"
+    slides = cv_data.get("slide_segments")
+    if isinstance(slides, list):
+        lines.append(f"- Slayt sayısı: {len(slides)}")
+
+    motion = _pick_first(
+        engagement.get("avg_motion_per_minute"),
+        engagement.get("motion_frames_per_minute"),
+        cv_data.get("avg_motion_per_minute"),
+        cv_data.get("motion_frames"),
+        cv_data.get("movement_energy_avg"),
     )
     if motion is not None:
         try:
-            lines.append(f"- Ortalama hareket enerjisi: {float(motion):.1f}")
+            lines.append(f"- Ortalama hareket: {float(motion):.1f}/dk")
         except (TypeError, ValueError):
             pass
+
+    dist = _pick_first(
+        engagement.get("movement_distribution"),
+        cv_data.get("movement_distribution"),
+    )
+    if isinstance(dist, dict) and dist:
+        left = _norm_pct(_pick_first(dist.get("left"), dist.get("sol")))
+        center = _norm_pct(_pick_first(dist.get("center"), dist.get("merkez")))
+        right = _norm_pct(_pick_first(dist.get("right"), dist.get("sag"), dist.get("sağ")))
+        parts: List[str] = []
+        if left is not None:
+            parts.append(f"Sol: %{left}")
+        if center is not None:
+            parts.append(f"Merkez: %{center}")
+        if right is not None:
+            parts.append(f"Sağ: %{right}")
+        if parts:
+            lines.append("- Hareket dağılımı: " + ", ".join(parts))
+
+    board_samples = cv_data.get("board_samples")
+    if isinstance(board_samples, list) and board_samples:
+        lines.append("- Tespit edilen tahta yazıları:")
+        for sample in board_samples[:5]:
+            if isinstance(sample, dict):
+                ts = _pick_first(sample.get("time_sec"), sample.get("timestamp"), sample.get("t"))
+                txt = _pick_first(sample.get("text"), sample.get("ocr_text"), sample.get("content"))
+                if txt:
+                    if ts is not None:
+                        try:
+                            lines.append(f"  - ({int(float(ts))}s) \"{str(txt).strip()}\"")
+                        except (TypeError, ValueError):
+                            lines.append(f"  - \"{str(txt).strip()}\"")
+            elif isinstance(sample, str) and sample.strip():
+                lines.append(f"  - \"{sample.strip()}\"")
 
     return (
         "\n".join(lines)

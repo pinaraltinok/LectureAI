@@ -7,8 +7,17 @@ import { useState, useMemo } from 'react'
  *   title?: string
  *   height?: number
  *   accentColor?: string  (default: '#6366f1')
+ *   xMode?: 'date' | 'report' (default: 'date')
+ *   maxPoints?: number (default: unlimited)
  */
-const ProgressChart = ({ data = [], title = 'Performans İlerlemesi', height = 300, accentColor = '#6366f1' }) => {
+const ProgressChart = ({
+  data = [],
+  title = 'Performans İlerlemesi',
+  height = 300,
+  accentColor = '#6366f1',
+  xMode = 'date',
+  maxPoints,
+}) => {
   const [hoveredIdx, setHoveredIdx] = useState(null)
 
   const chartId = useMemo(() => 'chart_' + Math.random().toString(36).slice(2, 8), [])
@@ -16,14 +25,18 @@ const ProgressChart = ({ data = [], title = 'Performans İlerlemesi', height = 3
   // Process & sort data
   const points = useMemo(() => {
     if (!data || data.length === 0) return []
-    return data
+    const sorted = data
       .map(d => ({
         date: new Date(d.date),
         score: typeof d.score === 'number' ? d.score : 0,
         label: d.label || '',
       }))
       .sort((a, b) => a.date - b.date)
-  }, [data])
+    if (typeof maxPoints === 'number' && maxPoints > 0) {
+      return sorted.slice(-maxPoints)
+    }
+    return sorted
+  }, [data, maxPoints])
 
   if (points.length === 0) {
     return (
@@ -50,7 +63,7 @@ const ProgressChart = ({ data = [], title = 'Performans İlerlemesi', height = 3
   const minScore = 0
   const yScale = (v) => pad.top + cH - ((v - minScore) / (maxScore - minScore)) * cH
 
-  // Scale X: spread evenly if 1 point, use date range otherwise
+  // Scale X
   const minDate = points[0].date.getTime()
   const maxDate = points.length > 1 ? points[points.length - 1].date.getTime() : minDate + 1
   const xScale = (d) => {
@@ -59,7 +72,12 @@ const ProgressChart = ({ data = [], title = 'Performans İlerlemesi', height = 3
   }
 
   // Build SVG path
-  const pathPoints = points.map(p => ({ x: xScale(p.date), y: yScale(p.score) }))
+  const pathPoints = points.map((p, i) => {
+    const x = xMode === 'report'
+      ? (points.length === 1 ? pad.left + cW / 2 : pad.left + (i / (points.length - 1)) * cW)
+      : xScale(p.date)
+    return { x, y: yScale(p.score) }
+  })
 
   // Smooth curved line using catmull-rom to bezier conversion
   const buildSmoothPath = (pts) => {
@@ -261,7 +279,7 @@ const ProgressChart = ({ data = [], title = 'Performans İlerlemesi', height = 3
                 textAnchor="middle" fontSize="10" fontWeight="700" fill="#94a3b8"
                 fontFamily="system-ui, -apple-system, sans-serif"
               >
-                {dateFormatter.format(points[i].date)}
+                {xMode === 'report' ? `R${i + 1}` : dateFormatter.format(points[i].date)}
               </text>
             )
           })}
@@ -349,7 +367,9 @@ const ProgressChart = ({ data = [], title = 'Performans İlerlemesi', height = 3
                         textAnchor="middle" fontSize="11" fontWeight="700" fill="#fff"
                         fontFamily="system-ui, -apple-system, sans-serif"
                       >
-                        📅 {points[i].date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        {xMode === 'report'
+                          ? `📈 Rapor #${i + 1}`
+                          : `📅 ${points[i].date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}`}
                       </text>
                       <text
                         x={tooltipX + tooltipW / 2} y={tooltipY + 30}

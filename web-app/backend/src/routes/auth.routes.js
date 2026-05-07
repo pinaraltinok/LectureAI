@@ -3,8 +3,8 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const asyncHandler = require('../middleware/asyncHandler');
 const validate = require('../middleware/validate');
-const { loginSchema, registerSchema, updateProfileSchema } = require('../schemas/auth.schema');
-const { login, register, getMe, updateProfile, logout } = require('../controllers/auth.controller');
+const { loginSchema, registerSchema, updateProfileSchema, forgotPasswordSchema } = require('../schemas/auth.schema');
+const { login, register, getMe, updateProfile, logout, forgotPassword } = require('../controllers/auth.controller');
 
 /**
  * @swagger
@@ -75,6 +75,7 @@ router.post('/login', validate(loginSchema), asyncHandler(login));
  *         description: Email zaten kayıtlı
  */
 router.post('/register', validate(registerSchema), asyncHandler(register));
+router.post('/forgot-password', validate(forgotPasswordSchema), asyncHandler(forgotPassword));
 
 /**
  * @swagger

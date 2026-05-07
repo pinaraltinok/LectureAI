@@ -30,6 +30,27 @@ const AdminManagement = () => {
   const [courseForm, setCourseForm] = useState({ course: '', age: '', lessonSize: '60', moduleNum: '1', moduleSize: '4' })
   const [editingGroup, setEditingGroup] = useState(null)
   const [editingCourse, setEditingCourse] = useState(null)
+  const [confirmState, setConfirmState] = useState({ open: false, message: '', onConfirm: null })
+
+  // Validation helpers (same rules as login page)
+  const formatPhone = (value) => {
+    const digits = value.replace(/\D/g, '').slice(0, 11)
+    if (digits.length <= 4) return digits
+    if (digits.length <= 7) return `${digits.slice(0, 4)} ${digits.slice(4)}`
+    return `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`
+  }
+  const isValidPhone = (val) => {
+    const digits = val.replace(/\D/g, '')
+    return digits.length === 11 && digits.startsWith('05')
+  }
+  const validatePassword = (value) => {
+    if (!value) return 'Şifre alanı zorunludur.'
+    if (value.length < 8) return 'Şifre en az 8 karakter olmalıdır.'
+    if (!/[A-Za-z]/.test(value)) return 'Şifre en az bir harf içermelidir.'
+    if (!/[0-9]/.test(value)) return 'Şifre en az bir rakam içermelidir.'
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(value)) return 'Şifre en az bir özel karakter içermelidir. (!@#$%^&*)'
+    return ''
+  }
 
   const loadData = async () => {
     try {
@@ -82,7 +103,27 @@ const AdminManagement = () => {
   }
 
   const handleCreateUser = async () => {
-    if (!form.name || !form.email) return showMsg('Ad ve email gereklidir.', true)
+    if (!form.name.trim()) return showMsg('Ad Soyad alanı zorunludur.', true)
+    if (form.name.trim().length < 2) return showMsg('Ad Soyad en az 2 karakter olmalıdır.', true)
+    if (/\d/.test(form.name)) return showMsg('Ad Soyad rakam içeremez.', true)
+    if (!form.email.trim()) return showMsg('E-posta adresi zorunludur.', true)
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return showMsg('Geçerli bir e-posta adresi giriniz. (örn: ad@mail.com)', true)
+    if (!form.phone.trim()) return showMsg('Telefon numarası zorunludur.', true)
+    if (!isValidPhone(form.phone)) return showMsg('Telefon numarası 05XX XXX XXXX formatında olmalıdır.', true)
+
+    const passwordError = validatePassword(form.password)
+    if (passwordError) return showMsg(passwordError, true)
+
+    if (form.role === 'student') {
+      if (!form.age) return showMsg('Yaş alanı zorunludur.', true)
+      if (parseInt(form.age) < 5 || parseInt(form.age) > 18) return showMsg('Yaş 5 ile 18 arasında olmalıdır.', true)
+      if (!form.parent.trim()) return showMsg('Veli adı zorunludur.', true)
+      if (form.parent.trim().length < 2) return showMsg('Veli adı en az 2 karakter olmalıdır.', true)
+      if (/\d/.test(form.parent)) return showMsg('Veli adı rakam içeremez.', true)
+      if (!form.parentPhone.trim()) return showMsg('Veli telefon numarası zorunludur.', true)
+      if (!isValidPhone(form.parentPhone)) return showMsg('Veli telefon numarası 05XX XXX XXXX formatında olmalıdır.', true)
+    }
+
     try {
       const res = await apiPost('/admin/users', form)
       showMsg(res.message || 'Kullanıcı oluşturuldu!')
@@ -158,7 +199,6 @@ const AdminManagement = () => {
     } catch (err) { showMsg(err.message, true) }
   }
   const handleDeleteGroup = async (id) => {
-    if (!confirm('Bu grubu silmek istediğinize emin misiniz?')) return
     try { const res = await apiDelete(`/admin/groups/${id}`); showMsg(res.message); await loadData() } catch (err) { showMsg(err.message, true) }
   }
   const handleUpdateCourse = async (id, data) => {
@@ -168,12 +208,18 @@ const AdminManagement = () => {
     } catch (err) { showMsg(err.message, true) }
   }
   const handleDeleteCourse = async (id) => {
-    if (!confirm('Bu kursu silmek istediğinize emin misiniz?')) return
     try { const res = await apiDelete(`/admin/courses/${id}`); showMsg(res.message); await loadData() } catch (err) { showMsg(err.message, true) }
   }
   const handleDeleteUser = async (id) => {
-    if (!confirm('Bu kullanıcıyı silmek istediğinize emin misiniz?')) return
     try { const res = await apiDelete(`/admin/users/${id}`); showMsg(res.message); await loadData() } catch (err) { showMsg(err.message, true) }
+  }
+
+  const requestConfirm = (message, onConfirm) => {
+    setConfirmState({ open: true, message, onConfirm })
+  }
+
+  const closeConfirm = () => {
+    setConfirmState({ open: false, message: '', onConfirm: null })
   }
 
   if (loading) return (<div style={{display:'grid', placeItems:'center', minHeight:'400px'}}><div style={{textAlign:'center', color:'#64748b'}}><div style={{fontSize:'2rem', marginBottom:'1rem'}}>⏳</div><p style={{fontWeight:700}}>Yükleniyor...</p></div></div>)
@@ -182,6 +228,77 @@ const AdminManagement = () => {
 
   return (
     <div style={{ animation: 'fadeIn 0.5s ease' }}>
+      {confirmState.open && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(2, 6, 23, 0.62)',
+            backdropFilter: 'blur(4px)',
+            display: 'grid',
+            placeItems: 'center',
+            zIndex: 2600,
+            padding: '1rem',
+          }}
+          onClick={closeConfirm}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: 'min(460px, 94vw)',
+              background: 'linear-gradient(145deg, #0f172a, #111827)',
+              border: '1px solid rgba(148, 163, 184, 0.28)',
+              borderRadius: '18px',
+              boxShadow: '0 28px 90px rgba(15, 23, 42, 0.7)',
+              padding: '1.35rem 1.4rem',
+            }}
+          >
+            <h3 style={{ margin: '0 0 0.55rem', color: '#f8fafc', fontSize: '1.05rem', fontWeight: 800 }}>
+              {confirmState.message}
+            </h3>
+            <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.9rem' }}>
+              Bu işlem geri alınamaz.
+            </p>
+            <div style={{ marginTop: '1.1rem', display: 'flex', justifyContent: 'flex-end', gap: '0.65rem' }}>
+              <button
+                onClick={closeConfirm}
+                style={{
+                  border: 'none',
+                  borderRadius: '11px',
+                  padding: '0.58rem 0.95rem',
+                  fontSize: '0.84rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: 'rgba(148, 163, 184, 0.16)',
+                  color: '#e2e8f0',
+                }}
+              >
+                Vazgeç
+              </button>
+              <button
+                onClick={() => {
+                  const run = confirmState.onConfirm
+                  closeConfirm()
+                  if (typeof run === 'function') run()
+                }}
+                style={{
+                  border: 'none',
+                  borderRadius: '11px',
+                  padding: '0.58rem 0.95rem',
+                  fontSize: '0.84rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: 'linear-gradient(135deg, #ef4444, #f43f5e)',
+                  color: '#fff',
+                }}
+              >
+                Sil
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '2rem', flexWrap: 'wrap' }}>
         {TABS.map(tab => (
@@ -209,8 +326,8 @@ const AdminManagement = () => {
             <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
               <InputField label="AD SOYAD" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="Adı Soyadı" />
               <InputField label="E-POSTA" value={form.email} onChange={v => setForm(f => ({ ...f, email: v }))} placeholder="email@example.com" />
-              <InputField label="ŞİFRE" value={form.password} onChange={v => setForm(f => ({ ...f, password: v }))} placeholder="password123" />
-              <InputField label="TELEFON" value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} placeholder="+90 5xx xxx xx xx" />
+              <InputField label="ŞİFRE" value={form.password} onChange={v => setForm(f => ({ ...f, password: v }))} placeholder="En az 8 karakter, harf-rakam-sembol" />
+              <InputField label="TELEFON" value={form.phone} onChange={v => setForm(f => ({ ...f, phone: formatPhone(v) }))} placeholder="05XX XXX XXXX" maxLength={13} />
               <div>
                 <label style={labelStyle}>ROL</label>
                 <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))} style={selectStyle}>
@@ -222,7 +339,7 @@ const AdminManagement = () => {
                 <>
                   <InputField label="YAŞ" value={form.age} onChange={v => { const n = parseInt(v); if (v === '' || (n >= 0 && n <= 120)) setForm(f => ({ ...f, age: v })) }} placeholder="10" type="number" min="0" />
                   <InputField label="VELİ ADI" value={form.parent} onChange={v => setForm(f => ({ ...f, parent: v }))} placeholder="Veli Adı Soyadı" />
-                  <InputField label="VELİ TELEFONU" value={form.parentPhone} onChange={v => setForm(f => ({ ...f, parentPhone: v }))} placeholder="+90 5xx" />
+                  <InputField label="VELİ TELEFONU" value={form.parentPhone} onChange={v => setForm(f => ({ ...f, parentPhone: formatPhone(v) }))} placeholder="05XX XXX XXXX" maxLength={13} />
                 </>
               )}
               {form.role === 'teacher' && (
@@ -240,14 +357,14 @@ const AdminManagement = () => {
             {teachers.map(t => (
               <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #f1f5f9', marginBottom: '6px' }}>
                 <div><span style={{ fontWeight: 700, fontSize: '0.85rem' }}>{t.name}</span><span style={{ color: '#94a3b8', fontSize: '0.75rem', marginLeft: '8px' }}>{t.email}</span></div>
-                <button onClick={() => handleDeleteUser(t.id)} style={{ border: 'none', background: '#fee2e2', color: '#dc2626', padding: '3px 10px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 800, cursor: 'pointer' }}>✕</button>
+                <button onClick={() => requestConfirm('Bu kullanıcıyı silmek istediğinize emin misiniz?', () => handleDeleteUser(t.id))} style={{ border: 'none', background: '#fee2e2', color: '#dc2626', padding: '3px 10px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 800, cursor: 'pointer' }}>✕</button>
               </div>
             ))}
             <h3 style={{ margin: '1.5rem 0 1rem', fontSize: '1rem', fontWeight: 900, color: '#0f172a' }}>Öğrenciler ({students.length})</h3>
             {students.map(s => (
               <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 14px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #f1f5f9', marginBottom: '6px' }}>
                 <div><span style={{ fontWeight: 700, fontSize: '0.85rem' }}>{s.name}</span><span style={{ color: '#94a3b8', fontSize: '0.75rem', marginLeft: '8px' }}>{s.email}</span></div>
-                <button onClick={() => handleDeleteUser(s.id)} style={{ border: 'none', background: '#fee2e2', color: '#dc2626', padding: '3px 10px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 800, cursor: 'pointer' }}>✕</button>
+                <button onClick={() => requestConfirm('Bu kullanıcıyı silmek istediğinize emin misiniz?', () => handleDeleteUser(s.id))} style={{ border: 'none', background: '#fee2e2', color: '#dc2626', padding: '3px 10px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 800, cursor: 'pointer' }}>✕</button>
               </div>
             ))}
           </div>
@@ -299,7 +416,7 @@ const AdminManagement = () => {
                           <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#1e293b' }}>{s.name}</span>
                           <span style={{ color: '#94a3b8', fontSize: '0.8rem', marginLeft: '8px' }}>→ {g.courseName} {g.schedule ? `(${g.schedule})` : ''}</span>
                         </div>
-                        <button onClick={() => handleRemoveStudent(s.id, g.groupId)} style={{
+                        <button onClick={() => requestConfirm('Bu atamayı silmek istediğinize emin misiniz?', () => handleRemoveStudent(s.id, g.groupId))} style={{
                           border: 'none', background: '#fee2e2', color: '#dc2626', padding: '4px 12px',
                           borderRadius: '8px', fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer',
                         }}>Çıkar</button>
@@ -481,7 +598,7 @@ const AdminManagement = () => {
                           </div>
                           <div style={{display:'flex', gap:'4px'}}>
                             <button onClick={() => setEditingGroup({id: g.id, name: g.name || '', teacherId: g.teacherId, schedule: g.schedule || ''})} style={{border:'none', background:'#dbeafe', color:'#2563eb', padding:'3px 10px', borderRadius:'6px', fontSize:'0.7rem', fontWeight:800, cursor:'pointer'}}>✎</button>
-                            <button onClick={() => handleDeleteGroup(g.id)} style={{border:'none', background:'#fee2e2', color:'#dc2626', padding:'3px 10px', borderRadius:'6px', fontSize:'0.7rem', fontWeight:800, cursor:'pointer'}}>✕</button>
+                            <button onClick={() => requestConfirm('Bu grubu silmek istediğinize emin misiniz?', () => handleDeleteGroup(g.id))} style={{border:'none', background:'#fee2e2', color:'#dc2626', padding:'3px 10px', borderRadius:'6px', fontSize:'0.7rem', fontWeight:800, cursor:'pointer'}}>✕</button>
                           </div>
                         </div>
                       )}
@@ -560,7 +677,7 @@ const AdminManagement = () => {
                             <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#1e293b' }}>{c.course}</div>
                             <div style={{display:'flex', gap:'4px'}}>
                               <button onClick={() => setEditingCourse({id: c.id, course: c.course, age: c.age, lessonSize: c.lessonSize, moduleNum: c.moduleNum, moduleSize: c.moduleSize})} style={{border:'none', background:'#dbeafe', color:'#2563eb', padding:'3px 10px', borderRadius:'6px', fontSize:'0.7rem', fontWeight:800, cursor:'pointer'}}>✎</button>
-                              <button onClick={() => handleDeleteCourse(c.id)} style={{border:'none', background:'#fee2e2', color:'#dc2626', padding:'3px 10px', borderRadius:'6px', fontSize:'0.7rem', fontWeight:800, cursor:'pointer'}}>✕</button>
+                              <button onClick={() => requestConfirm('Bu kursu silmek istediğinize emin misiniz?', () => handleDeleteCourse(c.id))} style={{border:'none', background:'#fee2e2', color:'#dc2626', padding:'3px 10px', borderRadius:'6px', fontSize:'0.7rem', fontWeight:800, cursor:'pointer'}}>✕</button>
                             </div>
                           </div>
                           <div style={{ display: 'flex', gap: '1rem', marginTop: '4px', fontSize: '0.75rem', color: '#64748b', fontWeight: 600, flexWrap: 'wrap' }}>
@@ -586,11 +703,12 @@ const AdminManagement = () => {
 const labelStyle = { fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }
 const selectStyle = { width: '100%', padding: '0.9rem 1.1rem' }
 
-const InputField = ({ label, value, onChange, placeholder, type = 'text', min }) => (
+const InputField = ({ label, value, onChange, placeholder, type = 'text', min, maxLength }) => (
   <div>
     <label style={labelStyle}>{label}</label>
     <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-      min={min} 
+      min={min}
+      maxLength={maxLength}
       style={{ width: '100%', padding: '12px', borderRadius: '14px', border: '1px solid #e2e8f0', fontSize: '0.9rem', fontWeight: 600, outline: 'none', background: '#f8fafc', boxSizing: 'border-box' }} />
   </div>
 )

@@ -33,4 +33,17 @@ const updateProfileSchema = z.object({
   parentPhone: z.string().max(20).optional(),
 });
 
-module.exports = { loginSchema, registerSchema, updateProfileSchema };
+const forgotPasswordSchema = z.object({
+  email: z.string().email('Geçerli bir email adresi giriniz.'),
+  newPassword: z.string()
+    .min(8, 'Şifre en az 8 karakter olmalıdır.')
+    .regex(/[A-Za-z]/, 'Şifre en az bir harf içermelidir.')
+    .regex(/[0-9]/, 'Şifre en az bir rakam içermelidir.')
+    .regex(/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/, 'Şifre en az bir özel karakter içermelidir.'),
+  newPasswordRepeat: z.string().min(8, 'Şifre tekrarı gereklidir.'),
+}).refine((data) => data.newPassword === data.newPasswordRepeat, {
+  message: 'Yeni şifre ve tekrar şifresi aynı olmalıdır.',
+  path: ['newPasswordRepeat'],
+});
+
+module.exports = { loginSchema, registerSchema, updateProfileSchema, forgotPasswordSchema };

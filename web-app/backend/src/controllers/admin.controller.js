@@ -66,21 +66,25 @@ async function getStats(req, res) {
     institutionScore = Math.round((allScores.reduce((a, b) => a + b, 0) / allScores.length) * 20 * 10) / 10;
   }
 
-  // ── Performance trend (monthly averages, score 0-100) ──
-  const monthMap = {};
-  const MONTH_NAMES = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+  // ── Performance trend (daily averages, last 30 days, score 0-100) ──
+  const dayMap = {};
+  const now = new Date();
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() - 30);
+  const DAY_MONTH_FMT = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: 'short' });
   allReportTeachers.forEach(rt => {
     const score = reportService.extractScore(rt);
     if (score == null || isNaN(score)) return;
     const d = new Date(rt.report.createdAt);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    if (!monthMap[key]) monthMap[key] = { total: 0, count: 0, label: `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}` };
-    monthMap[key].total += score * 20; // convert 0-5 to 0-100
-    monthMap[key].count += 1;
+    if (d < cutoff || d > now) return;
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (!dayMap[key]) dayMap[key] = { total: 0, count: 0, label: DAY_MONTH_FMT.format(d) };
+    dayMap[key].total += score * 20; // convert 0-5 to 0-100
+    dayMap[key].count += 1;
   });
-  const performanceTrend = Object.entries(monthMap)
+  const performanceTrend = Object.entries(dayMap)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([, v]) => ({ month: v.label, skor: Math.round(v.total / v.count) }));
+    .map(([dateKey, v]) => ({ day: v.label, date: dateKey, skor: Math.round(v.total / v.count) }));
 
   // ── Quality distribution (per-teacher latest score) ──
   const teacherLatest = {};
@@ -121,9 +125,8 @@ async function getTeachers(req, res) {
   const result = teachers.map(t => {
     const allReports = t.reportTeachers;
     const latest = allReports[0]?.report || null;
-    const fr = latest?.finalReport || latest?.draftReport || null;
-    let lastScore = t.reportTeachers[0]?.score || null;
-    if (!lastScore && fr?.overallScore != null) lastScore = fr.overallScore;
+    const latestReportTeacher = allReports[0] || null;
+    const lastScore = latestReportTeacher ? reportService.extractScore(latestReportTeacher) : null;
 
     return {
       id: t.id, name: t.user.name, email: t.user.email, phone: t.user.phone,

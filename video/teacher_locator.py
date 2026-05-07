@@ -6,11 +6,11 @@ import cv2
 import easyocr
 import mediapipe as mp
 import numpy as np
-import unicodedata
 import torch
 from difflib import SequenceMatcher
 
 from video.frame_extractor import crop_roi
+from video.text_normalize import normalize_text
 
 logger = logging.getLogger(__name__)
 
@@ -65,16 +65,6 @@ def _easyocr_reader_with_retry(languages: tuple[str, ...], *, gpu: bool) -> easy
             time.sleep(delay)
     assert last is not None
     raise last
-
-
-def normalize_text(text: str) -> str:
-    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
-    text = text.lower()
-    cleaned = []
-    for ch in text:
-        if ch.isalnum() or ch.isspace():
-            cleaned.append(ch)
-    return " ".join("".join(cleaned).split())
 
 
 class TeacherLocator:

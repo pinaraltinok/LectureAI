@@ -11,6 +11,9 @@ const TeacherPool = () => {
   const [teachers, setTeachers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [reportNotification, setReportNotification] = useState(null)
+  const knownTeacherReportCountsRef = useRef(new Map())
+  const initializedReportTrackingRef = useRef(false)
 
   // Reports list state
   const [selectedTeacher, setSelectedTeacher] = useState(null)
@@ -49,6 +52,55 @@ const TeacherPool = () => {
     }
     init()
   }, [])
+
+  // Poll admin teacher list and notify when new reports appear
+  useEffect(() => {
+    if (loading) return
+
+    const syncTeacherReportCounts = async () => {
+      try {
+        const latestTeachers = await apiGet('/admin/teachers')
+        setTeachers(latestTeachers)
+
+        if (!initializedReportTrackingRef.current) {
+          knownTeacherReportCountsRef.current = new Map(
+            (latestTeachers || []).map((t) => [t.id, Number(t.reportCount || 0)])
+          )
+          initializedReportTrackingRef.current = true
+          return
+        }
+
+        const increases = []
+        for (const t of latestTeachers || []) {
+          const prevCount = Number(knownTeacherReportCountsRef.current.get(t.id) || 0)
+          const nextCount = Number(t.reportCount || 0)
+          if (nextCount > prevCount) {
+            increases.push({ teacherName: t.name, addedCount: nextCount - prevCount, reportCount: nextCount })
+          }
+        }
+
+        if (increases.length > 0) {
+          const newest = increases[0]
+          setReportNotification(newest)
+        }
+
+        knownTeacherReportCountsRef.current = new Map(
+          (latestTeachers || []).map((t) => [t.id, Number(t.reportCount || 0)])
+        )
+      } catch {
+        // Silent fail for polling
+      }
+    }
+
+    const intervalId = setInterval(syncTeacherReportCounts, 20000)
+    return () => clearInterval(intervalId)
+  }, [loading])
+
+  useEffect(() => {
+    if (!reportNotification) return
+    const timeoutId = setTimeout(() => setReportNotification(null), 6000)
+    return () => clearTimeout(timeoutId)
+  }, [reportNotification])
 
   const colorPalette = ['#6366f1', '#f59e0b', '#10b981', '#ec4899', '#06b6d4', '#f43f5e']
 
@@ -90,14 +142,28 @@ const TeacherPool = () => {
       console.log('[TeacherPool] draftReport:', draft.draftReport)
       console.log('[TeacherPool] finalReport:', draft.finalReport)
       const fr = draft.finalReport || draft.draftReport || {}
-      const teacherName = selectedTeacher?.name || draft.teacher?.name || ''
+      const teacherName =
+        selectedTeacher?.name ||
+        draft.teacher?.name ||
+        report.teacherName ||
+        report.teacher?.name ||
+        ''
+      const lectureName =
+        draft.lesson?.course ||
+        draft.lesson?.name ||
+        report.courseName ||
+        report.lessonName ||
+        report.lesson?.course ||
+        report.lesson?.name ||
+        ''
       console.log('[TeacherPool] Teacher name debug:', { selectedTeacherName: selectedTeacher?.name, draftTeacherName: draft.teacher?.name, resolved: teacherName })
       const reportObj = {
         jobId: report.jobId,
         status: draft.status || report.status,
         id: report.jobId?.slice(0, 8),
         name: teacherName,
-        module: draft.lesson?.course || report.courseName || (teacherName ? teacherName + ' Analizi' : 'Analiz'),
+        lectureName,
+        module: lectureName || (teacherName ? teacherName + ' Analizi' : 'Analiz'),
         date: report.createdAt ? new Date(report.createdAt).toLocaleDateString('tr-TR') : '',
         group: report.lessonNo ? formatLessonLabel(report.lessonNo, report.moduleSize) : '',
         evaluator: fr.approvedBy ? 'Admin Onaylı' : 'Sistem (AI)',
@@ -477,6 +543,8 @@ const TeacherPool = () => {
               data={progressData}
               title={`${selectedTeacher.name} — Performans İlerlemesi`}
               accentColor={selectedTeacher.color || '#6366f1'}
+              xMode="report"
+              maxPoints={30}
             />
             {teacherReports.map((report, idx) => {
               let statusConfig;
@@ -616,14 +684,18 @@ const TeacherPool = () => {
   }
 
   // ─── VIEW 1: Teacher List ──────────────────────────────
-  const rows = teachers.map((t, idx) => ({
+  const rows = teachers.map((t, idx) => {
+    const numericScore = Number(t.lastScore)
+    const hasNumericScore = Number.isFinite(numericScore)
+    return ({
     ...t,
     initials: t.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2),
     color: colorPalette[idx % colorPalette.length],
-    score: t.lastScore ? (t.lastScore / 20).toFixed(1) : '—',
+    score: hasNumericScore ? numericScore.toFixed(1) : '—',
     hasReport: true,
     idx,
-  }))
+    })
+  })
 
   const filteredRows = rows.filter(r =>
     r.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -631,6 +703,48 @@ const TeacherPool = () => {
 
   return (
     <div style={{ padding: '1rem', animation: 'fadeIn 0.5s ease' }}>
+      {reportNotification && (
+        <div style={{
+          position: 'fixed',
+          top: '24px',
+          right: '24px',
+          zIndex: 2500,
+          width: 'min(430px, 92vw)',
+          padding: '1rem 1rem 0.9rem',
+          borderRadius: '16px',
+          background: 'linear-gradient(135deg, #ecfeff 0%, #f0f9ff 100%)',
+          border: '1px solid #bae6fd',
+          boxShadow: '0 18px 40px rgba(14, 116, 144, 0.2)',
+          animation: 'slideInRight 0.35s ease',
+        }}>
+          <div style={{display: 'flex', justifyContent: 'space-between', gap: '12px'}}>
+            <div>
+              <p style={{margin: 0, fontSize: '0.82rem', fontWeight: 900, color: '#0369a1', letterSpacing: '0.04em'}}>
+                YENİ RAPOR HAZIR
+              </p>
+              <p style={{margin: '0.35rem 0 0', fontSize: '0.9rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.45}}>
+                {reportNotification.teacherName} için {reportNotification.addedCount} yeni rapor sisteme eklendi.
+              </p>
+            </div>
+            <button
+              onClick={() => setReportNotification(null)}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                color: '#0ea5e9',
+                fontSize: '1.1rem',
+                cursor: 'pointer',
+                fontWeight: 900,
+                lineHeight: 1,
+              }}
+              aria-label="Bildirimi kapat"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="responsive-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
         <div>

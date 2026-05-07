@@ -31,6 +31,7 @@ function AppContent() {
   const { user, loading, logout, isAuthenticated } = useAuth()
   const [workflowStep, setWorkflowStep] = useState('upload')
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -40,6 +41,11 @@ function AppContent() {
   }, [location.pathname])
 
   const handleLogout = () => {
+    setLogoutConfirmOpen(true)
+  }
+
+  const confirmLogout = () => {
+    setLogoutConfirmOpen(false)
     logout()
     navigate('/')
   }
@@ -268,6 +274,31 @@ function AppContent() {
           <Route path="/" element={<Navigate to={role==='admin'?'/admin/kurum-ozeti':role==='teacher'?'/teacher/ders-ozeti':'/student/derslerim'} />} />
         </Routes>
       </main>
+
+      {logoutConfirmOpen && (
+        <div className="confirm-modal-backdrop" onClick={() => setLogoutConfirmOpen(false)}>
+          <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Çıkış yapmak istediğinize emin misiniz?</h3>
+            <p>Oturumunuz sonlandırılacak ve giriş ekranına yönlendirileceksiniz.</p>
+            <div className="confirm-modal-actions">
+              <button
+                type="button"
+                className="confirm-modal-btn cancel"
+                onClick={() => setLogoutConfirmOpen(false)}
+              >
+                Vazgeç
+              </button>
+              <button
+                type="button"
+                className="confirm-modal-btn danger"
+                onClick={confirmLogout}
+              >
+                Çıkış Yap
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

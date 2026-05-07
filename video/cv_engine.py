@@ -104,7 +104,6 @@ def run(
             teacher_name=teacher_name,
             analysis_interval_sec=2.0,
             relocalize_interval_sec=10.0,
-            smile_threshold=0.35,
             start_sec=0.0,
             end_sec=None,
             only_camera_open_frames=True,

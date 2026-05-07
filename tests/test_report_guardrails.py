@@ -79,3 +79,17 @@ def test_hatalar_forces_iyi_when_positive_phrase() -> None:
     )
     fix_metric_result_ratings(m, metric_key="hatalar")
     assert m.rating == Rating.good
+
+
+def test_hatalar_forces_iyi_when_yapici_ve_destekleyici() -> None:
+    obs = (
+        "(12:00) Hataların yapıcı ve destekleyici bir şekilde ele alınacağı "
+        "varsayılabilir. " + "x" * 30
+    )
+    m = MetricResult(
+        rating=Rating.na,
+        observation=obs,
+        improvement_tip="",
+    )
+    fix_metric_result_ratings(m, metric_key="hatalar")
+    assert m.rating == Rating.good

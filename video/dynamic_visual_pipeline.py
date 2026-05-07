@@ -1,10 +1,19 @@
+import os
+
 import cv2
 import pandas as pd
+
+_SMILE_THRESHOLD = float(os.environ.get("CV_SMILE_THRESHOLD", "0.35"))
 
 from video.frame_extractor import sample_frames_by_time, crop_roi
 from video.face_metrics import FaceMetrics
 from video.gesture_metrics import GestureMetrics
 from video.movement_analysis import MovementAnalyzer
+from video.screen_share_detector import (
+    ScreenShareDetector,
+    compute_teacher_metric_bbox,
+    screen_share_kwargs_from_env,
+)
 from video.teacher_locator import TeacherLocator
 
 
@@ -17,7 +26,7 @@ def run_dynamic_visual_poc(
     teacher_name: str,
     analysis_interval_sec: float = 2.0,
     relocalize_interval_sec: float = 10.0,
-    smile_threshold: float = 0.35,
+    smile_threshold: float = _SMILE_THRESHOLD,
     metric_size=(384, 384),
     start_sec: float = 0.0,
     end_sec: float = None,
@@ -30,8 +39,11 @@ def run_dynamic_visual_poc(
     face = FaceMetrics()
     gesture = GestureMetrics()
     movement = MovementAnalyzer()
+    movement_ss = MovementAnalyzer()
+    ssd = ScreenShareDetector(**screen_share_kwargs_from_env())
 
     total_sampled_frames = 0
+    screen_share_frames = 0
     located_frames = 0
     camera_open_frames = 0
     smile_frames = 0
@@ -90,6 +102,20 @@ def run_dynamic_visual_poc(
                 }
                 last_bbox = None
 
+        teacher_mv_ss = None
+        if loc.get("found"):
+            mb = compute_teacher_metric_bbox(loc, frame.shape)
+            if mb is not None:
+                tt = crop_roi(frame, mb)
+                tt = standardize_crop(tt, out_size=metric_size)
+                teacher_mv_ss = movement_ss.update(tt)["movement_energy"]
+        else:
+            movement_ss.reset()
+
+        is_screen_share = ssd.detect(frame, loc, teacher_mv_ss)
+        if is_screen_share:
+            screen_share_frames += 1
+
         if not loc["found"]:
             movement.reset()
             debug_rows.append({
@@ -98,6 +124,7 @@ def run_dynamic_visual_poc(
                 "teacher_found": False,
                 "camera_open_frame": False,
                 "used_for_metrics": False,
+                "screen_share": is_screen_share,
                 "source": loc["source"],
                 "label_text": None,
                 "label_conf": 0.0,
@@ -115,6 +142,16 @@ def run_dynamic_visual_poc(
                 import os
                 draw_frame = frame.copy()
                 cv2.putText(draw_frame, "TEACHER NOT FOUND", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
+                if is_screen_share:
+                    cv2.putText(
+                        draw_frame,
+                        "SCREEN_SHARE",
+                        (50, 100),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.9,
+                        (0, 128, 255),
+                        3,
+                    )
                 out_path = os.path.join(debug_dir, f"frame_{frame_idx:04d}_notfound.jpg")
                 cv2.imwrite(out_path, draw_frame)
             continue
@@ -155,12 +192,14 @@ def run_dynamic_visual_poc(
 
         if only_camera_open_frames and not face_detected:
             movement.reset()
+            movement_ss.reset()
             debug_rows.append({
                 "frame_idx": frame_idx,
                 "t_sec": t_sec,
                 "teacher_found": True,
                 "camera_open_frame": False,
                 "used_for_metrics": False,
+                "screen_share": is_screen_share,
                 "source": loc["source"],
                 "label_text": loc["label_text"],
                 "label_conf": loc["label_conf"],
@@ -179,6 +218,16 @@ def run_dynamic_visual_poc(
                 draw_frame = frame.copy()
                 cv2.rectangle(draw_frame, (x, y), (x+w, y+h), (0, 165, 255), 2)
                 cv2.putText(draw_frame, "NO FACE IN BOX", (x, max(30, y - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+                if is_screen_share:
+                    cv2.putText(
+                        draw_frame,
+                        "SCREEN_SHARE",
+                        (50, 50),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.9,
+                        (0, 128, 255),
+                        3,
+                    )
                 out_path = os.path.join(debug_dir, f"frame_{frame_idx:04d}_noface.jpg")
                 cv2.imwrite(out_path, draw_frame)
             continue
@@ -202,6 +251,7 @@ def run_dynamic_visual_poc(
             "teacher_found": True,
             "camera_open_frame": face_detected,
             "used_for_metrics": True,
+            "screen_share": is_screen_share,
             "source": loc["source"],
             "label_text": loc["label_text"],
             "label_conf": loc["label_conf"],
@@ -233,7 +283,17 @@ def run_dynamic_visual_poc(
             ]
             for i, t in enumerate(reversed(texts)):
                 cv2.putText(draw_frame, t, (mx, y_offset - i*20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-            
+            if is_screen_share:
+                cv2.putText(
+                    draw_frame,
+                    "SCREEN_SHARE",
+                    (50, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.85,
+                    (0, 128, 255),
+                    2,
+                )
+
             out_path = os.path.join(debug_dir, f"frame_{frame_idx:04d}.jpg")
             cv2.imwrite(out_path, draw_frame)
 
@@ -250,6 +310,18 @@ def run_dynamic_visual_poc(
         "smile_frame_ratio": (smile_frames / camera_open_frames) if camera_open_frames else 0.0,
         "hand_visible_ratio": (hand_frames / camera_open_frames) if camera_open_frames else 0.0,
         "movement_energy_avg": (sum(movement_vals) / len(movement_vals)) if movement_vals else 0.0,
+        "screen_share_frames": screen_share_frames,
+        "screen_share_ratio": (
+            (screen_share_frames / total_sampled_frames) if total_sampled_frames else 0.0
+        ),
+        "screen_share_minutes": (
+            (screen_share_frames * analysis_interval_sec) / 60.0
+            if total_sampled_frames
+            else 0.0
+        ),
+        "visual_material_used": (
+            (screen_share_frames / total_sampled_frames) > 0.05 if total_sampled_frames else False
+        ),
     }
 
     debug_df = pd.DataFrame(debug_rows)

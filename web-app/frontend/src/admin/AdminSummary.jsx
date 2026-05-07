@@ -128,7 +128,7 @@ const AdminSummary = () => {
                 <div style={{width: '10px', height: '10px', borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #06b6d4)', boxShadow: '0 0 10px rgba(99,102,241,0.4)'}}></div>
                 <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 900, color: '#1e293b' }}>Eğitmen Performans Trendi</h3>
               </div>
-              <p style={{ margin: '6px 0 0 20px', fontSize: '0.82rem', color: '#94a3b8', fontWeight: 500 }}>Kurumsal kalite skoru analitiği</p>
+              <p style={{ margin: '6px 0 0 20px', fontSize: '0.82rem', color: '#94a3b8', fontWeight: 500 }}>Son 30 gün, günlük kurumsal kalite skoru</p>
             </div>
             <div style={{
               padding: '6px 14px', borderRadius: '100px',
@@ -153,7 +153,7 @@ const AdminSummary = () => {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis
-                  dataKey="month"
+                  dataKey="day"
                   axisLine={false}
                   tickLine={false}
                   tick={{ fontSize: 11, fontWeight: 700, fill: '#94a3b8' }}
@@ -173,9 +173,10 @@ const AdminSummary = () => {
                     padding: '12px 16px',
                   }}
                   cursor={{ stroke: '#6366f1', strokeWidth: 1, strokeDasharray: '4 4' }}
+                  labelFormatter={(label, payload) => payload?.[0]?.payload?.date || label}
                 />
                 <Area
-                  type="monotone"
+                  type="natural"
                   dataKey="skor"
                   stroke="#6366f1"
                   strokeWidth={3}

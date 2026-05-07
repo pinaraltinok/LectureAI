@@ -7,10 +7,18 @@ export default function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
   const [isLogin, setIsLogin] = useState(true)
+  const [isForgotPasswordView, setIsForgotPasswordView] = useState(false)
   const [role, setRole] = useState('student')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [newPasswordRepeat, setNewPasswordRepeat] = useState('')
+  const [showMainPassword, setShowMainPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showNewPasswordRepeat, setShowNewPasswordRepeat] = useState(false)
+  const [forgotPasswordSuccess, setForgotPasswordSuccess] = useState('')
   const [phone, setPhone] = useState('')
   const [age, setAge] = useState('')
   const [parentName, setParentName] = useState('')
@@ -153,6 +161,54 @@ export default function Login() {
     }
   }
 
+  const validatePassword = (value) => {
+    if (value.length < 8) return 'Şifre en az 8 karakter olmalıdır.'
+    if (!/[A-Za-z]/.test(value)) return 'Şifre en az bir harf içermelidir.'
+    if (!/[0-9]/.test(value)) return 'Şifre en az bir rakam içermelidir.'
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(value)) {
+      return 'Şifre en az bir özel karakter içermelidir. (!@#$%^&*)'
+    }
+    return ''
+  }
+
+  const handleForgotPasswordSubmit = async (e) => {
+    e.preventDefault()
+    setErrorMsg('')
+    setForgotPasswordSuccess('')
+
+    if (!forgotEmail.trim()) {
+      return setErrorMsg('E-posta adresi zorunludur.')
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotEmail)) {
+      return setErrorMsg('Geçerli bir e-posta adresi giriniz. (örn: ad@mail.com)')
+    }
+    const passwordValidationError = validatePassword(newPassword)
+    if (passwordValidationError) {
+      return setErrorMsg(passwordValidationError)
+    }
+    if (newPassword !== newPasswordRepeat) {
+      return setErrorMsg('Yeni şifre ve tekrar şifresi aynı olmalıdır.')
+    }
+
+    try {
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email: forgotEmail, newPassword, newPasswordRepeat })
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        return setErrorMsg(data.error || 'Şifre sıfırlama başarısız oldu.')
+      }
+      setForgotPasswordSuccess('Şifreniz başarıyla güncellendi. Yeni şifrenizle giriş yapabilirsiniz.')
+      setNewPassword('')
+      setNewPasswordRepeat('')
+    } catch (err) {
+      setErrorMsg('Sunucuya bağlanılamadı. Lütfen backend sunucusunun çalıştığından emin olun.')
+    }
+  }
+
   return (
     <div className="login-container">
       <div className="background-overlay"></div>
@@ -165,12 +221,15 @@ export default function Login() {
           </p>
         </div>
 
+        {!isForgotPasswordView && (
         <div className="role-tabs">
           <button className={role === 'student' ? 'active' : ''} onClick={() => setRole('student')}>Öğrenci</button>
           <button className={role === 'teacher' ? 'active' : ''} onClick={() => setRole('teacher')}>Eğitmen</button>
           <button className={role === 'admin' ? 'active' : ''} onClick={() => setRole('admin')}>Yönetici</button>
         </div>
+        )}
 
+        {!isForgotPasswordView ? (
         <form onSubmit={handleSubmit} className="login-form">
           {errorMsg && (
             <div style={{color: '#f43f5e', background: '#ffe4e6', padding: '0.75rem', borderRadius: '8px', fontSize: '0.85rem', marginBottom: '1rem', textAlign: 'center'}}>
@@ -195,7 +254,14 @@ export default function Login() {
           </div>
           <div className="input-group">
             <label>ŞİFRE</label>
-            <input type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <input type={showMainPassword ? 'text' : 'password'} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <button
+              type="button"
+              className="password-toggle-btn"
+              onClick={() => setShowMainPassword((prev) => !prev)}
+            >
+              {showMainPassword ? 'Gizle' : 'Göster'}
+            </button>
           </div>
 
           {/* Student-specific fields */}
@@ -219,8 +285,72 @@ export default function Login() {
           <button type="submit" className="login-submit-btn">
             {isLogin ? "Giriş Yap" : "Hesap Oluştur"}
           </button>
+          {isLogin && (
+            <button
+              type="button"
+              className="forgot-password-btn"
+              onClick={() => setIsForgotPasswordView(true)}
+            >
+              Şifremi unuttum
+            </button>
+          )}
         </form>
+        ) : (
+          <form onSubmit={handleForgotPasswordSubmit} className="login-form forgot-password-view">
+            {errorMsg && (
+              <div style={{color: '#f43f5e', background: '#ffe4e6', padding: '0.75rem', borderRadius: '8px', fontSize: '0.85rem', marginBottom: '1rem', textAlign: 'center'}}>
+                {errorMsg}
+              </div>
+            )}
+            {forgotPasswordSuccess && (
+              <div style={{color: '#166534', background: '#dcfce7', padding: '0.75rem', borderRadius: '8px', fontSize: '0.85rem', marginBottom: '1rem', textAlign: 'center'}}>
+                {forgotPasswordSuccess}
+              </div>
+            )}
+            <div className="input-group">
+              <label>EMAIL</label>
+              <input type="email" placeholder="ornek@mail.com" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} required />
+            </div>
+            <div className="input-group">
+              <label>YENİ ŞİFRE</label>
+              <input type={showNewPassword ? 'text' : 'password'} placeholder="••••••••" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
+              <button
+                type="button"
+                className="password-toggle-btn"
+                onClick={() => setShowNewPassword((prev) => !prev)}
+              >
+                {showNewPassword ? 'Gizle' : 'Göster'}
+              </button>
+            </div>
+            <div className="input-group">
+              <label>YENİ ŞİFRE (TEKRAR)</label>
+              <input type={showNewPasswordRepeat ? 'text' : 'password'} placeholder="••••••••" value={newPasswordRepeat} onChange={(e) => setNewPasswordRepeat(e.target.value)} required />
+              <button
+                type="button"
+                className="password-toggle-btn"
+                onClick={() => setShowNewPasswordRepeat((prev) => !prev)}
+              >
+                {showNewPasswordRepeat ? 'Gizle' : 'Göster'}
+              </button>
+            </div>
+            <button type="submit" className="login-submit-btn">
+              Şifreyi Güncelle
+            </button>
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault()
+                setErrorMsg('')
+                setForgotPasswordSuccess('')
+                setIsForgotPasswordView(false)
+              }}
+            >
+              Giriş ekranına dön
+            </a>
+          </form>
+        )}
 
+        {!isForgotPasswordView && (
         <div className="login-footer">
           {isLogin ? (
             <p>
@@ -232,6 +362,7 @@ export default function Login() {
             </p>
           )}
         </div>
+        )}
       </div>
     </div>
   )

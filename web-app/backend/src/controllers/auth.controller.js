@@ -215,4 +215,25 @@ async function logout(req, res) {
   return res.json({ message: 'Oturum başarıyla sonlandırıldı.' });
 }
 
-module.exports = { login, register, getMe, updateProfile, logout };
+/**
+ * POST /api/auth/forgot-password
+ * Resets password by email (overwrites previous password hash).
+ */
+async function forgotPassword(req, res) {
+  const { email, newPassword } = req.body;
+
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) {
+    throw new AppError('Bu email ile kayıtlı kullanıcı bulunamadı.', 404);
+  }
+
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { password: hashedPassword },
+  });
+
+  return res.json({ message: 'Şifre başarıyla güncellendi.' });
+}
+
+module.exports = { login, register, getMe, updateProfile, logout, forgotPassword };

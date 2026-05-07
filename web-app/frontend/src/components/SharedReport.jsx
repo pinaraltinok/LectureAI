@@ -143,6 +143,8 @@ const SharedReport = ({ report }) => {
   }, [videoUrl])
 
   if (!report) return null
+  const teacherDisplayName = report.name || '—'
+  const lectureDisplayName = report.lectureName || report.module || '—'
 
   // Build competency data from real report or fallback
   const dr = report.draftReport || report.finalReport || {}
@@ -216,9 +218,8 @@ const SharedReport = ({ report }) => {
              <div style={{padding:'4px 12px', background:'rgba(255,255,255,0.1)', borderRadius:'6px', fontSize:'10px', fontWeight:700}}>REF: #QA-2026-DOC-{report.id}</div>
           </div>
 
-          {/* Teacher Name - Prominent Display */}
-          {report.name && (
-            <div style={{display:'flex', alignItems:'center', gap:'16px', marginBottom:'1rem'}}>
+          <div style={{display:'grid', gap:'10px', marginBottom:'1rem'}}>
+            <div style={{display:'flex', alignItems:'center', gap:'16px'}}>
               <div style={{
                 width:'52px', height:'52px', borderRadius:'16px',
                 background:'linear-gradient(135deg, #6366f1, #a855f7)',
@@ -227,20 +228,23 @@ const SharedReport = ({ report }) => {
                 boxShadow:'0 8px 20px rgba(99, 102, 241, 0.4)',
                 flexShrink:0,
               }}>
-                {report.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                {teacherDisplayName !== '—'
+                  ? teacherDisplayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+                  : '??'}
               </div>
               <div>
-                <div style={{fontSize:'1.4rem', fontWeight:900, letterSpacing:'-0.02em', lineHeight:1.2}}>
-                  {report.name}
-                </div>
-                <div style={{fontSize:'0.78rem', fontWeight:600, color:'rgba(255,255,255,0.5)', marginTop:'2px'}}>
-                  Eğitmen
+                <div style={{fontSize:'0.72rem', fontWeight:700, color:'rgba(255,255,255,0.6)', textTransform:'uppercase', letterSpacing:'0.08em'}}>Eğitmen</div>
+                <div style={{fontSize:'1.25rem', fontWeight:900, letterSpacing:'-0.02em', lineHeight:1.2}}>
+                  {teacherDisplayName}
                 </div>
               </div>
             </div>
-          )}
+            <div>
+              <div style={{fontSize:'0.72rem', fontWeight:700, color:'rgba(255,255,255,0.6)', textTransform:'uppercase', letterSpacing:'0.08em'}}>Ders</div>
+              <h2 style={{fontSize:'1.35rem', fontWeight:800, margin:'4px 0 0'}}>{lectureDisplayName}</h2>
+            </div>
+          </div>
 
-          <h2 style={{fontSize:'1.8rem', fontWeight:800, margin:0}}>{report.module || (report.name ? report.name + ' - Analizi' : 'Analiz Raporu')}</h2>
           <div style={{display:'flex', gap:'1.5rem', marginTop:'1rem', opacity:0.8, fontSize:'0.85rem', flexWrap:'wrap'}}>
              <span>📅 {report.date || report.details?.date}</span>
              <span>👥 {report.group || report.details?.group}</span>
