@@ -3,6 +3,8 @@ import { apiGet, apiPost, apiDelete } from '../api'
 import { formatLessonLabel } from '../utils/lessonLabel'
 import SharedReport from '../components/SharedReport.jsx'
 import ProgressChart from '../components/ProgressChart.jsx'
+import useAdaptivePolling from '../hooks/useAdaptivePolling'
+import useSingleTabPolling from '../hooks/useSingleTabPolling'
 
 const TeacherPool = () => {
   // Navigation: 'list' → 'reports' → 'detail'
@@ -38,6 +40,17 @@ const TeacherPool = () => {
   // Progress polling for PROCESSING reports
   const [detailProgress, setDetailProgress] = useState(null)
   const progressIntervalRef = useRef(null)
+  const { isLeader, broadcastData } = useSingleTabPolling('admin_teachers_polling_v1', (payload) => {
+    const latestTeachers = payload?.latestTeachers || []
+    setTeachers(latestTeachers)
+    if (!initializedReportTrackingRef.current) {
+      knownTeacherReportCountsRef.current = new Map(latestTeachers.map((t) => [t.id, Number(t.reportCount || 0)]))
+      initializedReportTrackingRef.current = true
+    } else {
+      knownTeacherReportCountsRef.current = new Map(latestTeachers.map((t) => [t.id, Number(t.reportCount || 0)]))
+    }
+    if (payload?.notification) setReportNotification(payload.notification)
+  })
 
   // Load teachers
   useEffect(() => {
@@ -54,48 +67,42 @@ const TeacherPool = () => {
     init()
   }, [])
 
-  // Poll admin teacher list and notify when new reports appear
-  useEffect(() => {
-    if (loading) return
+  useAdaptivePolling({
+    enabled: !loading && isLeader,
+    baseIntervalMs: 60000,
+    maxBackoffMs: 300000,
+    runImmediately: true,
+    task: async () => {
+      const latestTeachers = await apiGet('/admin/teachers')
+      let notification = null
 
-    const syncTeacherReportCounts = async () => {
-      try {
-        const latestTeachers = await apiGet('/admin/teachers')
-        setTeachers(latestTeachers)
-
-        if (!initializedReportTrackingRef.current) {
-          knownTeacherReportCountsRef.current = new Map(
-            (latestTeachers || []).map((t) => [t.id, Number(t.reportCount || 0)])
-          )
-          initializedReportTrackingRef.current = true
-          return
-        }
-
+      if (!initializedReportTrackingRef.current) {
+        knownTeacherReportCountsRef.current = new Map(
+          latestTeachers.map((t) => [t.id, Number(t.reportCount || 0)])
+        )
+        initializedReportTrackingRef.current = true
+      } else {
         const increases = []
-        for (const t of latestTeachers || []) {
+        for (const t of latestTeachers) {
           const prevCount = Number(knownTeacherReportCountsRef.current.get(t.id) || 0)
           const nextCount = Number(t.reportCount || 0)
           if (nextCount > prevCount) {
             increases.push({ teacherName: t.name, addedCount: nextCount - prevCount, reportCount: nextCount })
           }
         }
-
         if (increases.length > 0) {
-          const newest = increases[0]
-          setReportNotification(newest)
+          notification = increases[0]
+          setReportNotification(notification)
         }
-
         knownTeacherReportCountsRef.current = new Map(
-          (latestTeachers || []).map((t) => [t.id, Number(t.reportCount || 0)])
+          latestTeachers.map((t) => [t.id, Number(t.reportCount || 0)])
         )
-      } catch {
-        // Silent fail for polling
       }
-    }
 
-    const intervalId = setInterval(syncTeacherReportCounts, 20000)
-    return () => clearInterval(intervalId)
-  }, [loading])
+      setTeachers(latestTeachers)
+      broadcastData({ latestTeachers, notification })
+    },
+  })
 
   useEffect(() => {
     if (!reportNotification) return
@@ -206,42 +213,12 @@ const TeacherPool = () => {
 
       setView('detail')
 
-      // Start polling if PROCESSING
+      // Initial progress fetch for processing report
       if ((draft.status || report.status) === 'PROCESSING') {
-        // Initial progress fetch
         try {
           const prog = await apiGet(`/admin/analysis/progress/${report.jobId}`)
           setDetailProgress(prog)
         } catch {}
-
-        progressIntervalRef.current = setInterval(async () => {
-          try {
-            const prog = await apiGet(`/admin/analysis/progress/${report.jobId}`)
-            setDetailProgress(prog)
-            if (prog.stage === 'completed' || prog.stage === 'failed') {
-              clearInterval(progressIntervalRef.current)
-              progressIntervalRef.current = null
-              // Refresh report data when completed
-              if (prog.stage === 'completed') {
-                try {
-                  const updatedDraft = await apiGet(`/admin/analysis/draft/${report.jobId}`)
-                  const ufr = updatedDraft.finalReport || updatedDraft.draftReport || {}
-                  setSelectedReport(prev => ({
-                    ...prev,
-                    status: updatedDraft.status || 'DRAFT',
-                    quality: ufr.yeterlilikler || '—',
-                    ttt: ufr.speaking_time_rating || '—',
-                    duration: ufr.actual_duration_min ? `${ufr.actual_duration_min}dk` : '—',
-                    evaluator: ufr.approvedBy ? 'Admin Onaylı' : 'Sistem (AI)',
-
-                    finalReport: ufr,
-                    draftReport: ufr,
-                  }))
-                } catch {}
-              }
-            }
-          } catch {}
-        }, 3000)
       }
     } catch (e) {
       console.error('Report fetch error:', e)
@@ -257,6 +234,36 @@ const TeacherPool = () => {
       }
     }
   }, [])
+
+  useAdaptivePolling({
+    enabled: view === 'detail' && selectedReport?.status === 'PROCESSING' && Boolean(selectedReport?.jobId),
+    baseIntervalMs: 60000,
+    maxBackoffMs: 300000,
+    runImmediately: false,
+    task: async () => {
+      const jobId = selectedReport?.jobId
+      if (!jobId) return
+      const prog = await apiGet(`/admin/analysis/progress/${jobId}`)
+      setDetailProgress(prog)
+      if (prog.stage === 'completed') {
+        const updatedDraft = await apiGet(`/admin/analysis/draft/${jobId}`)
+        const ufr = updatedDraft.finalReport || updatedDraft.draftReport || {}
+        setSelectedReport(prev => prev ? ({
+          ...prev,
+          status: updatedDraft.status || 'DRAFT',
+          quality: ufr.yeterlilikler || '—',
+          ttt: ufr.speaking_time_rating || '—',
+          duration: ufr.actual_duration_min ? `${ufr.actual_duration_min}dk` : '—',
+          evaluator: ufr.approvedBy ? 'Admin Onaylı' : 'Sistem (AI)',
+          finalReport: ufr,
+          draftReport: ufr,
+        }) : prev)
+      }
+      if (prog.stage === 'failed') {
+        setSelectedReport(prev => prev ? ({ ...prev, status: 'DRAFT' }) : prev)
+      }
+    },
+  })
 
   // ─── Loading state ──────────────────────────────────────
   if (loading) {

@@ -45,6 +45,13 @@ app.use(cors({
 }));
 
 // ─── Security: Rate Limiting ────────────────────────────────
+const isAuthPath = (reqPath) =>
+  reqPath === '/api/auth/login' ||
+  reqPath === '/api/auth/register' ||
+  reqPath === '/api/auth/forgot-password' ||
+  reqPath === '/api/auth/me' ||
+  reqPath === '/api/auth/logout';
+
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,           // 15 minutes
   max: 200,                           // 200 requests per window per IP
@@ -54,7 +61,9 @@ const apiLimiter = rateLimit({
   validate: { trustProxy: false },    // We handle trust proxy at Express level
   skip: (req) => {
     // Exempt pipeline worker webhooks (server-to-server, PubSub-triggered)
-    return req.path.startsWith('/api/pipeline/');
+    // Also keep auth endpoints outside global quota to avoid login lockout.
+    // They are protected by dedicated authLimiter below.
+    return req.path.startsWith('/api/pipeline/') || isAuthPath(req.path);
   },
 });
 app.use('/api', apiLimiter);

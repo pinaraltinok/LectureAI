@@ -7,10 +7,38 @@
 
 const API_BASE = '/api';
 
+class ApiError extends Error {
+  constructor(message, status, retryAfterSec = null) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.retryAfterSec = retryAfterSec;
+  }
+}
+
 function getHeaders(isJson = true) {
   const headers = {};
   if (isJson) headers['Content-Type'] = 'application/json';
   return headers;
+}
+
+async function parseError(res) {
+  const payload = await res.json().catch(() => ({}));
+  const retryAfterHeader = res.headers.get('retry-after');
+  const retryAfterSec = retryAfterHeader ? Number(retryAfterHeader) : null;
+  const retryMins = retryAfterSec && Number.isFinite(retryAfterSec)
+    ? Math.max(1, Math.ceil(retryAfterSec / 60))
+    : null;
+
+  if (res.status === 429) {
+    const msg = retryMins
+      ? `Sistem şu anda yoğun. Lütfen ${retryMins} dakika sonra tekrar deneyin.`
+      : 'Sistem şu anda yoğun. Lütfen kısa süre sonra tekrar deneyin.';
+    return new ApiError(msg, res.status, retryAfterSec);
+  }
+
+  const message = payload.error || `HTTP ${res.status}`;
+  return new ApiError(message, res.status, retryAfterSec);
 }
 
 export async function apiGet(path) {
@@ -19,8 +47,7 @@ export async function apiGet(path) {
     credentials: 'include',  // Send httpOnly cookies
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Sunucu hatası' }));
-    throw new Error(err.error || `HTTP ${res.status}`);
+    throw await parseError(res);
   }
   return res.json();
 }
@@ -33,8 +60,7 @@ export async function apiPost(path, body) {
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Sunucu hatası' }));
-    throw new Error(err.error || `HTTP ${res.status}`);
+    throw await parseError(res);
   }
   return res.json();
 }
@@ -46,8 +72,7 @@ export async function apiUpload(path, formData) {
     body: formData,
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Sunucu hatası' }));
-    throw new Error(err.error || `HTTP ${res.status}`);
+    throw await parseError(res);
   }
   return res.json();
 }
@@ -60,8 +85,7 @@ export async function apiPut(path, body) {
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Sunucu hatası' }));
-    throw new Error(err.error || `HTTP ${res.status}`);
+    throw await parseError(res);
   }
   return res.json();
 }
@@ -73,8 +97,7 @@ export async function apiDelete(path) {
     credentials: 'include',
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Sunucu hatası' }));
-    throw new Error(err.error || `HTTP ${res.status}`);
+    throw await parseError(res);
   }
   return res.json();
 }

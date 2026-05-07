@@ -4,6 +4,8 @@ import { apiGet } from '../api'
 import { formatLessonLabel } from '../utils/lessonLabel'
 import SharedReport from '../components/SharedReport.jsx'
 import ProgressChart from '../components/ProgressChart.jsx'
+import useAdaptivePolling from '../hooks/useAdaptivePolling'
+import useSingleTabPolling from '../hooks/useSingleTabPolling'
 
 const TeacherDashboard = () => {
   const [selectedReport, setSelectedReport] = useState(null)
@@ -16,6 +18,17 @@ const TeacherDashboard = () => {
   const [reportNotification, setReportNotification] = useState(null)
   const knownReportIdsRef = useRef(new Set())
   const initializedReportTrackingRef = useRef(false)
+  const { isLeader, broadcastData } = useSingleTabPolling('teacher_reports_polling_v1', (payload) => {
+    const latestReports = payload?.latestReports || []
+    setReports(latestReports)
+    if (!initializedReportTrackingRef.current) {
+      knownReportIdsRef.current = new Set(latestReports.map(r => r.jobId))
+      initializedReportTrackingRef.current = true
+    } else {
+      knownReportIdsRef.current = new Set(latestReports.map(r => r.jobId))
+    }
+    if (payload?.notification) setReportNotification(payload.notification)
+  })
 
   useEffect(() => {
     Promise.all([
@@ -31,46 +44,39 @@ const TeacherDashboard = () => {
       .finally(() => setLoading(false))
   }, [])
 
-  // Poll teacher reports and notify when a new generated report appears in system
-  useEffect(() => {
-    if (loading) return
+  useAdaptivePolling({
+    enabled: !loading && isLeader,
+    baseIntervalMs: 60000,
+    maxBackoffMs: 300000,
+    runImmediately: true,
+    task: async () => {
+      const latestReports = await apiGet('/teacher/reports')
+      let notification = null
 
-    const syncReports = async () => {
-      try {
-        const latestReports = await apiGet('/teacher/reports')
-        setReports(latestReports)
-
-        if (!initializedReportTrackingRef.current) {
-          knownReportIdsRef.current = new Set((latestReports || []).map(r => r.jobId))
-          initializedReportTrackingRef.current = true
-          return
-        }
-
-        const newReports = (latestReports || []).filter(
-          (r) => r.jobId && !knownReportIdsRef.current.has(r.jobId)
-        )
-
+      if (!initializedReportTrackingRef.current) {
+        knownReportIdsRef.current = new Set(latestReports.map(r => r.jobId))
+        initializedReportTrackingRef.current = true
+      } else {
+        const newReports = latestReports.filter((r) => r.jobId && !knownReportIdsRef.current.has(r.jobId))
         if (newReports.length > 0) {
           const newest = [...newReports].sort(
             (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
           )[0]
-          setReportNotification({
+          notification = {
             jobId: newest.jobId,
             courseName: newest.courseName || 'Ders Analizi',
             lessonNo: newest.lessonNo,
             moduleSize: newest.moduleSize,
-          })
+          }
+          setReportNotification(notification)
         }
-
-        knownReportIdsRef.current = new Set((latestReports || []).map(r => r.jobId))
-      } catch {
-        // Silent fail for polling; existing page error state remains untouched
+        knownReportIdsRef.current = new Set(latestReports.map(r => r.jobId))
       }
-    }
 
-    const intervalId = setInterval(syncReports, 20000)
-    return () => clearInterval(intervalId)
-  }, [loading])
+      setReports(latestReports)
+      broadcastData({ latestReports, notification })
+    },
+  })
 
   useEffect(() => {
     if (!reportNotification) return

@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiGet, apiPost, apiUpload } from '../api'
 import SharedReport from '../components/SharedReport.jsx'
+import useAdaptivePolling from '../hooks/useAdaptivePolling'
+import useSingleTabPolling from '../hooks/useSingleTabPolling'
 
 const AnalysisWorkflow = ({ onStepChange }) => {
   const [step, setStep] = useState('upload')
@@ -220,20 +222,25 @@ const AnalysisWorkflow = ({ onStepChange }) => {
 
   // --- Progress polling ---
   const [progress, setProgress] = useState({ stage: 'queued', message: 'Video sisteme kaydediliyor...', percent: 5 })
-
-  useEffect(() => {
-    if (!isAnalyzing || !currentJobId) return
-    const interval = setInterval(async () => {
-      try {
-        const data = await apiGet(`/admin/analysis/progress/${currentJobId}`)
-        setProgress(data)
-        if (data.stage === 'completed' || data.stage === 'failed') {
-          clearInterval(interval)
-        }
-      } catch { /* ignore polling errors */ }
-    }, 2000)
-    return () => clearInterval(interval)
-  }, [isAnalyzing, currentJobId])
+  const { isLeader, broadcastData } = useSingleTabPolling('analysis_progress_polling_v1', (payload) => {
+    if (payload?.jobId !== currentJobId) return
+    if (payload?.progress) setProgress(payload.progress)
+  })
+  useAdaptivePolling({
+    enabled: isAnalyzing && Boolean(currentJobId) && isLeader,
+    baseIntervalMs: 60000,
+    maxBackoffMs: 300000,
+    runImmediately: true,
+    task: async () => {
+      const data = await apiGet(`/admin/analysis/progress/${currentJobId}`)
+      setProgress(data)
+      broadcastData({ jobId: currentJobId, progress: data })
+      if (data.stage === 'completed' || data.stage === 'failed') {
+        setIsAnalyzing(false)
+        setIsRegenerating(false)
+      }
+    },
+  })
 
   const STAGES = [
     { key: 'queued', label: 'Sisteme Kaydediliyor', icon: '💾' },
