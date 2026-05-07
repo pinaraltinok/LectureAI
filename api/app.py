@@ -119,6 +119,57 @@ async def check_report(student_id: str, lesson_id: str):
     
     return {"status": "processing", "message": "Rapor henüz hazır değil veya buluta yükleniyor."}
 
+@app.post("/pubsub-push")
+async def pubsub_push(request: dict, background_tasks: BackgroundTasks):
+    """
+    Google Cloud Pub/Sub Push Trigger için endpoint.
+    Format: {"message": {"data": "base64_string", ...}}
+    """
+    import base64
+    
+    print(f"[PubSub Push] Mesaj alındı!")
+    try:
+        if "message" not in request or "data" not in request["message"]:
+            raise HTTPException(status_code=400, detail="Geçersiz Pub/Sub mesaj formatı.")
+        
+        # Base64 decode
+        data_str = base64.b64decode(request["message"]["data"]).decode("utf-8")
+        data = json.loads(data_str)
+        
+        video_id = data.get("video_id")
+        teacher_name = data.get("teacher_name", "Teacher")
+        
+        if not video_id:
+            print("[-] HATA: video_id bulunamadı.")
+            return {"status": "ignored", "reason": "no_video_id"}
+
+        print(f"[>>] Bulut Tetikledi: {video_id} (Öğretmen: {teacher_name})")
+        
+        # --- ÖĞRENCİ LİSTESİNİ BUL (BATCH) ---
+        # Registry'den öğrencileri al (Fallback logic)
+        registry_path = ROOT / "core" / "storage" / "student_registry.json"
+        students = ["Kağan Efe Tezcan", "Ali Deniz", "Mete", "Ömer", "Ayaz"] # Varsayılanlar
+        
+        if registry_path.exists():
+            with open(registry_path, "r", encoding="utf-8") as f:
+                registry = json.load(f)
+            students = list(set([entry["id"] for entry in registry if entry.get("is_student")]))
+
+        # Video yolunu düzenle
+        video_blob = f"Lesson_Records/{video_id}.mp4"
+        if "/" in video_id: video_blob = video_id
+        if not video_blob.endswith(".mp4"): video_blob += ".mp4"
+
+        # Arka planda BATCH işlemi başlat (Tüm sınıf için)
+        from core.pipelines.batch_group_pipeline import process_entire_group
+        background_tasks.add_task(process_entire_group, video_blob=video_blob, students=students)
+        
+        return {"status": "accepted", "video_id": video_id}
+    except Exception as e:
+        print(f"[-] Push işleme hatası: {e}")
+        return {"status": "error", "message": str(e)}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

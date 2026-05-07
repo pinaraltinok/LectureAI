@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
     libpangoft2-1.0-0 \
     build-essential \
     libcairo2-dev \
+    fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -26,5 +27,5 @@ COPY . .
 # Expose the port the app runs on
 EXPOSE 8000
 
-# Start the application
-CMD ["uvicorn", "api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start the application using the port provided by Cloud Run
+CMD ["sh", "-c", "uvicorn api.app:app --host 0.0.0.0 --port ${PORT:-8080}"]

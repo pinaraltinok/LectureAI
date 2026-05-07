@@ -14,3 +14,11 @@ gcp-key.json
 *.key
 *.pem
 senior-design-488908-28bd7c55329d.json
+
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.env

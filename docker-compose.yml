@@ -10,3 +10,14 @@ services:
       - ./data:/app/data
       - ./core/storage:/app/core/storage
     restart: always
+
+  lectureai-worker:
+    build: .
+    container_name: lectureai_worker
+    command: python core/pipelines/pubsub_listener.py
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./core/storage:/app/core/storage
+    restart: always

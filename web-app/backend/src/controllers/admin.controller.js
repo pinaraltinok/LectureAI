@@ -158,7 +158,11 @@ async function triggerVideoAnalysis(jobId, videoUri, teacherName) {
   try {
     if (!pubsub) throw new Error('PubSub client not initialized');
     const topic = pubsub.topic(PUBSUB_TOPIC);
-    const payload = JSON.stringify({ video_id: videoId, teacher_name: teacherName || 'Teacher' });
+    const payload = JSON.stringify({ 
+      video_id: videoId, 
+      video_uri: videoUri,
+      teacher_name: teacherName || 'Teacher' 
+    });
     const messageId = await topic.publishMessage({ data: Buffer.from(payload) });
     console.log(`[PubSub] Message ${messageId} published for video_id=${videoId}`);
     analysisProgress.set(jobId, { ...analysisProgress.get(jobId), stage: 'processing', message: 'Video analiz ediliyor...', percent: 20 });

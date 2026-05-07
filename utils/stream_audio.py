@@ -2,6 +2,7 @@ import argparse
 import os
 import subprocess
 import tempfile
+import datetime
 from pathlib import Path
 
 
@@ -42,16 +43,44 @@ def get_storage_client():
 
 
 def get_signed_url(storage_client, bucket_name, blob_name, expires_seconds=21600):
+    """
+    Cloud Run (ADC) ortaminda Private Key hatasi almadan Signed URL uretir.
+    """
+    from google.auth import default
+    from google.auth.transport.requests import Request
+    
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(blob_name)
     if not blob.exists():
         raise FileNotFoundError(f"GCS object not found: gs://{bucket_name}/{blob_name}")
 
-    return blob.generate_signed_url(
-        version="v4",
-        expiration=expires_seconds,
-        method="GET",
-    )
+    try:
+        # 1. Klasik yontemi dene (Eger JSON key varsa calisir)
+        return blob.generate_signed_url(
+            version="v4",
+            expiration=datetime.timedelta(seconds=expires_seconds),
+            method="GET",
+        )
+    except AttributeError:
+        # 2. Cloud Run / ADC Ortami: IAM üzerinden imzala
+        print("[>>] Private key bulunamadi, IAM üzerinden imzalama yapiliyor...")
+        
+        credentials, project = default()
+        if not credentials.token:
+            credentials.refresh(Request())
+            
+        # Servis hesabı e-postasını al
+        service_account_email = getattr(credentials, "service_account_email", None)
+        if not service_account_email:
+            service_account_email = f"lectureai@{project}.iam.gserviceaccount.com"
+
+        return blob.generate_signed_url(
+            version="v4",
+            expiration=datetime.timedelta(seconds=expires_seconds),
+            method="GET",
+            service_account_email=service_account_email,
+            access_token=credentials.token
+        )
 
 
 def upload_video_to_gcs(local_path, bucket_name, blob_name):
