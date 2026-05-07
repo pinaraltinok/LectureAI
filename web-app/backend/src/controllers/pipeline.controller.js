@@ -12,41 +12,41 @@ const pipelineEvents = new Map();
 
 // ─── Stage → Admin Progress mapping ────────────────────────
 const STAGE_PROGRESS_MAP = {
-  'audio:started':                    { stage: 'processing', message: 'Ses analizi başladı...',           percent: 10 },
-  'audio:processing':                 { stage: 'processing', message: 'Ses dosyası işleniyor...',         percent: 15 },
-  'audio:gcs_uploaded':               { stage: 'processing', message: 'Ses dosyası yüklendi...',          percent: 20 },
-  'audio:completed':                  { stage: 'processing', message: 'Ses analizi tamamlandı.',          percent: 25 },
-  'audio:skipped_existing':           { stage: 'processing', message: 'Ses analizi (mevcut, atlandı).',   percent: 25 },
-  'cv:started':                       { stage: 'processing', message: 'Görüntü analizi başladı...',       percent: 30 },
-  'cv:triggering_modal':              { stage: 'processing', message: 'Görüntü modeli tetikleniyor...',   percent: 35 },
-  'cv:triggered':                     { stage: 'processing', message: 'Görüntü analizi tetiklendi.',      percent: 40 },
-  'cv:completed':                     { stage: 'processing', message: 'Görüntü analizi tamamlandı.',      percent: 50 },
-  'cv:skipped_existing':              { stage: 'processing', message: 'Görüntü analizi (mevcut, atlandı).', percent: 50 },
-  'orchestrator:state_updated':       { stage: 'processing', message: 'Pipeline durumu güncellendi...',   percent: 52 },
+  'audio:started': { stage: 'processing', message: 'Ses analizi başladı...', percent: 10 },
+  'audio:processing': { stage: 'processing', message: 'Ses dosyası işleniyor...', percent: 15 },
+  'audio:gcs_uploaded': { stage: 'processing', message: 'Ses dosyası yüklendi...', percent: 20 },
+  'audio:completed': { stage: 'processing', message: 'Ses analizi tamamlandı.', percent: 25 },
+  'audio:skipped_existing': { stage: 'processing', message: 'Ses analizi (mevcut, atlandı).', percent: 25 },
+  'cv:started': { stage: 'processing', message: 'Görüntü analizi başladı...', percent: 30 },
+  'cv:triggering_modal': { stage: 'processing', message: 'Görüntü modeli tetikleniyor...', percent: 35 },
+  'cv:triggered': { stage: 'processing', message: 'Görüntü analizi tetiklendi.', percent: 40 },
+  'cv:completed': { stage: 'processing', message: 'Görüntü analizi tamamlandı.', percent: 50 },
+  'cv:skipped_existing': { stage: 'processing', message: 'Görüntü analizi (mevcut, atlandı).', percent: 50 },
+  'orchestrator:state_updated': { stage: 'processing', message: 'Pipeline durumu güncellendi...', percent: 52 },
   'orchestrator:waiting_for_dependencies': { stage: 'processing', message: 'Bağımlılıklar bekleniyor...', percent: 53 },
-  'orchestrator:started':             { stage: 'reporting',  message: 'Rapor oluşturma başladı...',       percent: 55 },
-  'orchestrator:loading_audio_input': { stage: 'reporting',  message: 'Ses verileri yükleniyor...',       percent: 58 },
-  'orchestrator:report_generation_started': { stage: 'reporting', message: 'Rapor oluşturuluyor...',      percent: 65 },
-  'orchestrator:llm_provider_try':    { stage: 'reporting',  message: 'LLM modeli deneniyor...',          percent: 70 },
-  'orchestrator:llm_provider_ok':     { stage: 'reporting',  message: 'LLM yanıtı alındı.',              percent: 75 },
-  'orchestrator:llm_provider_failed': { stage: 'reporting',  message: 'LLM denemesi başarısız, tekrar deneniyor...', percent: 70 },
-  'orchestrator:llm_retry_wait':      { stage: 'reporting',  message: 'LLM tekrar denemesi bekleniyor...', percent: 70 },
-  'orchestrator:pdf_generation_started':    { stage: 'uploading', message: 'PDF oluşturuluyor...',        percent: 85 },
-  'orchestrator:pdf_generation_completed':  { stage: 'uploading', message: 'PDF tamamlandı.',             percent: 90 },
-  'orchestrator:completed':           { stage: 'completed',  message: 'Analiz tamamlandı!',              percent: 100 },
-  'orchestrator:failed':              { stage: 'failed',     message: 'Analiz başarısız oldu.',           percent: 0 },
-  'orchestrator:skipped_report_exists': { stage: 'completed', message: 'Rapor zaten mevcut.',             percent: 100 },
+  'orchestrator:started': { stage: 'reporting', message: 'Rapor oluşturma başladı...', percent: 55 },
+  'orchestrator:loading_audio_input': { stage: 'reporting', message: 'Ses verileri yükleniyor...', percent: 58 },
+  'orchestrator:report_generation_started': { stage: 'reporting', message: 'Rapor oluşturuluyor...', percent: 65 },
+  'orchestrator:llm_provider_try': { stage: 'reporting', message: 'LLM modeli deneniyor...', percent: 70 },
+  'orchestrator:llm_provider_ok': { stage: 'reporting', message: 'LLM yanıtı alındı.', percent: 75 },
+  'orchestrator:llm_provider_failed': { stage: 'reporting', message: 'LLM denemesi başarısız, tekrar deneniyor...', percent: 70 },
+  'orchestrator:llm_retry_wait': { stage: 'reporting', message: 'LLM tekrar denemesi bekleniyor...', percent: 70 },
+  'orchestrator:pdf_generation_started': { stage: 'uploading', message: 'PDF oluşturuluyor...', percent: 85 },
+  'orchestrator:pdf_generation_completed': { stage: 'uploading', message: 'PDF tamamlandı.', percent: 90 },
+  'orchestrator:completed': { stage: 'completed', message: 'Analiz tamamlandı!', percent: 100 },
+  'orchestrator:failed': { stage: 'failed', message: 'Analiz başarısız oldu.', percent: 0 },
+  'orchestrator:skipped_report_exists': { stage: 'completed', message: 'Rapor zaten mevcut.', percent: 100 },
 
   // ── Student Voice Analysis Pipeline stages ────────────────
-  'student:transcript_started':       { stage: 'processing', message: 'Öğrenci transkripti oluşturuluyor...',       percent: 10 },
-  'student:transcript_completed':     { stage: 'processing', message: 'Transkript tamamlandı.',                     percent: 25 },
-  'student:biometric_started':        { stage: 'processing', message: 'Biyometrik ses eşleştirme başladı...',       percent: 30 },
-  'student:biometric_matching':       { stage: 'processing', message: 'Konuşmacı eşleştirme yapılıyor...',          percent: 45 },
-  'student:biometric_completed':      { stage: 'processing', message: 'Ses eşleştirme tamamlandı.',                 percent: 55 },
-  'student:report_generating':        { stage: 'reporting',  message: 'Pedagojik rapor oluşturuluyor...',            percent: 70 },
-  'student:report_uploading':         { stage: 'uploading',  message: 'Rapor yükleniyor...',                         percent: 85 },
-  'student:completed':                { stage: 'completed',  message: 'Öğrenci ses analizi tamamlandı!',            percent: 100 },
-  'student:failed':                   { stage: 'failed',     message: 'Öğrenci ses analizi başarısız oldu.',         percent: 0 },
+  'student:transcript_started': { stage: 'processing', message: 'Öğrenci transkripti oluşturuluyor...', percent: 10 },
+  'student:transcript_completed': { stage: 'processing', message: 'Transkript tamamlandı.', percent: 25 },
+  'student:biometric_started': { stage: 'processing', message: 'Biyometrik ses eşleştirme başladı...', percent: 30 },
+  'student:biometric_matching': { stage: 'processing', message: 'Konuşmacı eşleştirme yapılıyor...', percent: 45 },
+  'student:biometric_completed': { stage: 'processing', message: 'Ses eşleştirme tamamlandı.', percent: 55 },
+  'student:report_generating': { stage: 'reporting', message: 'Pedagojik rapor oluşturuluyor...', percent: 70 },
+  'student:report_uploading': { stage: 'uploading', message: 'Rapor yükleniyor...', percent: 85 },
+  'student:completed': { stage: 'completed', message: 'Öğrenci ses analizi tamamlandı!', percent: 100 },
+  'student:failed': { stage: 'failed', message: 'Öğrenci ses analizi başarısız oldu.', percent: 0 },
 };
 
 /**
@@ -128,6 +128,11 @@ async function postWorkerPipelineEvent(req, res) {
         } catch { /* detail is plain text */ }
       }
 
+      // Extract student name from webhook payload for precise matching
+      const webhookStudentName = (
+        reportData._studentName || reportData.student_name || ''
+      ).toLowerCase().trim();
+
       // Find student voice analysis reports
       const records = await prisma.report.findMany({
         where: {
@@ -139,13 +144,18 @@ async function postWorkerPipelineEvent(req, res) {
         const dr = (typeof record.draftReport === 'object' && record.draftReport) || {};
         const recordVideoId = dr._videoId || '';
         const recordVideoUrl = dr._videoUrl || '';
+        const recordStudentName = (dr._studentName || '').toLowerCase().trim();
 
         // Extract filename from _videoUrl for reliable matching
         const urlFilename = recordVideoUrl.split('/').pop().replace(/\.[^.]+$/, '');
-        const matches = (recordVideoId && video_id === recordVideoId) ||
-                        (urlFilename && video_id === urlFilename);
+        const videoMatch = (recordVideoId && video_id === recordVideoId) ||
+          (urlFilename && video_id === urlFilename);
 
-        if (matches && record.status === 'PROCESSING') {
+        // Student-aware matching: if both sides have student names, they must match
+        const studentMatch = !webhookStudentName || !recordStudentName ||
+          webhookStudentName === recordStudentName;
+
+        if (videoMatch && studentMatch && record.status === 'PROCESSING') {
           // Merge worker report data into draftReport
           const updatedDraft = { ...dr, ...reportData, _videoId: video_id, _completedAt: new Date().toISOString() };
 
@@ -157,7 +167,7 @@ async function postWorkerPipelineEvent(req, res) {
               updatedAt: new Date(),
             },
           });
-          console.log(`[Pipeline] Report ${record.id} → ${newStatus} (markdown: ${!!reportData.report_markdown})`);
+          console.log(`[Pipeline] Report ${record.id} → ${newStatus} (student: ${recordStudentName}, markdown: ${!!reportData.report_markdown})`);
           break;
         }
       }
