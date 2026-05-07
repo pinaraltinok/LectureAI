@@ -132,7 +132,7 @@ function AppContent() {
               </NavLink>
               <NavLink to="/admin/ogrenci-raporlari" className={({isActive})=>isActive?"menu-link active":"menu-link"}>
                 <Mic size={18} style={{marginRight:'12px', opacity: 0.8, flexShrink: 0}} />
-                Öğrenci Ses Raporları
+                Öğrenci Raporları
               </NavLink>
             </>
           )}
@@ -170,7 +170,7 @@ function AppContent() {
               </NavLink>
               <NavLink to="/student/raporlarim" className={({isActive})=>isActive?"menu-link active":"menu-link"}>
                 <Mic size={18} style={{marginRight:'12px', opacity: 0.8, flexShrink: 0}} />
-                Ses Raporlarım
+                Raporlarım
               </NavLink>
             </>
           )}
@@ -207,7 +207,7 @@ function AppContent() {
                     : <div><h1>Taslak Rapor Önizleme</h1><p>Raporu onaylayın veya revize edin.</p></div>
                 } />
                 <Route path="yonetim" element={<div><h1>Kullanıcı & Grup Yönetimi</h1><p>Öğrenci, eğitmen ve grup işlemlerini yönetin.</p></div>} />
-                <Route path="ogrenci-raporlari" element={<div><h1>Öğrenci Ses Raporları</h1><p>Gruplardaki öğrencilerin ses analiz raporlarını inceleyin.</p></div>} />
+                <Route path="ogrenci-raporlari" element={<div><h1>Öğrenci Raporları</h1><p>Gruplardaki öğrencilerin analiz raporlarını inceleyin.</p></div>} />
               </Routes>
             } />
             
@@ -225,7 +225,7 @@ function AppContent() {
                 <Route path="ders-kaydi" element={<div><h1>Ders Kaydı</h1><p>Ders kaydını izleyin ve not alın</p></div>} />
                 <Route path="anket" element={<div><h1>Ders Anketi</h1><p>Anonim ders değerlendirmesi</p></div>} />
                 <Route path="notlar" element={<div><h1>Hocamın Notları</h1><p>Eğitmenlerinizden gelen geri bildirimler</p></div>} />
-                <Route path="raporlarim" element={<div><h1>Ses Analiz Raporlarım</h1><p>Ders performansınıza dair pedagojik raporlar</p></div>} />
+                <Route path="raporlarim" element={<div><h1>Analiz Raporlarım</h1><p>Ders performansınıza dair pedagojik raporlar</p></div>} />
               </Routes>
             } />
 

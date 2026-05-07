@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { apiGet, apiPost } from '../api'
+import { apiGet, apiPost, apiDelete } from '../api'
 import { formatLessonLabel } from '../utils/lessonLabel'
 import SharedReport from '../components/SharedReport.jsx'
 import ProgressChart from '../components/ProgressChart.jsx'
@@ -28,6 +28,7 @@ const TeacherPool = () => {
 
   // Admin action states
   const [finalizing, setFinalizing] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
 
   // Progress polling for PROCESSING reports
@@ -208,9 +209,24 @@ const TeacherPool = () => {
       }
     }
 
-
-
-
+    const handleDeleteReport = async () => {
+      if (!selectedReport.jobId) return
+      if (!window.confirm('Bu raporu kalıcı olarak silmek istediğinize emin misiniz?')) return
+      setDeleting(true)
+      try {
+        await apiDelete(`/admin/report/${selectedReport.jobId}`)
+        // Go back to reports list and refresh
+        setSelectedReport(null)
+        setDetailProgress(null)
+        setView('reports')
+        const data = await apiGet(`/admin/teacher/${selectedTeacher.id}/reports`)
+        setTeacherReports(data.reports || [])
+      } catch (err) {
+        setError('Silme hatası: ' + err.message)
+      } finally {
+        setDeleting(false)
+      }
+    }
 
     return (
       <div style={{animation: 'fadeIn 0.3s ease', padding: '1rem'}}>
@@ -336,6 +352,18 @@ const TeacherPool = () => {
               >
                 {finalizing ? '⏳ Onaylanıyor...' : '✓ Raporu Onayla ve Yayınla'}
               </button>
+              <button
+                onClick={handleDeleteReport}
+                disabled={deleting}
+                style={{
+                  padding: '14px', borderRadius: '14px', border: '1.5px solid #fecaca',
+                  background: '#fff', color: '#dc2626', fontSize: '0.85rem', fontWeight: 800,
+                  cursor: deleting ? 'wait' : 'pointer', transition: 'all 0.2s',
+                  opacity: deleting ? 0.7 : 1, minWidth: '160px',
+                }}
+              >
+                {deleting ? '⏳ Siliniyor...' : '🗑 Raporu Sil'}
+              </button>
             </div>
           </div>
         )}
@@ -345,17 +373,31 @@ const TeacherPool = () => {
           <div style={{
             marginTop: '2rem', padding: '1.5rem 2rem', borderRadius: '16px',
             background: '#f0fdf4', border: '1px solid #bbf7d0',
-            display: 'flex', alignItems: 'center', gap: '12px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           }}>
-            <div style={{
-              width: '36px', height: '36px', borderRadius: '50%',
-              background: '#10b981', color: '#fff',
-              display: 'grid', placeItems: 'center', fontWeight: 900, fontSize: '1rem',
-            }}>✓</div>
-            <div>
-              <p style={{margin: 0, fontWeight: 800, color: '#15803d', fontSize: '0.9rem'}}>Bu rapor onaylanmış</p>
-              <p style={{margin: '2px 0 0', fontSize: '0.78rem', color: '#4ade80', fontWeight: 600}}>Eğitmen panelinde görüntüleniyor.</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{
+                width: '36px', height: '36px', borderRadius: '50%',
+                background: '#10b981', color: '#fff',
+                display: 'grid', placeItems: 'center', fontWeight: 900, fontSize: '1rem',
+              }}>✓</div>
+              <div>
+                <p style={{margin: 0, fontWeight: 800, color: '#15803d', fontSize: '0.9rem'}}>Bu rapor onaylanmış</p>
+                <p style={{margin: '2px 0 0', fontSize: '0.78rem', color: '#4ade80', fontWeight: 600}}>Eğitmen panelinde görüntüleniyor.</p>
+              </div>
             </div>
+            <button
+              onClick={handleDeleteReport}
+              disabled={deleting}
+              style={{
+                padding: '10px 20px', borderRadius: '12px', border: '1.5px solid #fecaca',
+                background: '#fff', color: '#dc2626', fontSize: '0.8rem', fontWeight: 800,
+                cursor: deleting ? 'wait' : 'pointer', transition: 'all 0.2s',
+                opacity: deleting ? 0.7 : 1, whiteSpace: 'nowrap',
+              }}
+            >
+              {deleting ? '⏳...' : '🗑 Sil'}
+            </button>
           </div>
         )}
 

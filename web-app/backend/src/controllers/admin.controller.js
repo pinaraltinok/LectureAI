@@ -1220,6 +1220,29 @@ async function getGroupStudentReports(req, res) {
   return res.json(students);
 }
 
+/**
+ * DELETE /api/admin/report/:reportId
+ * Permanently deletes a report and its junction records.
+ * Admin only.
+ */
+async function deleteReport(req, res) {
+  const { reportId } = req.params;
+  if (!reportId) throw new AppError('reportId gereklidir.', 400);
+
+  const report = await prisma.report.findUnique({ where: { id: reportId } });
+  if (!report) throw new AppError('Rapor bulunamadı.', 404);
+
+  // Delete in transaction: junction tables first, then report
+  await prisma.$transaction([
+    prisma.reportTeacher.deleteMany({ where: { reportId } }),
+    prisma.reportStudent.deleteMany({ where: { reportId } }),
+    prisma.report.delete({ where: { id: reportId } }),
+  ]);
+
+  console.log(`[Admin] Report deleted: ${reportId}`);
+  return res.json({ message: 'Rapor başarıyla silindi.', reportId });
+}
+
 module.exports = {
   getStats, getTeachers, uploadAnalysis, createFromUrl, assignAnalysis, getDraft,
   regenerateAnalysis, retryAnalysis, retryReportOnly, finalizeAnalysis, getLessons, getAnalysisJobs,
@@ -1231,5 +1254,7 @@ module.exports = {
   // Student voice analysis
   uploadReferenceAudio, createStudentAnalysis, getStudentAnalysisJobs,
   getGroupStudentReports,
+  // Report management
+  deleteReport,
   analysisProgress,
 };
