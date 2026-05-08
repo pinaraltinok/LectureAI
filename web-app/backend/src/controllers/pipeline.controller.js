@@ -128,11 +128,6 @@ async function postWorkerPipelineEvent(req, res) {
         } catch { /* detail is plain text */ }
       }
 
-      // Extract student name from webhook payload for precise matching
-      const webhookStudentName = (
-        reportData._studentName || reportData.student_name || ''
-      ).toLowerCase().trim();
-
       // Find student voice analysis reports
       const records = await prisma.report.findMany({
         where: {
@@ -144,18 +139,13 @@ async function postWorkerPipelineEvent(req, res) {
         const dr = (typeof record.draftReport === 'object' && record.draftReport) || {};
         const recordVideoId = dr._videoId || '';
         const recordVideoUrl = dr._videoUrl || '';
-        const recordStudentName = (dr._studentName || '').toLowerCase().trim();
 
         // Extract filename from _videoUrl for reliable matching
         const urlFilename = recordVideoUrl.split('/').pop().replace(/\.[^.]+$/, '');
-        const videoMatch = (recordVideoId && video_id === recordVideoId) ||
+        const matches = (recordVideoId && video_id === recordVideoId) ||
           (urlFilename && video_id === urlFilename);
 
-        // Student-aware matching: if both sides have student names, they must match
-        const studentMatch = !webhookStudentName || !recordStudentName ||
-          webhookStudentName === recordStudentName;
-
-        if (videoMatch && studentMatch && record.status === 'PROCESSING') {
+        if (matches && record.status === 'PROCESSING') {
           // Merge worker report data into draftReport
           const updatedDraft = { ...dr, ...reportData, _videoId: video_id, _completedAt: new Date().toISOString() };
 
@@ -167,7 +157,7 @@ async function postWorkerPipelineEvent(req, res) {
               updatedAt: new Date(),
             },
           });
-          console.log(`[Pipeline] Report ${record.id} → ${newStatus} (student: ${recordStudentName}, markdown: ${!!reportData.report_markdown})`);
+          console.log(`[Pipeline] Report ${record.id} → ${newStatus} (markdown: ${!!reportData.report_markdown})`);
           break;
         }
       }
